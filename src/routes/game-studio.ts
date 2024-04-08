@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../database/db'
 import { FastifyInstance } from 'fastify'
 
-export async function createGameStudio(app: FastifyInstance) {
+export async function gameStudioRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/gameStudios',
     {
@@ -40,9 +40,7 @@ export async function createGameStudio(app: FastifyInstance) {
       return reply.status(201).send({ studioId: studio.id })
     }
   )
-}
 
-export async function getGameStudio(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/gameStudios/:gameStudioId',
     {
@@ -54,7 +52,8 @@ export async function getGameStudio(app: FastifyInstance) {
           200: z.object({
             gameStudio: z.object({
               id: z.string().uuid(),
-              gamesAmount: z.number().int().nullable(),
+              studioName: z.string(),
+              gamesAmount: z.number(),
               games: z.array(
                 z.object({
                   gameName: z.string(),
@@ -80,6 +79,7 @@ export async function getGameStudio(app: FastifyInstance) {
           id: gameStudioId
         },
         select: {
+          id: true,
           studioName: true,
           _count: {
             select: {
@@ -107,7 +107,8 @@ export async function getGameStudio(app: FastifyInstance) {
 
       return reply.send({
         gameStudio: {
-          id: gameStudioId,
+          id: gameStudio.id,
+          studioName: gameStudio.studioName,
           gamesAmount: gameStudio._count.game,
           games: gameStudio.game
         }
@@ -115,5 +116,3 @@ export async function getGameStudio(app: FastifyInstance) {
     }
   )
 }
-
-

@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { z } from 'zod'
+import { string, z } from 'zod'
 import { prisma } from '../database/db'
 
-export async function getGame(app: FastifyInstance) {
+export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/games/:gameId',
     {
@@ -14,7 +14,7 @@ export async function getGame(app: FastifyInstance) {
         response: {
           200: z.object({
             game: z.object({
-              gameId: z.string().uuid(),
+              id: z.string().uuid(),
               gameName: z.string(),
               gameBanner: z.string(),
               gameDateRelease: z.date(),
@@ -36,6 +36,7 @@ export async function getGame(app: FastifyInstance) {
 
       const game = await prisma.game.findUnique({
         select: {
+          id: true,
           gameName: true,
           gameBanner: true,
           gameDateRelease: true,
@@ -59,21 +60,10 @@ export async function getGame(app: FastifyInstance) {
         throw new Error('Game not found.')
       }
 
-      return reply.send({
-        game: {
-          gameId,
-          gameName: game.gameName,
-          gameBanner: game.gameBanner,
-          gameDateRelease: game.gameDateRelease,
-          categories: game.categories,
-          gameStudio: game.gameStudio
-        }
-      })
+      return reply.send({ game })
     }
   )
-}
 
-export async function getAllGames(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/games',
     {
@@ -82,12 +72,14 @@ export async function getAllGames(app: FastifyInstance) {
           200: z.object({
             games: z.array(
               z.object({
-                id: z.string().uuid(),
                 gameName: z.string(),
-                gameBanner: z.string().nullable(),
+                gameBanner: z.string(),
                 gameDateRelease: z.date(),
-                categories: z.array(z.string()),
-                gameStudio: z.string()
+                categories: z.array(
+                  z.object({
+                    categoryName: z.string()
+                  })
+                )
               })
             )
           })
@@ -114,25 +106,10 @@ export async function getAllGames(app: FastifyInstance) {
         }
       })
 
-      if (games.length === 0) {
-        throw new Error('No games found.')
-      }
-
-      const formattedGames = games.map(game => ({
-        id: game.id,
-        gameName: game.gameName,
-        gameBanner: game.gameBanner,
-        gameDateRelease: game.gameDateRelease,
-        categories: game.categories.map(category => category.categoryName),
-        gameStudio: game.gameStudio.studioName
-      }))
-
-      return reply.send({ games: formattedGames })
+      return reply.send({ games })
     }
   )
-}
 
-export async function createGame(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/games/:gameStudioId',
     {
@@ -152,7 +129,10 @@ export async function createGame(app: FastifyInstance) {
         }),
         response: {
           201: z.object({
-            gameId: z.string().uuid()
+            game: z.object({
+              id: string().uuid(),
+              gameName: z.string()
+            })
           })
         }
       }
@@ -191,10 +171,18 @@ export async function createGame(app: FastifyInstance) {
               create: { categoryName } // Se não encontrar, cria a categoria
             }))
           }
+        },
+        select: {
+          id: true,
+          gameName: true
         }
       })
 
-      return reply.send({ gameId: game.id })
+      return reply.send({ game })
     }
   )
 }
+
+
+
+// TODO: Criar rota para editar um jogo

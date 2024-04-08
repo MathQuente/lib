@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { prisma } from '../database/db'
 import bcrypt from 'bcrypt'
 
-export async function createUser(app: FastifyInstance) {
+export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/users',
     {
@@ -15,7 +15,9 @@ export async function createUser(app: FastifyInstance) {
         }),
         response: {
           201: z.object({
-            userId: z.string().uuid()
+            user: z.object({
+              id: z.string().uuid()
+            })
           })
         }
       }
@@ -39,15 +41,16 @@ export async function createUser(app: FastifyInstance) {
         data: {
           email,
           password: newPassword
+        },
+        select: {
+          id: true
         }
       })
 
-      return reply.status(201).send({ userId: user.id })
+      return reply.status(201).send({ user })
     }
   )
-}
 
-export async function getUser(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/users/:userId',
     {
@@ -71,6 +74,7 @@ export async function getUser(app: FastifyInstance) {
 
       const user = await prisma.user.findUnique({
         select: {
+          id: true,
           userName: true,
           profilePicture: true
         },
@@ -83,18 +87,10 @@ export async function getUser(app: FastifyInstance) {
         throw new Error('User not found.')
       }
 
-      return reply.send({
-        user: {
-          id: userId,
-          userName: user.userName,
-          profilePicture: user.profilePicture
-        }
-      })
+      return reply.send({ user })
     }
   )
-}
 
-export async function getAllUsers(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/users',
     {
@@ -126,9 +122,7 @@ export async function getAllUsers(app: FastifyInstance) {
       return reply.send({ users, usersAmount })
     }
   )
-}
 
-export async function addGame(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/users/:userId/userGames/:gameId',
     {
@@ -209,9 +203,7 @@ export async function addGame(app: FastifyInstance) {
       })
     }
   )
-}
 
-export async function removeGame(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/users/:userId/userGames/:gameId',
     {
@@ -290,9 +282,7 @@ export async function removeGame(app: FastifyInstance) {
       })
     }
   )
-}
 
-export async function updateGameStatus(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/users/:userId/userGames/:gameId',
     {
@@ -364,9 +354,7 @@ export async function updateGameStatus(app: FastifyInstance) {
       return reply.send({ gameStatusUpdated })
     }
   )
-}
 
-export async function getAllUserGames(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/users/:userId/userGames',
     {
@@ -433,9 +421,7 @@ export async function getAllUserGames(app: FastifyInstance) {
       return reply.send({ userGames, userGamesAmount })
     }
   )
-}
 
-export async function updateUser(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/users/:userId',
     {
@@ -480,9 +466,7 @@ export async function updateUser(app: FastifyInstance) {
       return reply.send({ userUpdated })
     }
   )
-}
 
-export async function deleteUser(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/users/:userId',
     {
@@ -493,7 +477,8 @@ export async function deleteUser(app: FastifyInstance) {
         response: {
           200: z.object({
             userDeleted: z.object({
-              id: z.string().uuid()
+              id: z.string().uuid(),
+              userName: z.string().nullable()
             })
           })
         }
@@ -505,6 +490,10 @@ export async function deleteUser(app: FastifyInstance) {
       const userDeleted = await prisma.user.delete({
         where: {
           id: userId
+        },
+        select: {
+          id: true,
+          userName: true
         }
       })
 
