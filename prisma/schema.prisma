@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GameStudio {
+  id         String @id @default(uuid())
+  studioName String @unique @map("studio_name")
+  game       Game[]
+
+  @@map("game_studio")
+}
+
+model Game {
+  id              String   @id @default(uuid())
+  gameName        String   @unique @map("game_name")
+  gameDateRelease DateTime @map("game_date_release")
+  gameStudioId    String   @map("game_studio_id")
+  gameBanner      String   @map("game_banner")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  gameStudio GameStudio @relation(fields: [gameStudioId], references: [id])
+
+  userGames  UserGames[]
+  categories GameCategory[]
+
+  @@map("games")
+}
+
+model GameCategory {
+  id           Int    @id @default(autoincrement())
+  categoryName String @unique @map("category_name")
+
+  games Game[]
+
+  @@map("game_category")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  userName       String?  @map("user_name")
+  password       String
+  profilePicture String?  @map("profile_picture")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  userGames UserGames[]
+
+  @@map("user")
+}
+
+model UserGames {
+  id                String @default(uuid())
+  gameId            String @map("game_id")
+  userId            String @map("user_id")
+  userGamesStatusId Int
+
+  game            Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
+
+  @@id([gameId, userId])
+  @@map("user_games")
+}
+
+model UserGamesStatus {
+  id     Int    @id @default(autoincrement())
+  status String
+
+  userGames UserGames[]
+
+  @@map("user_games_status")
+}
