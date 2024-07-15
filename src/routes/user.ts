@@ -145,7 +145,7 @@ export async function getUser(app: FastifyInstance) {
         let { page } = request.query
         let lastPage
 
-        const count = await prisma.userGames.count({
+        const count = await prisma.userGame.count({
           where: {
             userId
           }
@@ -317,7 +317,7 @@ export async function addGame(app: FastifyInstance) {
           throw new Error('User not found.')
         }
 
-        const gameHasBeenAdded = await prisma.userGames.findUnique({
+        const gameHasBeenAdded = await prisma.userGame.findUnique({
           where: {
             gameId_userId: {
               gameId,
@@ -333,7 +333,7 @@ export async function addGame(app: FastifyInstance) {
           throw new Error('This game has been already added in your library')
         }
 
-        const gameAdded = await prisma.userGames.create({
+        const gameAdded = await prisma.userGame.create({
           data: {
             gameId,
             userId,
@@ -395,7 +395,7 @@ export async function removeGame(app: FastifyInstance) {
           throw new Error('User not found.')
         }
 
-        const gameHasBeenRemoved = await prisma.userGames.findUnique({
+        const gameHasBeenRemoved = await prisma.userGame.findUnique({
           where: {
             gameId_userId: {
               gameId,
@@ -410,7 +410,7 @@ export async function removeGame(app: FastifyInstance) {
           )
         }
 
-        const gameRemoved = await prisma.userGames.delete({
+        const gameRemoved = await prisma.userGame.delete({
           where: {
             gameId_userId: {
               gameId,
@@ -466,7 +466,7 @@ export async function updateUserGameStatus(app: FastifyInstance) {
         const { userId, gameId, statusId } = request.params
         console.log('oi')
 
-        const game = await prisma.userGames.findUnique({
+        const game = await prisma.userGame.findUnique({
           where: {
             gameId_userId: {
               gameId,
@@ -482,7 +482,7 @@ export async function updateUserGameStatus(app: FastifyInstance) {
           throw new Error('This game is not in your library')
         }
 
-        const gameStatusUpdated = await prisma.userGames.update({
+        const gameStatusUpdated = await prisma.userGame.update({
           where: {
             gameId_userId: {
               gameId,
@@ -541,7 +541,7 @@ export async function getGameStatus(app: FastifyInstance) {
       async (request, reply) => {
         const { userId, gameId, statusId } = request.params
 
-        const gameStatus = await prisma.userGames.findUnique({
+        const gameStatus = await prisma.userGame.findUnique({
           where: {
             gameId_userId: {
               gameId,
@@ -629,7 +629,7 @@ export async function getAllUserGames(app: FastifyInstance) {
         let { page } = request.query
         const limit = 14
         let lastPage
-        const count = await prisma.userGames.count({
+        const count = await prisma.userGame.count({
           where: {
             userId
           }
@@ -641,7 +641,7 @@ export async function getAllUserGames(app: FastifyInstance) {
           throw new Error('No game found')
         }
 
-        const userGames = await prisma.userGames.findMany({
+        const userGames = await prisma.userGame.findMany({
           where: {
             userId: userId
           },

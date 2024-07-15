@@ -9,21 +9,20 @@ datasource db {
 
 model Game {
   id           String   @id @default(uuid())
+  createdAt    DateTime @default(now()) @map("created_at")
+  gameBanner   String   @map("game_banner")
   gameName     String   @unique @map("game_name")
   gameStudioId String   @map("game_studio_id")
-  publisherId  String   @map("publisher_id")
-  gameBanner   String   @map("game_banner")
-  createdAt    DateTime @default(now()) @map("created_at")
+  publisherId  String
   updatedAt    DateTime @default(now()) @map("updated_at")
 
   gameStudio GameStudio @relation(fields: [gameStudioId], references: [id], onDelete: Cascade)
-  Publisher  Publisher  @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publisher  Publisher  @relation(fields: [publisherId], references: [id], onDelete: Cascade)
 
-  categories GameCategory[]
-  platforms  Platform[]
-
-  gameLaunchers GameLaunchers[]
-  userGames     UserGames[]
+  categories    GameCategory[]
+  platforms     Platform[]
+  gameLaunchers GameLauncher[]
+  userGames     UserGame[]
 
   @@map("games")
 }
@@ -31,22 +30,21 @@ model Game {
 model GameCategory {
   id           Int    @id @default(autoincrement())
   categoryName String @unique @map("category_name")
+  games        Game[]
 
-  games Game[]
-
-  @@map("game_category")
+  @@map("game_categories")
 }
 
-model GameLaunchers {
+model GameLauncher {
   id          String   @default(uuid())
   dateRelease DateTime
   gameId      String   @map("game_id")
   platformId  String   @map("plataform_id")
-
-  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  platforms Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  platforms   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@id([platformId, gameId])
+  @@map("game_launchers")
 }
 
 model GameStudio {
@@ -54,14 +52,13 @@ model GameStudio {
   studioName String @unique @map("studio_name")
   games      Game[]
 
-  @@map("game_studio")
+  @@map("game_studios")
 }
 
 model Platform {
-  id           String @id @default(uuid())
-  platformName String @unique @map("plataform_name")
-
-  gameLaunchers GameLaunchers[]
+  id            String         @id @default(uuid())
+  platformName  String         @unique @map("plataform_name")
+  gameLaunchers GameLauncher[]
   games         Game[]
 
   @@map("platforms")
@@ -70,43 +67,41 @@ model Platform {
 model Publisher {
   id            String @id @default(uuid())
   publisherName String @unique @map("publisher_name")
+  games         Game[]
 
-  games Game[]
+  @@map("publishers")
 }
 
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
-  userName       String?  @map("user_name")
+  id             String     @id @default(uuid())
+  email          String     @unique
+  userName       String?    @map("user_name")
   password       String
-  profilePicture String?  @map("profile_picture")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @default(now()) @map("updated_at")
+  profilePicture String?    @map("profile_picture")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @map("updated_at")
+  userGames      UserGame[]
 
-  userGames UserGames[]
-
-  @@map("user")
+  @@map("users")
 }
 
-model UserGames {
-  id                String @default(uuid())
-  gameId            String @map("game_id")
-  userId            String @map("user_id")
+model UserGame {
+  id                String          @default(uuid())
+  gameId            String          @map("game_id")
+  userId            String          @map("user_id")
   userGamesStatusId Int
-
-  game            Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
+  UserGamesStatus   UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game              Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@id([gameId, userId])
   @@map("user_games")
 }
 
 model UserGamesStatus {
-  id     Int    @id @default(autoincrement())
-  status String
+  id        Int        @id @default(autoincrement())
+  status    String
+  userGames UserGame[]
 
-  userGames UserGames[]
-
-  @@map("user_games_status")
+  @@map("users_games_status")
 }

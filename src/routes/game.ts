@@ -269,6 +269,11 @@ export async function gameRoutes(app: FastifyInstance) {
                 platformName
               }
             }))
+          },
+          publisher: {
+            connect: {
+              id: '2343243'
+            }
           }
         },
         select: {
@@ -320,7 +325,7 @@ export async function gameRoutes(app: FastifyInstance) {
       }
 
       const gameDateReleaseAlreadyExistOnPlataform =
-        await prisma.gameLaunchers.findUnique({
+        await prisma.gameLauncher.findUnique({
           where: {
             platformId_gameId: {
               platformId,
@@ -333,7 +338,7 @@ export async function gameRoutes(app: FastifyInstance) {
         throw new Error('This game has already been release on this date')
       }
 
-      const gameDateReleaseOnPlataform = await prisma.gameLaunchers.create({
+      const gameDateReleaseOnPlataform = await prisma.gameLauncher.create({
         data: {
           dateRelease,
           gameId,
