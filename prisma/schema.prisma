@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,27 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model GameStudio {
-  id         String @id @default(uuid())
-  studioName String @unique @map("studio_name")
-  game       Game[]
-
-  @@map("game_studio")
-}
-
 model Game {
-  id              String   @id @default(uuid())
-  gameName        String   @unique @map("game_name")
-  gameDateRelease DateTime @map("game_date_release")
-  gameStudioId    String   @map("game_studio_id")
-  gameBanner      String   @map("game_banner")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @default(now()) @map("updated_at")
+  id           String   @id @default(uuid())
+  gameName     String   @unique @map("game_name")
+  gameStudioId String   @map("game_studio_id")
+  publisherId  String   @map("publisher_id")
+  gameBanner   String   @map("game_banner")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
 
-  gameStudio GameStudio @relation(fields: [gameStudioId], references: [id])
+  gameStudio GameStudio @relation(fields: [gameStudioId], references: [id], onDelete: Cascade)
+  Publisher  Publisher  @relation(fields: [publisherId], references: [id], onDelete: Cascade)
 
-  userGames  UserGames[]
   categories GameCategory[]
+  platforms  Platform[]
+
+  gameLaunchers GameLaunchers[]
+  userGames     UserGames[]
 
   @@map("games")
 }
@@ -42,6 +35,43 @@ model GameCategory {
   games Game[]
 
   @@map("game_category")
+}
+
+model GameLaunchers {
+  id          String   @default(uuid())
+  dateRelease DateTime
+  gameId      String   @map("game_id")
+  platformId  String   @map("plataform_id")
+
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  platforms Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@id([platformId, gameId])
+}
+
+model GameStudio {
+  id         String @id @default(uuid())
+  studioName String @unique @map("studio_name")
+  games      Game[]
+
+  @@map("game_studio")
+}
+
+model Platform {
+  id           String @id @default(uuid())
+  platformName String @unique @map("plataform_name")
+
+  gameLaunchers GameLaunchers[]
+  games         Game[]
+
+  @@map("platforms")
+}
+
+model Publisher {
+  id            String @id @default(uuid())
+  publisherName String @unique @map("publisher_name")
+
+  games Game[]
 }
 
 model User {
