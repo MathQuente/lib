@@ -272,7 +272,7 @@ async function main() {
 
   const statusPaused = await prisma.userGamesStatus.upsert({
     where: {
-      id: 2
+      id: 3
     },
     update: {},
     create: {

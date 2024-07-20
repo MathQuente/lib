@@ -4,6 +4,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { prisma } from '../database/db'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { ClientError } from '../errors/client-error'
 
 export async function createUser(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
@@ -29,7 +30,7 @@ export async function createUser(app: FastifyInstance) {
       const { email, password } = request.body
 
       if (!email || !password)
-        throw new Error('Submit all fields for registration')
+        throw new ClientError('Submit all fields for registration')
 
       const emailAlreadyRegisteredOnDB = await prisma.user.findUnique({
         where: {
@@ -38,7 +39,7 @@ export async function createUser(app: FastifyInstance) {
       })
 
       if (emailAlreadyRegisteredOnDB !== null)
-        throw new Error('This email already used')
+        throw new ClientError('This email already used')
 
       const hash = await bcrypt.hash(password, 10)
       const user = await prisma.user.create({
@@ -78,7 +79,8 @@ export async function login(app: FastifyInstance) {
     async (request, reply) => {
       const { email, password } = request.body
 
-      if (!email || !password) throw new Error('Submit all fields for sign up')
+      if (!email || !password)
+        throw new ClientError('Submit all fields for sign up')
 
       const user = await prisma.user.findUnique({
         where: {
@@ -88,7 +90,7 @@ export async function login(app: FastifyInstance) {
 
       const isMatch = user && (await bcrypt.compare(password, user.password))
       if (!isMatch) {
-        throw new Error('Email or password wrong')
+        throw new ClientError('Email or password wrong')
       }
 
       const token = app.jwt.sign({ userId: user.id })
@@ -154,7 +156,7 @@ export async function getUser(app: FastifyInstance) {
         if (count !== 0) {
           lastPage = Math.ceil(count / limit)
         } else {
-          throw new Error('No game found')
+          throw new ClientError('No game found')
         }
 
         const user = await prisma.user.findUnique({
@@ -195,7 +197,7 @@ export async function getUser(app: FastifyInstance) {
         })
 
         if (user === null) {
-          throw new Error('User not found.')
+          throw new ClientError('User not found.')
         }
 
         return reply.send({
@@ -247,7 +249,7 @@ export async function getAllUsers(app: FastifyInstance) {
         if (count !== 0) {
           lastPage = Math.ceil(count / limit)
         } else {
-          throw new Error('No game found')
+          throw new ClientError('No game found')
         }
 
         const [users, usersAmount] = await Promise.all([
@@ -283,7 +285,7 @@ export async function getAllUsers(app: FastifyInstance) {
 export async function addGame(app: FastifyInstance) {
   app
     .withTypeProvider<ZodTypeProvider>()
-    .get(
+    .post(
       '/users/:userId/userGames/:gameId/:statusId',
       {
         schema: {
@@ -314,7 +316,7 @@ export async function addGame(app: FastifyInstance) {
         })
 
         if (!user) {
-          throw new Error('User not found.')
+          throw new ClientError('User not found.')
         }
 
         const gameHasBeenAdded = await prisma.userGame.findUnique({
@@ -329,9 +331,10 @@ export async function addGame(app: FastifyInstance) {
           }
         })
 
-        if (gameHasBeenAdded !== null) {
-          throw new Error('This game has been already added in your library')
-        }
+        if (gameHasBeenAdded !== null)
+          throw new ClientError(
+            'This game has been already added in your library'
+          )
 
         const gameAdded = await prisma.userGame.create({
           data: {
@@ -392,7 +395,7 @@ export async function removeGame(app: FastifyInstance) {
         })
 
         if (userExists === null) {
-          throw new Error('User not found.')
+          throw new ClientError('User not found.')
         }
 
         const gameHasBeenRemoved = await prisma.userGame.findUnique({
@@ -405,7 +408,7 @@ export async function removeGame(app: FastifyInstance) {
         })
 
         if (!gameHasBeenRemoved) {
-          throw new Error(
+          throw new ClientError(
             'This game has already been removed from your library'
           )
         }
@@ -438,7 +441,7 @@ export async function removeGame(app: FastifyInstance) {
 export async function updateUserGameStatus(app: FastifyInstance) {
   app
     .withTypeProvider<ZodTypeProvider>()
-    .get(
+    .patch(
       '/userGamesStatus/:userId/:gameId/:statusId',
       {
         schema: {
@@ -464,7 +467,6 @@ export async function updateUserGameStatus(app: FastifyInstance) {
       },
       async (request, reply) => {
         const { userId, gameId, statusId } = request.params
-        console.log('oi')
 
         const game = await prisma.userGame.findUnique({
           where: {
@@ -479,7 +481,7 @@ export async function updateUserGameStatus(app: FastifyInstance) {
         })
 
         if (!game) {
-          throw new Error('This game is not in your library')
+          throw new ClientError('This game is not in your library')
         }
 
         const gameStatusUpdated = await prisma.userGame.update({
@@ -517,53 +519,35 @@ export async function getGameStatus(app: FastifyInstance) {
   app
     .withTypeProvider<ZodTypeProvider>()
     .get(
-      '/userGames/:userId/:gameId/:statusId',
+      '/userGames/:userId/:gameId',
       {
         schema: {
           params: z.object({
             userId: z.string().uuid(),
-            gameId: z.string().uuid(),
-            statusId: z.coerce.number()
-          }),
-          response: {
-            200: z.object({
-              gameStatus: z
-                .object({
-                  UserGamesStatus: z.object({
-                    status: z.string()
-                  })
-                })
-                .nullable()
-            })
-          }
+            gameId: z.string().uuid()
+          })
         }
       },
       async (request, reply) => {
-        const { userId, gameId, statusId } = request.params
+        const { userId, gameId } = request.params
 
-        const gameStatus = await prisma.userGame.findUnique({
+        const userGameStatus = await prisma.userGame.findUnique({
           where: {
             gameId_userId: {
               gameId,
               userId
             }
           },
-          include: {
-            UserGamesStatus: true
+          select: {
+            UserGamesStatus: {
+              select: {
+                id: true
+              }
+            }
           }
         })
 
-        reply.send({ gameStatus })
-
-        if (!gameStatus) {
-          return reply.redirect(
-            `http://localhost:3333/users/${userId}/userGames/${gameId}/${statusId}`
-          )
-        }
-
-        return reply.redirect(
-          `http://localhost:3333/userGamesStatus/${userId}/${gameId}/${statusId}`
-        )
+        return reply.send(userGameStatus)
       }
     )
     .addHook('preHandler', authMiddleware)
@@ -638,7 +622,7 @@ export async function getAllUserGames(app: FastifyInstance) {
         if (count !== 0) {
           lastPage = Math.ceil(count / limit)
         } else {
-          throw new Error('No game found')
+          throw new ClientError('No game found')
         }
 
         const userGames = await prisma.userGame.findMany({
@@ -740,7 +724,7 @@ export async function updateUser(app: FastifyInstance) {
         })
 
         if (!userExists) {
-          throw new Error('This user was not found')
+          throw new ClientError('This user was not found')
         }
 
         const userUpdated = await prisma.user.update({

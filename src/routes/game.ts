@@ -128,7 +128,10 @@ export async function gameRoutes(app: FastifyInstance) {
                   z.object({
                     platformName: z.string()
                   })
-                )
+                ),
+                publisher: z.object({
+                  publisherName: z.string()
+                })
               })
             ),
             total: z.number()
@@ -186,6 +189,11 @@ export async function gameRoutes(app: FastifyInstance) {
             select: {
               platformName: true
             }
+          },
+          publisher: {
+            select: {
+              publisherName: true
+            }
           }
         }
       })
@@ -198,11 +206,12 @@ export async function gameRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:gameStudioId',
+    '/:gameStudioId/:publisherId',
     {
       schema: {
         params: z.object({
-          gameStudioId: z.string().uuid()
+          gameStudioId: z.string().uuid(),
+          publisherId: z.string().uuid()
         }),
         body: z.object({
           gameName: z.string().min(1),
@@ -229,7 +238,7 @@ export async function gameRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const { gameStudioId } = request.params
+      const { gameStudioId, publisherId } = request.params
       const { gameName, gameBanner, categories, platforms } = request.body
 
       const categoryNames = categories.map(category => category.categoryName)
@@ -272,7 +281,7 @@ export async function gameRoutes(app: FastifyInstance) {
           },
           publisher: {
             connect: {
-              id: '2343243'
+              id: publisherId
             }
           }
         },

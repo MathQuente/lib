@@ -1,4 +1,4 @@
-import fastify, { FastifyError } from 'fastify'
+import fastify from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler
@@ -10,7 +10,6 @@ import { gameStudioRoutes } from './routes/game-studio'
 
 import { fastifyJwt } from '@fastify/jwt'
 import * as dotenv from 'dotenv'
-import { ZodError } from 'zod'
 import { platformsRoutes } from './routes/platforms'
 import {
   addGame,
@@ -24,6 +23,7 @@ import {
   updateUser,
   updateUserGameStatus
 } from './routes/user'
+import { errorHandler } from './error-handler'
 
 dotenv.config()
 
@@ -38,18 +38,7 @@ app.register(fastifyJwt, {
   secret: 'process.env.SECRET_JWT_KEY'
 })
 
-app.setErrorHandler((error: FastifyError, request, reply) => {
-  if (error instanceof ZodError) {
-    return reply.status(400).send({
-      message: 'Validation error',
-      issues: error.issues
-    })
-  } else if (error instanceof Error) {
-    return reply.status(500).send({
-      message: error.message
-    })
-  }
-})
+app.setErrorHandler(errorHandler)
 
 app.register(gameStudioRoutes, { prefix: '/gameStudios' })
 app.register(gameRoutes, { prefix: '/games' })
