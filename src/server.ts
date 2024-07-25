@@ -15,6 +15,7 @@ import {
   addGame,
   createUser,
   deleteUser,
+  getAllUserGames,
   getAllUsers,
   getGameStatus,
   getUser,
@@ -49,7 +50,7 @@ app.register(login)
 app.register(getUser)
 app.register(getAllUsers)
 app.register(addGame)
-// app.register(getAllUserGames)
+app.register(getAllUserGames)
 app.register(removeGame)
 app.register(updateUser)
 app.register(deleteUser)

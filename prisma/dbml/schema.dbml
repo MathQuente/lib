@@ -1,0 +1,112 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table games {
+  id String [pk]
+  createdAt DateTime [default: `now()`, not null]
+  gameBanner String [not null]
+  gameName String [unique, not null]
+  gameStudioId String [not null]
+  publisherId String [not null]
+  updatedAt DateTime [default: `now()`, not null]
+  gameStudio game_studios [not null]
+  publisher publishers [not null]
+  categories game_categories [not null]
+  platforms platforms [not null]
+  gameLaunchers game_launchers [not null]
+  userGames user_games [not null]
+}
+
+Table game_categories {
+  id Int [pk, increment]
+  categoryName String [unique, not null]
+  games games [not null]
+}
+
+Table game_launchers {
+  id String [not null]
+  dateRelease DateTime [not null]
+  gameId String [not null]
+  platformId String [not null]
+  platforms platforms [not null]
+  game games [not null]
+
+  indexes {
+    (platformId, gameId) [pk]
+  }
+}
+
+Table game_studios {
+  id String [pk]
+  studioName String [unique, not null]
+  games games [not null]
+}
+
+Table platforms {
+  id String [pk]
+  platformName String [unique, not null]
+  gameLaunchers game_launchers [not null]
+  games games [not null]
+}
+
+Table publishers {
+  id String [pk]
+  publisherName String [unique, not null]
+  games games [not null]
+}
+
+Table users {
+  id String [pk]
+  email String [unique, not null]
+  userName String
+  password String [not null]
+  profilePicture String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [default: `now()`, not null]
+  userGames user_games [not null]
+}
+
+Table user_games {
+  id String [not null]
+  gameId String [not null]
+  userId String [not null]
+  userGamesStatusId Int [not null]
+  UserGamesStatus users_games_status [not null]
+  user users [not null]
+  game games [not null]
+
+  indexes {
+    (gameId, userId) [pk]
+  }
+}
+
+Table users_games_status {
+  id Int [pk, increment]
+  status String [not null]
+  userGames user_games [not null]
+}
+
+Table GameToGameCategory {
+  categoriesId Int [ref: > game_categories.id]
+  gamesId String [ref: > games.id]
+}
+
+Table GameToPlatform {
+  platformsId String [ref: > platforms.id]
+  gamesId String [ref: > games.id]
+}
+
+Ref: games.gameStudioId > game_studios.id [delete: Cascade]
+
+Ref: games.publisherId > publishers.id [delete: Cascade]
+
+Ref: game_launchers.platformId > platforms.id [delete: Cascade]
+
+Ref: game_launchers.gameId > games.id [delete: Cascade]
+
+Ref: user_games.userGamesStatusId > users_games_status.id
+
+Ref: user_games.userId > users.id [delete: Cascade]
+
+Ref: user_games.gameId > games.id [delete: Cascade]

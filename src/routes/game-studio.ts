@@ -85,7 +85,7 @@ export async function gameStudioRoutes(app: FastifyInstance) {
         include: {
           _count: {
             select: {
-              game: true
+              games: true
             }
           }
         }
@@ -106,10 +106,10 @@ export async function gameStudioRoutes(app: FastifyInstance) {
           studioName: true,
           _count: {
             select: {
-              game: true
+              games: true
             }
           },
-          game: {
+          games: {
             skip: Number(page * limit - limit),
             take: limit,
             orderBy: [
@@ -134,8 +134,8 @@ export async function gameStudioRoutes(app: FastifyInstance) {
         gameStudio: {
           id: gameStudio.id,
           studioName: gameStudio.studioName,
-          gamesAmount: gameStudio._count.game,
-          games: gameStudio.game
+          gamesAmount: gameStudio._count.games,
+          games: gameStudio.games
         },
         page,
         previousPage: page - 1 >= 1 ? page - 1 : false,

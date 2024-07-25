@@ -561,76 +561,30 @@ export async function getAllUserGames(app: FastifyInstance) {
       {
         schema: {
           querystring: z.object({
-            page: z.coerce.number().optional().default(1)
+            query: z.string().nullish(),
+            pageIndex: z.string().nullish().default('0').transform(Number)
           }),
           params: z.object({
             userId: z.string().uuid()
-          }),
-          response: {
-            200: z.object({
-              userGames: z.array(
-                z.object({
-                  game: z.object({
-                    id: z.string().uuid(),
-                    gameName: z.string(),
-                    gameBanner: z.string(),
-                    categories: z.array(
-                      z.object({
-                        categoryName: z.string()
-                      })
-                    ),
-                    gameStudio: z.object({
-                      studioName: z.string()
-                    }),
-                    gameLaunchers: z.array(
-                      z.object({
-                        dateRelease: z.date(),
-                        platforms: z.object({
-                          platformName: z.string()
-                        })
-                      })
-                    ),
-                    platforms: z.array(
-                      z.object({
-                        platformName: z.string()
-                      })
-                    )
-                  })
-                })
-              ),
-              page: z.number(),
-              previousPage: z.union([z.number(), z.boolean()]),
-              nextPage: z.number(),
-              lastPage: z.number(),
-              total: z.number()
-            })
-          }
+          })
         }
       },
       async (request, reply) => {
         const { userId } = request.params
 
-        let { page } = request.query
-        const limit = 14
-        let lastPage
+        const { pageIndex, query } = request.query
         const count = await prisma.userGame.count({
           where: {
             userId
           }
         })
 
-        if (count !== 0) {
-          lastPage = Math.ceil(count / limit)
-        } else {
-          throw new ClientError('No game found')
-        }
-
         const userGames = await prisma.userGame.findMany({
           where: {
             userId: userId
           },
-          skip: Number(page * limit - limit),
-          take: limit,
+          take: 15,
+          skip: pageIndex * 15,
           orderBy: [
             {
               game: {
@@ -670,18 +624,17 @@ export async function getAllUserGames(app: FastifyInstance) {
                   }
                 }
               }
+            },
+            UserGamesStatus: {
+              select: {
+                id: true,
+                status: true
+              }
             }
           }
         })
 
-        return reply.send({
-          userGames,
-          page,
-          previousPage: page - 1 >= 1 ? page - 1 : false,
-          nextPage: page + 1 > lastPage ? lastPage : page + 1,
-          lastPage,
-          total: count
-        })
+        return reply.send({ userGames, total: count })
       }
     )
     .addHook('preHandler', authMiddleware)
