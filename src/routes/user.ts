@@ -541,7 +541,8 @@ export async function getGameStatus(app: FastifyInstance) {
           select: {
             UserGamesStatus: {
               select: {
-                id: true
+                id: true,
+                status: true
               }
             }
           }
@@ -581,15 +582,21 @@ export async function getAllUserGames(app: FastifyInstance) {
 
         const userGames = await prisma.userGame.findMany({
           where: {
-            userId: userId
+            userId: userId,
+            game: {
+              gameName: query
+                ? {
+                    contains: query
+                  }
+                : undefined
+            }
           },
-          take: 15,
+          take: 20,
           skip: pageIndex * 15,
           orderBy: [
+            { updatedAt: 'desc' },
             {
-              game: {
-                gameName: 'asc'
-              }
+              createdAt: 'desc'
             }
           ],
           select: {
@@ -621,6 +628,11 @@ export async function getAllUserGames(app: FastifyInstance) {
                 platforms: {
                   select: {
                     platformName: true
+                  }
+                },
+                publisher: {
+                  select: {
+                    publisherName: true
                   }
                 }
               }

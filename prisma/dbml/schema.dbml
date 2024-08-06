@@ -72,6 +72,8 @@ Table user_games {
   gameId String [not null]
   userId String [not null]
   userGamesStatusId Int [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
   UserGamesStatus users_games_status [not null]
   user users [not null]
   game games [not null]

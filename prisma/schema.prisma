@@ -94,6 +94,8 @@ model UserGame {
   gameId            String          @map("game_id")
   userId            String          @map("user_id")
   userGamesStatusId Int
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
   UserGamesStatus   UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   game              Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
