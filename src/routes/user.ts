@@ -107,7 +107,8 @@ export async function getUser(app: FastifyInstance) {
       {
         schema: {
           querystring: z.object({
-            page: z.coerce.number().optional().default(1)
+            query: z.string().nullish(),
+            pageIndex: z.string().nullish().default('0').transform(Number)
           }),
           params: z.object({
             userId: z.string()
@@ -132,10 +133,7 @@ export async function getUser(app: FastifyInstance) {
                   })
                 )
               }),
-              page: z.number(),
-              previousPage: z.union([z.number(), z.boolean()]),
-              nextPage: z.number(),
-              lastPage: z.number(),
+
               total: z.number()
             })
           }
@@ -143,21 +141,12 @@ export async function getUser(app: FastifyInstance) {
       },
       async (request, reply) => {
         const { userId } = request.params
-        const limit = 14
-        let { page } = request.query
-        let lastPage
-
+        const { pageIndex, query } = request.query
         const count = await prisma.userGame.count({
           where: {
             userId
           }
         })
-
-        if (count !== 0) {
-          lastPage = Math.ceil(count / limit)
-        } else {
-          throw new ClientError('No game found')
-        }
 
         const user = await prisma.user.findUnique({
           where: {
@@ -168,8 +157,8 @@ export async function getUser(app: FastifyInstance) {
             userName: true,
             profilePicture: true,
             userGames: {
-              skip: Number(page * limit - limit),
-              take: limit,
+              take: 20,
+              skip: pageIndex * 15,
               orderBy: [
                 {
                   game: {
@@ -202,10 +191,59 @@ export async function getUser(app: FastifyInstance) {
 
         return reply.send({
           user,
-          page,
-          previousPage: page - 1 >= 1 ? page - 1 : false,
-          nextPage: page + 1 > lastPage ? lastPage : page + 1,
-          lastPage,
+          total: count
+        })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
+}
+
+export async function getMe(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/users/me',
+      {
+        schema: {
+          response: {
+            200: z.object({
+              user: z.object({
+                id: z.string().uuid(),
+                userName: z.string().nullable(),
+                profilePicture: z.string().nullable()
+              }),
+
+              total: z.number()
+            })
+          }
+        }
+      },
+      async (request, reply) => {
+        const userId = `${request.user}`
+
+        const count = await prisma.userGame.count({
+          where: {
+            userId
+          }
+        })
+
+        const user = await prisma.user.findUnique({
+          where: {
+            id: userId
+          },
+          select: {
+            id: true,
+            userName: true,
+            profilePicture: true
+          }
+        })
+
+        if (user === null) {
+          throw new ClientError('User not found.')
+        }
+
+        return reply.send({
+          user,
           total: count
         })
       }

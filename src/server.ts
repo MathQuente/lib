@@ -18,6 +18,7 @@ import {
   getAllUserGames,
   getAllUsers,
   getGameStatus,
+  getMe,
   getUser,
   login,
   removeGame,
@@ -56,6 +57,7 @@ app.register(updateUser)
 app.register(deleteUser)
 app.register(updateUserGameStatus)
 app.register(getGameStatus)
+app.register(getMe)
 
 app.listen({ port: 3333 }).then(() => {
   console.log('HTTP server running!')
