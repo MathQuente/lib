@@ -62,6 +62,7 @@ Table users {
   userName String
   password String [not null]
   profilePicture String
+  userBanner String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]
