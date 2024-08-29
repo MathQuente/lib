@@ -119,6 +119,7 @@ export async function getUser(app: FastifyInstance) {
                 id: z.string().uuid(),
                 userName: z.string().nullable(),
                 profilePicture: z.string().nullable(),
+                userBanner: z.string().nullable(),
                 userGames: z.array(
                   z.object({
                     game: z.object({
@@ -156,6 +157,7 @@ export async function getUser(app: FastifyInstance) {
             id: true,
             userName: true,
             profilePicture: true,
+            userBanner: true,
             userGames: {
               take: 20,
               skip: pageIndex * 15,
@@ -182,59 +184,6 @@ export async function getUser(app: FastifyInstance) {
                 }
               }
             }
-          }
-        })
-
-        if (user === null) {
-          throw new ClientError('User not found.')
-        }
-
-        return reply.send({
-          user,
-          total: count
-        })
-      }
-    )
-    .addHook('preHandler', authMiddleware)
-}
-
-export async function getMe(app: FastifyInstance) {
-  app
-    .withTypeProvider<ZodTypeProvider>()
-    .get(
-      '/users/me',
-      {
-        schema: {
-          response: {
-            200: z.object({
-              user: z.object({
-                id: z.string().uuid(),
-                userName: z.string().nullable(),
-                profilePicture: z.string().nullable()
-              }),
-
-              total: z.number()
-            })
-          }
-        }
-      },
-      async (request, reply) => {
-        const userId = `${request.user}`
-
-        const count = await prisma.userGame.count({
-          where: {
-            userId
-          }
-        })
-
-        const user = await prisma.user.findUnique({
-          where: {
-            id: userId
-          },
-          select: {
-            id: true,
-            userName: true,
-            profilePicture: true
           }
         })
 
@@ -690,6 +639,306 @@ export async function getAllUserGames(app: FastifyInstance) {
     .addHook('preHandler', authMiddleware)
 }
 
+export async function getAllUserFinishedGames(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/users/:userId/userFinishedGames',
+      {
+        schema: {
+          querystring: z.object({
+            query: z.string().nullish(),
+            pageIndex: z.string().nullish().default('0').transform(Number)
+          }),
+          params: z.object({
+            userId: z.string().uuid()
+          })
+        }
+      },
+      async (request, reply) => {
+        const { userId } = request.params
+
+        const { pageIndex, query } = request.query
+        const count = await prisma.userGame.count({
+          where: {
+            userId,
+            userGamesStatusId: 1
+          }
+        })
+
+        const userFinishedGames = await prisma.userGame.findMany({
+          where: {
+            userId: userId,
+            userGamesStatusId: 1,
+            game: {
+              gameName: query
+                ? {
+                    contains: query
+                  }
+                : undefined
+            }
+          },
+          take: 10,
+          skip: pageIndex * 10,
+          orderBy: [
+            { updatedAt: 'desc' },
+            {
+              createdAt: 'desc'
+            }
+          ],
+          select: {
+            game: {
+              select: {
+                id: true,
+                gameName: true,
+                gameBanner: true,
+                categories: {
+                  select: {
+                    categoryName: true
+                  }
+                },
+                gameStudio: {
+                  select: {
+                    studioName: true
+                  }
+                },
+                gameLaunchers: {
+                  select: {
+                    dateRelease: true,
+                    platforms: {
+                      select: {
+                        platformName: true
+                      }
+                    }
+                  }
+                },
+                platforms: {
+                  select: {
+                    platformName: true
+                  }
+                },
+                publisher: {
+                  select: {
+                    publisherName: true
+                  }
+                }
+              }
+            },
+            UserGamesStatus: {
+              select: {
+                id: true,
+                status: true
+              }
+            }
+          }
+        })
+
+        return reply.send({ userFinishedGames, total: count })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
+}
+
+export async function getAllUserPlayingGames(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/users/:userId/userPlayingGames',
+      {
+        schema: {
+          querystring: z.object({
+            query: z.string().nullish(),
+            pageIndex: z.string().nullish().default('0').transform(Number)
+          }),
+          params: z.object({
+            userId: z.string().uuid()
+          })
+        }
+      },
+      async (request, reply) => {
+        const { userId } = request.params
+
+        const { pageIndex, query } = request.query
+        const count = await prisma.userGame.count({
+          where: {
+            userId,
+            userGamesStatusId: 2
+          }
+        })
+
+        const userPlayingGames = await prisma.userGame.findMany({
+          where: {
+            userId: userId,
+            userGamesStatusId: 2,
+            game: {
+              gameName: query
+                ? {
+                    contains: query
+                  }
+                : undefined
+            }
+          },
+          take: 20,
+          skip: pageIndex * 15,
+          orderBy: [
+            { updatedAt: 'desc' },
+            {
+              createdAt: 'desc'
+            }
+          ],
+          select: {
+            game: {
+              select: {
+                id: true,
+                gameName: true,
+                gameBanner: true,
+                categories: {
+                  select: {
+                    categoryName: true
+                  }
+                },
+                gameStudio: {
+                  select: {
+                    studioName: true
+                  }
+                },
+                gameLaunchers: {
+                  select: {
+                    dateRelease: true,
+                    platforms: {
+                      select: {
+                        platformName: true
+                      }
+                    }
+                  }
+                },
+                platforms: {
+                  select: {
+                    platformName: true
+                  }
+                },
+                publisher: {
+                  select: {
+                    publisherName: true
+                  }
+                }
+              }
+            },
+            UserGamesStatus: {
+              select: {
+                id: true,
+                status: true
+              }
+            }
+          }
+        })
+
+        return reply.send({ userPlayingGames, total: count })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
+}
+
+export async function getAllUserPausedGames(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/users/:userId/userPausedGames',
+      {
+        schema: {
+          querystring: z.object({
+            query: z.string().nullish(),
+            pageIndex: z.string().nullish().default('0').transform(Number)
+          }),
+          params: z.object({
+            userId: z.string().uuid()
+          })
+        }
+      },
+      async (request, reply) => {
+        const { userId } = request.params
+
+        const { pageIndex, query } = request.query
+        const count = await prisma.userGame.count({
+          where: {
+            userId,
+            userGamesStatusId: 3
+          }
+        })
+
+        const userPausedGames = await prisma.userGame.findMany({
+          where: {
+            userId: userId,
+            userGamesStatusId: 3,
+            game: {
+              gameName: query
+                ? {
+                    contains: query
+                  }
+                : undefined
+            }
+          },
+          take: 10,
+          skip: pageIndex * 10,
+          orderBy: [
+            { updatedAt: 'desc' },
+            {
+              createdAt: 'desc'
+            }
+          ],
+          select: {
+            game: {
+              select: {
+                id: true,
+                gameName: true,
+                gameBanner: true,
+                categories: {
+                  select: {
+                    categoryName: true
+                  }
+                },
+                gameStudio: {
+                  select: {
+                    studioName: true
+                  }
+                },
+                gameLaunchers: {
+                  select: {
+                    dateRelease: true,
+                    platforms: {
+                      select: {
+                        platformName: true
+                      }
+                    }
+                  }
+                },
+                platforms: {
+                  select: {
+                    platformName: true
+                  }
+                },
+                publisher: {
+                  select: {
+                    publisherName: true
+                  }
+                }
+              }
+            },
+            UserGamesStatus: {
+              select: {
+                id: true,
+                status: true
+              }
+            }
+          }
+        })
+
+        return reply.send({ userPausedGames, total: count })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
+}
+
 export async function updateUser(app: FastifyInstance) {
   app
     .withTypeProvider<ZodTypeProvider>()
@@ -703,14 +952,16 @@ export async function updateUser(app: FastifyInstance) {
           body: z
             .object({
               userName: z.string().nullable(),
-              profilePicture: z.string().nullable()
+              profilePicture: z.string().nullable(),
+              userBanner: z.string().nullable()
             })
             .partial(),
           response: {
             200: z.object({
               userUpdated: z.object({
                 userName: z.string().nullable(),
-                profilePicture: z.string().nullable()
+                profilePicture: z.string().nullable(),
+                userBanner: z.string().nullable()
               })
             })
           }
@@ -718,7 +969,7 @@ export async function updateUser(app: FastifyInstance) {
       },
       async (request, reply) => {
         const { userId } = request.params
-        const { userName, profilePicture } = request.body
+        const { userName, profilePicture, userBanner } = request.body
 
         const userExists = await prisma.user.findUnique({
           where: {
@@ -736,11 +987,13 @@ export async function updateUser(app: FastifyInstance) {
           },
           data: {
             userName,
-            profilePicture
+            profilePicture,
+            userBanner
           },
           select: {
             userName: true,
-            profilePicture: true
+            profilePicture: true,
+            userBanner: true
           }
         })
 
