@@ -13,6 +13,7 @@ import * as dotenv from 'dotenv'
 import { platformsRoutes } from './routes/platforms'
 import {
   addGame,
+  authenticateToken,
   createUser,
   deleteUser,
   getAllUserFinishedGames,
@@ -23,6 +24,7 @@ import {
   getGameStatus,
   getUser,
   login,
+  logout,
   removeGame,
   updateUser,
   updateUserGameStatus
@@ -50,7 +52,9 @@ app.register(platformsRoutes, { prefix: '/platforms' })
 
 app.register(createUser)
 app.register(login)
+app.register(logout)
 app.register(getUser)
+app.register(authenticateToken)
 app.register(getAllUsers)
 app.register(addGame)
 app.register(getAllUserGames)
