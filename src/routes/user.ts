@@ -71,7 +71,11 @@ export async function login(app: FastifyInstance) {
         response: {
           200: z.object({
             token: z.string(),
-            userId: z.string().uuid()
+            user: z.object({
+              id: z.string().uuid(),
+              profilePicture: z.string().nullish(),
+              userBanner: z.string().nullish()
+            })
           })
         }
       }
@@ -94,9 +98,43 @@ export async function login(app: FastifyInstance) {
       }
 
       const token = app.jwt.sign({ userId: user.id })
-      return reply.send({ token, userId: user.id })
+      return reply.send({ token, user })
     }
   )
+}
+
+export async function logout(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .post(
+      '/users/logout',
+      {
+        schema: {
+          response: {
+            200: z.object({
+              message: z.string()
+            })
+          }
+        }
+      },
+      async (request, reply) => {
+        const token = request.headers.authorization?.split(' ')[1]
+        console.log('oi')
+
+        if (token) {
+          await prisma.blacklistedToken.create({
+            data: {
+              token,
+              userId: request.authUser.id,
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // expira em 24 horas
+            }
+          })
+        }
+
+        return reply.send({ message: 'Logout successful' })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
 }
 
 export async function getUser(app: FastifyInstance) {
@@ -194,6 +232,50 @@ export async function getUser(app: FastifyInstance) {
         return reply.send({
           user,
           total: count
+        })
+      }
+    )
+    .addHook('preHandler', authMiddleware)
+}
+
+export async function authenticateToken(app: FastifyInstance) {
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/users/me',
+      {
+        schema: {
+          response: {
+            200: z.object({
+              user: z.object({
+                id: z.string().uuid(),
+                userName: z.string().nullable(),
+                profilePicture: z.string().nullable(),
+                userBanner: z.string().nullable()
+              })
+            })
+          }
+        }
+      },
+      async (request, reply) => {
+        const user = await prisma.user.findUnique({
+          where: {
+            id: request.authUser.id
+          },
+          select: {
+            id: true,
+            userName: true,
+            profilePicture: true,
+            userBanner: true
+          }
+        })
+
+        if (user === null) {
+          throw new ClientError('User not found.')
+        }
+
+        return reply.send({
+          user
         })
       }
     )
