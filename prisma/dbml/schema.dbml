@@ -2,6 +2,14 @@
 //// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 //// ------------------------------------------------------
 
+Table BlacklistedToken {
+  id String [pk]
+  token String [unique, not null]
+  userId String [not null]
+  expiresAt DateTime [not null]
+  createdAt DateTime [default: `now()`, not null]
+}
+
 Table games {
   id String [pk]
   createdAt DateTime [default: `now()`, not null]

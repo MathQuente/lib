@@ -11,6 +11,16 @@ generator dbml {
   provider = "prisma-dbml-generator"
 }
 
+model BlacklistedToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+}
+
 model Game {
   id           String   @id @default(uuid())
   createdAt    DateTime @default(now()) @map("created_at")
