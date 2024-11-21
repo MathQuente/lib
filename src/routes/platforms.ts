@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { z } from 'zod'
 import { PlatformController } from '../controllers/platform.controller'
 import { PlatformService } from '../services/platform.service'
 import { PlatformRepository } from '../repositories/platform.repository'
