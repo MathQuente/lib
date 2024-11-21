@@ -1,193 +1,79 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { z } from 'zod'
-import { prisma } from '../database/db'
+import * as GameStudioSchemas from '../schemas/gameStudio.schema'
+import { GameStudioRepository } from '../repositories/gameStudio.repository'
+import { GameStudioService } from '../services/gameStudio.service'
+import { GameStudioController } from '../controllers/gameStudio.controller'
 
 export async function gameStudioRoutes(app: FastifyInstance) {
+  const gameStudioRepository = new GameStudioRepository()
+  const gameStudioService = new GameStudioService(gameStudioRepository)
+  const gameStudioController = new GameStudioController(gameStudioService)
+
   app.withTypeProvider<ZodTypeProvider>().post(
     '/',
     {
       schema: {
-        body: z.object({
-          studioName: z.string().min(1)
-        }),
+        body: GameStudioSchemas.GameStudioBodySchema,
         response: {
-          200: z.object({
-            studioId: z.string().uuid()
-          })
+          201: GameStudioSchemas.CreateGameStudioResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { studioName } = request.body
-
-      const studioWithSameName = await prisma.gameStudio.findUnique({
-        where: {
-          studioName
-        }
-      })
-
-      if (studioWithSameName !== null) {
-        throw new Error('Another studio with same name already exists')
-      }
-
-      const studio = await prisma.gameStudio.create({
-        data: {
-          studioName
-        }
-      })
-
-      return reply.send({ studioId: studio.id })
-    }
+    async (request, reply) => gameStudioController.create(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:gameStudioId',
     {
       schema: {
-        querystring: z.object({
-          page: z.coerce.number().optional().default(1)
-        }),
-        params: z.object({
-          gameStudioId: z.string().uuid()
-        }),
+        querystring: GameStudioSchemas.GameStudioQueryStringSchema,
+        params: GameStudioSchemas.GameStudioParamsSchema,
         response: {
-          200: z.object({
-            gameStudio: z.object({
-              id: z.string().uuid(),
-              studioName: z.string(),
-              gamesAmount: z.number(),
-              games: z.array(
-                z.object({
-                  id: z.string().uuid(),
-                  gameName: z.string(),
-                  gameBanner: z.string()
-                })
-              )
-            }),
-            page: z.number(),
-            previousPage: z.union([z.number(), z.boolean()]),
-            nextPage: z.number(),
-            lastPage: z.number(),
-            total: z.number()
-          })
+          200: GameStudioSchemas.GetStudioResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameStudioId } = request.params
+    async (request, reply) => gameStudioController.getStudio(request, reply)
+  )
 
-      let { page = Number(1) } = request.query
-      const limit = 14
-      let lastPage = 1
-
-      const count = await prisma.gameStudio.findMany({
-        include: {
-          _count: {
-            select: {
-              games: true
-            }
-          }
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/',
+    {
+      schema: {
+        querystring: GameStudioSchemas.GameStudioQueryStringSchema,
+        response: {
+          200: GameStudioSchemas.GetAllStudiosResponseSchema
         }
-      })
-
-      if (count.length !== 0) {
-        lastPage = Math.ceil(count.length / limit)
-      } else {
-        throw new Error('No game found')
       }
-
-      const gameStudio = await prisma.gameStudio.findUnique({
-        where: {
-          id: gameStudioId
-        },
-        select: {
-          id: true,
-          studioName: true,
-          _count: {
-            select: {
-              games: true
-            }
-          },
-          games: {
-            skip: Number(page * limit - limit),
-            take: limit,
-            orderBy: [
-              {
-                gameName: 'asc'
-              }
-            ],
-            select: {
-              id: true,
-              gameName: true,
-              gameBanner: true
-            }
-          }
-        }
-      })
-
-      if (gameStudio === null) {
-        throw new Error('Game Studio not found.')
-      }
-
-      return reply.send({
-        gameStudio: {
-          id: gameStudio.id,
-          studioName: gameStudio.studioName,
-          gamesAmount: gameStudio._count.games,
-          games: gameStudio.games
-        },
-        page,
-        previousPage: page - 1 >= 1 ? page - 1 : false,
-        nextPage: page + 1 > lastPage ? lastPage : page + 1,
-        lastPage,
-        total: count.length
-      })
-    }
+    },
+    async (request, reply) => gameStudioController.getStudios(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/:studioId',
+    '/:gameStudioId',
     {
       schema: {
-        params: z.object({
-          studioId: z.string().uuid()
-        }),
+        params: GameStudioSchemas.GameStudioParamsSchema,
         response: {
-          200: z.object({
-            studioDeleted: z.object({
-              id: z.string().uuid(),
-              studioName: z.string()
-            })
-          })
+          200: GameStudioSchemas.DeleteStudioResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { studioId } = request.params
+    async (request, reply) => gameStudioController.deleteStudio(request, reply)
+  )
 
-      const gameStudioAlreadyExist = await prisma.gameStudio.findUnique({
-        where: {
-          id: studioId
+  app.withTypeProvider<ZodTypeProvider>().patch(
+    '/:gameStudioId',
+    {
+      schema: {
+        params: GameStudioSchemas.GameStudioParamsSchema,
+        body: GameStudioSchemas.GameStudioBodySchema,
+        response: {
+          200: GameStudioSchemas.UpdateStudioResponseSchema
         }
-      })
-
-      if (gameStudioAlreadyExist === null) {
-        throw new Error(
-          'This game studio does not exist. You cannnot delete this studio'
-        )
       }
-
-      const studioDeleted = await prisma.gameStudio.delete({
-        where: {
-          id: studioId
-        },
-        select: {
-          id: true,
-          studioName: true
-        }
-      })
-      return reply.send({ studioDeleted })
-    }
+    },
+    async (request, reply) => gameStudioController.updateStudio(request, reply)
   )
 }
