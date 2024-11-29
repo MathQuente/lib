@@ -1,509 +1,119 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { string, z } from 'zod'
-import { prisma } from '../database/db'
+import { GameRepository } from '../repositories/games.repository'
+import { GameService } from '../services/games.service'
+import { GameController } from '../controllers/games.controller'
+import * as GameSchema from '../schemas/games.schema'
+import { DlcRepository } from '../repositories/dlcs.repository'
+
+const gameRepository = new GameRepository()
+const dlcRepository = new DlcRepository()
+const gameService = new GameService(gameRepository, dlcRepository)
+const gameController = new GameController(gameService)
 
 export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:gameId',
     {
       schema: {
-        params: z.object({
-          gameId: z.string().uuid()
-        }),
+        params: GameSchema.GameParamsSchema,
         response: {
-          200: z.object({
-            gameFound: z.object({
-              id: z.string().uuid(),
-              gameName: z.string(),
-              gameBanner: z.string(),
-              categories: z.array(
-                z.object({
-                  categoryName: z.string()
-                })
-              ),
-              gameStudio: z.object({
-                studioName: z.string()
-              }),
-              gameLaunchers: z.array(
-                z.object({
-                  dateRelease: z.date(),
-                  platforms: z.object({
-                    platformName: z.string()
-                  })
-                })
-              ),
-              platforms: z.array(
-                z.object({
-                  platformName: z.string()
-                })
-              )
-            })
-          })
+          200: GameSchema.GetGameResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameId } = request.params
-
-      const gameFound = await prisma.game.findUnique({
-        where: {
-          id: gameId
-        },
-        select: {
-          id: true,
-          gameName: true,
-          gameBanner: true,
-          categories: {
-            select: {
-              categoryName: true
-            }
-          },
-          gameStudio: {
-            select: {
-              studioName: true
-            }
-          },
-          gameLaunchers: {
-            orderBy: {
-              dateRelease: 'asc'
-            },
-            select: {
-              dateRelease: true,
-              platforms: {
-                select: {
-                  platformName: true
-                }
-              }
-            }
-          },
-          platforms: {
-            select: {
-              platformName: true
-            }
-          }
-        }
-      })
-
-      if (gameFound === null) {
-        throw new Error('Game not found.')
-      }
-
-      return reply.send({ gameFound })
-    }
+    async (request, reply) => gameController.getGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
       schema: {
-        querystring: z.object({
-          query: z.string().nullish(),
-          pageIndex: z.string().nullish().default('0').transform(Number)
-        }),
+        querystring: GameSchema.GameQueryStringSchema,
         response: {
-          200: z.object({
-            games: z.array(
-              z.object({
-                id: z.string().uuid(),
-                gameName: z.string(),
-                gameBanner: z.string(),
-                categories: z.array(
-                  z.object({
-                    categoryName: z.string()
-                  })
-                ),
-                gameStudio: z.object({
-                  studioName: z.string()
-                }),
-                gameLaunchers: z.array(
-                  z.object({
-                    dateRelease: z.date(),
-                    platforms: z.object({
-                      platformName: z.string()
-                    })
-                  })
-                ),
-                platforms: z.array(
-                  z.object({
-                    platformName: z.string()
-                  })
-                ),
-                publisher: z.object({
-                  publisherName: z.string()
-                })
-              })
-            ),
-            total: z.number()
-          })
+          200: GameSchema.GetGamesResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { pageIndex, query } = request.query
-      const count = await prisma.game.count()
-
-      const games = await prisma.game.findMany({
-        where: {
-          gameName: query
-            ? {
-                contains: query
-              }
-            : undefined
-        },
-        take: 15,
-        skip: pageIndex * 15,
-        orderBy: [
-          {
-            gameName: 'asc'
-          }
-        ],
-        select: {
-          id: true,
-          gameName: true,
-          gameBanner: true,
-          categories: {
-            select: {
-              categoryName: true
-            }
-          },
-          gameStudio: {
-            select: {
-              studioName: true
-            }
-          },
-          gameLaunchers: {
-            orderBy: {
-              dateRelease: 'asc'
-            },
-            select: {
-              dateRelease: true,
-              platforms: {
-                select: {
-                  platformName: true
-                }
-              }
-            }
-          },
-          platforms: {
-            select: {
-              platformName: true
-            }
-          },
-          publisher: {
-            select: {
-              publisherName: true
-            }
-          }
-        }
-      })
-
-      return reply.send({
-        games,
-        total: count
-      })
-    }
+    async (request, reply) => gameController.getAllGames(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:gameStudioId/:publisherId',
+    '/',
     {
       schema: {
-        params: z.object({
-          gameStudioId: z.string().uuid(),
-          publisherId: z.string().uuid()
-        }),
-        body: z.object({
-          gameName: z.string().min(1),
-          gameBanner: z.string(),
-          categories: z.array(
-            z.object({
-              categoryName: z.string()
-            })
-          ),
-          platforms: z.array(
-            z.object({
-              platformName: z.string()
-            })
-          )
-        }),
+        body: GameSchema.GameBodySchema,
         response: {
-          200: z.object({
-            gameCreated: z.object({
-              id: string().uuid(),
-              gameName: z.string()
-            })
-          })
+          201: GameSchema.CreateGameResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameStudioId, publisherId } = request.params
-      const { gameName, gameBanner, categories, platforms } = request.body
-
-      const categoryNames = categories.map(category => category.categoryName)
-      const platformNames = platforms.map(platform => platform.platformName)
-
-      const gameWithSameName = await prisma.game.findUnique({
-        where: {
-          gameName
-        }
-      })
-
-      if (gameWithSameName !== null) {
-        throw new Error('Game with the same name already exists')
-      }
-
-      const gameCreated = await prisma.game.create({
-        data: {
-          gameName,
-          gameBanner,
-          gameStudio: {
-            connect: {
-              id: gameStudioId
-            }
-          },
-          categories: {
-            connectOrCreate: categoryNames.map(categoryName => ({
-              where: { categoryName },
-              create: { categoryName }
-            }))
-          },
-          platforms: {
-            connectOrCreate: platformNames.map(platformName => ({
-              where: {
-                platformName
-              },
-              create: {
-                platformName
-              }
-            }))
-          },
-          publisher: {
-            connect: {
-              id: publisherId
-            }
-          }
-        },
-        select: {
-          id: true,
-          gameName: true
-        }
-      })
-
-      return reply.send({ gameCreated })
-    }
+    async (request, reply) => gameController.createGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
     '/:gameId/dateRelease',
     {
       schema: {
-        params: z.object({
-          gameId: z.string().uuid()
-        }),
-        body: z.object({
-          dateRelease: z.coerce.date(),
-          platformId: z.string().uuid()
-        }),
+        params: GameSchema.GameParamsSchema,
+        body: GameSchema.CreateGameDateReleaseBodySchema,
         response: {
-          200: z.object({
-            gameDateReleaseOnPlataform: z.object({
-              platforms: z.object({
-                platformName: z.string()
-              }),
-              dateRelease: z.date()
-            })
-          })
+          201: GameSchema.CreateGameDateReleaseResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameId } = request.params
-
-      const { platformId, dateRelease } = request.body
-
-      const gameAlreadyExist = await prisma.game.findUnique({
-        where: {
-          id: gameId
-        }
-      })
-
-      if (gameAlreadyExist == null) {
-        throw new Error('This game does not exist')
-      }
-
-      const gameDateReleaseAlreadyExistOnPlataform =
-        await prisma.gameLauncher.findUnique({
-          where: {
-            platformId_gameId: {
-              platformId,
-              gameId
-            }
-          }
-        })
-
-      if (gameDateReleaseAlreadyExistOnPlataform) {
-        throw new Error('This game has already been release on this date')
-      }
-
-      const gameDateReleaseOnPlataform = await prisma.gameLauncher.create({
-        data: {
-          dateRelease,
-          gameId,
-          platformId
-        },
-        select: {
-          platforms: {
-            select: {
-              platformName: true
-            }
-          },
-          dateRelease: true
-        }
-      })
-
-      return reply.status(200).send({ gameDateReleaseOnPlataform })
-    }
+    async (request, reply) => gameController.addPlatformRelease(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/:gameId',
     {
       schema: {
-        params: z.object({
-          gameId: z.string().uuid()
-        }),
-        body: z.object({
-          gameBanner: z.string(),
-          categories: z.array(
-            z.object({
-              categoryName: z.string()
-            })
-          )
-        }),
+        params: GameSchema.GameParamsSchema,
+        body: GameSchema.UpdateGameBodySchema,
         response: {
-          200: z.object({
-            gameUpdated: z.object({
-              id: string().uuid(),
-              gameName: z.string()
-            })
-          })
+          200: GameSchema.UpdateGameResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameId } = request.params
-
-      const { gameBanner, categories } = request.body
-      const categoryNames = categories.map(category => category.categoryName)
-
-      const gameAlreadyExist = await prisma.game.findUnique({
-        where: {
-          id: gameId
-        }
-      })
-
-      if (!gameAlreadyExist) {
-        throw new Error('This game does not exist')
-      }
-
-      const gameUpdated = await prisma.game.update({
-        where: {
-          id: gameId
-        },
-        data: {
-          gameBanner,
-          categories: {
-            connectOrCreate: categoryNames.map(categoryName => ({
-              where: { categoryName },
-              create: { categoryName }
-            }))
-          }
-        },
-        select: {
-          id: true,
-          gameName: true
-        }
-      })
-
-      return reply.status(200).send({ gameUpdated })
-    }
+    async (request, reply) => gameController.updateGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/:gameId',
     {
       schema: {
-        params: z.object({
-          gameId: z.string().uuid()
-        }),
+        params: GameSchema.GameParamsSchema,
         response: {
-          200: z.object({
-            gameDeleted: z.object({
-              id: z.string().uuid(),
-              gameName: z.string()
-            })
-          })
+          200: GameSchema.DeleteGameResponseSchema
         }
       }
     },
-    async (request, reply) => {
-      const { gameId } = request.params
-
-      const gameHasBeenRemoved = await prisma.game.findUnique({
-        where: {
-          id: gameId
-        }
-      })
-
-      if (!gameHasBeenRemoved) {
-        throw new Error('This game has already been removed from your library')
-      }
-
-      const gameDeleted = await prisma.game.delete({
-        where: {
-          id: gameId
-        },
-        select: {
-          id: true,
-          gameName: true
-        }
-      })
-
-      return reply.send({
-        gameDeleted
-      })
-    }
+    async (request, reply) => gameController.deleteGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/gameStatus',
+    '/status',
     {
       schema: {
-        querystring: z.object({
-          pageIndex: z.string().nullish().default('0').transform(Number)
-        })
+        response: {
+          200: GameSchema.GetGameStatusResponseSchema
+        }
       }
     },
-    async (request, reply) => {
-      const { pageIndex } = request.query
+    async (request, reply) => gameController.getAllGameStatus(request, reply)
+  )
 
-      const gameStatus = await prisma.userGamesStatus.findMany({
-        take: 3,
-        skip: pageIndex * 3,
-        orderBy: [
-          {
-            status: 'asc'
-          }
-        ],
-        select: {
-          id: true,
-          status: true
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/similarGames/:gameId',
+    {
+      schema: {
+        params: GameSchema.GameParamsSchema,
+        response: {
+          200: GameSchema.GetSimilarGamesResponseSchema
         }
-      })
-
-      return reply.send(gameStatus)
-    }
+      }
+    },
+    async (request, reply) => gameController.getSimilarGames(request, reply)
   )
 }
