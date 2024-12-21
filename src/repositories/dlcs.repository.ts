@@ -142,4 +142,83 @@ export class DlcRepository {
       }
     })
   }
+
+  async findDlcById(dlcId: string) {
+    return prisma.dLC.findUnique({
+      where: {
+        id: dlcId
+      },
+      select: {
+        id: true,
+        dlcBanner: true,
+        dlcName: true,
+        game: {
+          select: {
+            id: true,
+            gameBanner: true,
+            gameName: true
+          }
+        },
+        categories: {
+          orderBy: [
+            {
+              categoryName: 'asc'
+            }
+          ],
+          select: {
+            id: true,
+            categoryName: true
+          }
+        },
+        gameStudios: {
+          orderBy: [
+            {
+              studioName: 'asc'
+            }
+          ],
+          select: {
+            id: true,
+            studioName: true
+          }
+        },
+        gameLaunchers: {
+          orderBy: [
+            {
+              platforms: {
+                platformName: 'asc'
+              }
+            }
+          ],
+          select: {
+            dateRelease: true,
+            platformId: true,
+            platforms: true
+          }
+        },
+        platforms: {
+          orderBy: [
+            {
+              platformName: 'asc'
+            }
+          ],
+          select: {
+            id: true,
+            platformName: true
+          }
+        },
+        publishers: {
+          orderBy: [
+            {
+              publisherName: 'asc'
+            }
+          ],
+          select: {
+            id: true,
+            publisherName: true
+          }
+        },
+        summary: true
+      }
+    })
+  }
 }

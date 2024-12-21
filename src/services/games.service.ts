@@ -1,7 +1,7 @@
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/games.dto'
 import { ClientError } from '../errors/client-error'
-import { DlcRepository } from '../repositories/dlcs.repository'
 import { GameRepository } from '../repositories/games.repository'
+import { DlcRepository } from '../repositories/dlcs.repository'
 
 export class GameService {
   private readonly ITEMS_PER_PAGE = 18
@@ -91,119 +91,129 @@ export class GameService {
     }))
   }
 
-  async findAllGamesAndDlcs(pageIndex: number) {
-    const games = await this.gameRepository.findManyGames({
-      pageIndex,
-      limit: this.ITEMS_PER_PAGE
-    })
+  async findAllGamesAndDlcs(
+    pageIndex: number,
+    search: string | null | undefined
+  ) {
+    const games = await this.gameRepository.findManyGames(search)
 
-    const dlcs = await this.dlcRepository.findManyDlcs({
-      pageIndex,
-      limit: this.ITEMS_PER_PAGE
-    })
+    const resultFiltered = games.flatMap(game => [
+      {
+        id: game.id,
+        name: game.gameName,
+        banner: game.gameBanner,
+        gameStudios: game.gameStudios,
+        categories: game.categories,
+        publishers: game.publishers,
+        platforms: game.platforms,
+        summary: game.summary,
+        gameLaunchers: game.gameLaunchers,
+        dlcs: game.dlcs,
+        type: 'game'
+      },
+      ...game.dlcs.map(dlc => ({
+        id: dlc.id,
+        name: dlc.dlcName,
+        banner: dlc.dlcBanner,
+        categories: dlc.categories,
+        game: dlc.game,
+        gameStudios: dlc.gameStudios,
+        gameLaunchers: dlc.gameLaunchers,
+        publishers: dlc.publishers,
+        platforms: dlc.platforms,
+        summary: dlc.summary,
+        type: 'dlc'
+      }))
+    ])
+
+    const startIndex = pageIndex * this.ITEMS_PER_PAGE
+    const paginatedResutls = resultFiltered.slice(
+      startIndex,
+      startIndex + this.ITEMS_PER_PAGE
+    )
 
     return {
-      games: games.map(game => ({
-        id: game.id,
-        categories: game.categories.map(category => ({
-          id: category.id,
-          categoryName: category.categoryName
-        })),
-        dlcs: game.dlcs.map(dlc => ({
-          id: dlc.id,
-          dlcBanner: dlc.dlcBanner,
-          dlcName: dlc.dlcName
-        })),
-        gameBanner: game.gameBanner,
-        gameName: game.gameName,
-        gameStudios: game.gameStudios.map(gameStudio => ({
-          studioName: gameStudio.studioName
-        })),
-        gameLaunchers: game.gameLaunchers.map(gameLauncher => ({
-          gameLauncher: {
-            dateRelease: gameLauncher.dateRelease,
-            id: gameLauncher.platforms.id,
-            platform: gameLauncher.platforms.platformName
-          }
-        })),
-        platforms: game.platforms.map(platform => ({
-          id: platform.id,
-          platformName: platform.platformName
-        })),
-        publishers: game.publishers.map(publisher => ({
-          id: publisher.id,
-          publisherName: publisher.publisherName
-        }))
-      })),
-      dlcs: dlcs.map(dlc => ({
-        id: dlc.id,
-        categories: dlc.categories.map(category => ({
-          id: category.id,
-          categoryName: category.categoryName
-        })),
-        dlcBanner: dlc.dlcBanner,
-        dlcName: dlc.dlcName,
-        game: dlc.game,
-        gameStudios: dlc.gameStudios.map(gameStudio => ({
-          studioName: gameStudio.studioName
-        })),
-        gameLaunchers: dlc.gameLaunchers.map(gameLauncher => ({
-          gameLauncher: {
-            dateRelease: gameLauncher.dateRelease,
-            id: gameLauncher.platforms.id,
-            platform: gameLauncher.platforms.platformName
-          }
-        })),
-        platforms: dlc.platforms.map(platform => ({
-          id: platform.id,
-          platformName: platform.platformName
-        })),
-        publishers: dlc.publishers.map(publisher => ({
-          id: publisher.id,
-          publisherName: publisher.publisherName
-        }))
-      }))
+      games: paginatedResutls,
+      total: resultFiltered.length
     }
   }
 
   async findGameById(gameId: string) {
     const game = await this.gameRepository.findById(gameId)
 
-    if (!game) {
-      throw new ClientError('Game with this id has not founded.')
+    const dlc = await this.dlcRepository.findDlcById(gameId)
+
+    if (!game && !dlc) {
+      throw new ClientError('Item with this id has not founded.')
     }
 
-    return {
-      game: {
+    if (game) {
+      return {
         id: game.id,
+        name: game.gameName,
+        banner: game.gameBanner,
+        gameStudios: game.gameStudios.map(studio => ({
+          id: studio.id,
+          studioName: studio.studioName
+        })),
         categories: game.categories.map(category => ({
           id: category.id,
           categoryName: category.categoryName
         })),
-        dlcs: game.dlcs.map(dlc => ({
-          id: dlc.id,
-          dlcBanner: dlc.dlcBanner,
-          dlcName: dlc.dlcName
-        })),
-        gameBanner: game.gameBanner,
-        gameName: game.gameName,
-        gameStudios: game.gameStudios.map(gameStudio => ({
-          studioName: gameStudio.studioName
-        })),
-        gameLaunchers: game.gameLaunchers.map(gameLauncher => ({
-          dateRelease: gameLauncher.dateRelease,
-          platformId: gameLauncher.platformId,
-          platform: gameLauncher.platforms
+        publishers: game.publishers.map(publisher => ({
+          id: publisher.id,
+          publisherName: publisher.publisherName
         })),
         platforms: game.platforms.map(platform => ({
           id: platform.id,
           platformName: platform.platformName
         })),
-        publishers: game.publishers.map(publisher => ({
-          id: publisher.id,
-          publisherName: publisher.publisherName
-        }))
+        summary: game.summary,
+        gameLaunchers: game.gameLaunchers.map(launcher => ({
+          dateRelease: launcher.dateRelease,
+          platforms: launcher.platforms
+        })),
+        dlcs: game.dlcs.map(dlc => ({
+          id: dlc.id,
+          banner: dlc.dlcBanner,
+          name: dlc.dlcName
+        })),
+        type: 'game'
       }
+    }
+
+    return {
+      id: dlc?.id,
+      name: dlc?.dlcName,
+      banner: dlc?.dlcBanner,
+      game: {
+        id: dlc?.game.id,
+        banner: dlc?.game.gameBanner,
+        name: dlc?.game.gameName
+      },
+      gameStudios: dlc?.gameStudios.map(studio => ({
+        id: studio.id,
+        studioName: studio.studioName
+      })),
+      categories: dlc?.categories.map(category => ({
+        id: category.id,
+        categoryName: category.categoryName
+      })),
+      publishers: dlc?.publishers.map(publisher => ({
+        id: publisher.id,
+        publisherName: publisher.publisherName
+      })),
+      platforms: dlc?.platforms.map(platform => ({
+        id: platform.id,
+        platformName: platform.platformName
+      })),
+      summary: dlc?.summary,
+      gameLaunchers: dlc?.gameLaunchers.map(launcher => ({
+        dateRelease: launcher.dateRelease,
+        platforms: launcher.platforms
+      })),
+      dlcs: [], // DLC não tem DLCs
+      type: 'dlc'
     }
   }
 
