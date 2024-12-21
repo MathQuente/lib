@@ -16,17 +16,22 @@ export class GameController {
   async getGame(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
 
-    const { game } = await this.gameService.findGameById(gameId)
+    const gameAndDlc = await this.gameService.findGameById(gameId)
 
-    return reply.send({ game })
+    return reply.send({ gameAndDlc })
   }
 
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
-    const { pageIndex } = GameSchema.GameQueryStringSchema.parse(request.query)
+    const { pageIndex, query } = GameSchema.GameQueryStringSchema.parse(
+      request.query
+    )
 
-    const gamesAndDlcs = await this.gameService.findAllGamesAndDlcs(pageIndex)
+    const { games, total } = await this.gameService.findAllGamesAndDlcs(
+      pageIndex,
+      query
+    )
 
-    return reply.send({ gamesAndDlcs })
+    return reply.send({ games, total })
   }
 
   async addPlatformRelease(request: FastifyRequest, reply: FastifyReply) {

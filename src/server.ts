@@ -7,35 +7,23 @@ import {
 import cors from '@fastify/cors'
 import { gameRoutes } from './routes/game'
 import { gameStudioRoutes } from './routes/game-studio'
+import { dlcsRoutes } from './routes/dlcs'
 
 import { fastifyJwt } from '@fastify/jwt'
 import * as dotenv from 'dotenv'
 import { platformsRoutes } from './routes/platforms'
-import {
-  addGame,
-  authenticateToken,
-  createUser,
-  deleteUser,
-  getAllUserFinishedGames,
-  getAllUserGames,
-  getAllUserPausedGames,
-  getAllUserPlayingGames,
-  getAllUsers,
-  getGameStatus,
-  getUser,
-  login,
-  logout,
-  removeGame,
-  updateUser,
-  updateUserGameStatus
-} from './routes/user'
+import { userRoutes } from './routes/user'
 import { errorHandler } from './error-handler'
+import { fastifyCookie } from '@fastify/cookie'
+import { authRoutes } from './routes/auth'
 
 dotenv.config()
 
 export const app = fastify()
 
-app.register(cors, {})
+app.register(cors, {
+  origin: ['http://127.0.0.1:5173', 'http://localhost:5173']
+})
 
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
@@ -44,28 +32,18 @@ app.register(fastifyJwt, {
   secret: 'process.env.SECRET_JWT_KEY'
 })
 
+app.register(fastifyCookie, {
+  secret: 'process.env.SECRET_JWT_KEY'
+})
+
 app.setErrorHandler(errorHandler)
 
 app.register(gameStudioRoutes, { prefix: '/gameStudios' })
 app.register(gameRoutes, { prefix: '/games' })
+app.register(dlcsRoutes, { prefix: '/dlcs' })
 app.register(platformsRoutes, { prefix: '/platforms' })
-
-app.register(createUser)
-app.register(login)
-app.register(logout)
-app.register(getUser)
-app.register(authenticateToken)
-app.register(getAllUsers)
-app.register(addGame)
-app.register(getAllUserGames)
-app.register(removeGame)
-app.register(updateUser)
-app.register(deleteUser)
-app.register(updateUserGameStatus)
-app.register(getGameStatus)
-app.register(getAllUserFinishedGames)
-app.register(getAllUserPlayingGames)
-app.register(getAllUserPausedGames)
+app.register(authRoutes, { prefix: '/auth' })
+app.register(userRoutes, { prefix: '/users' })
 
 app.listen({ port: 3333 }).then(() => {
   console.log('HTTP server running!')

@@ -80,15 +80,20 @@ export class GameRepository {
     })
   }
 
-  async findManyGames({ pageIndex = 0, limit = 18 } = {}) {
+  async findManyGames(query: string | null | undefined) {
     return prisma.game.findMany({
+      where: {
+        gameName: query
+          ? {
+              contains: query
+            }
+          : undefined
+      },
       orderBy: [
         {
           gameName: 'asc'
         }
       ],
-      skip: pageIndex * limit,
-      take: limit,
       select: {
         id: true,
         categories: {
@@ -110,16 +115,87 @@ export class GameRepository {
           ],
           select: {
             id: true,
+            categories: {
+              orderBy: [
+                {
+                  categoryName: 'asc'
+                }
+              ],
+              select: {
+                id: true,
+                categoryName: true
+              }
+            },
             dlcBanner: true,
-            dlcName: true
+            dlcName: true,
+            game: {
+              select: {
+                id: true,
+                gameBanner: true,
+                gameName: true
+              }
+            },
+            gameLaunchers: {
+              orderBy: [
+                {
+                  platforms: {
+                    platformName: 'asc'
+                  }
+                }
+              ],
+              select: {
+                dateRelease: true,
+                platforms: {
+                  select: {
+                    id: true,
+                    platformName: true
+                  }
+                }
+              }
+            },
+            gameStudios: {
+              orderBy: [
+                {
+                  studioName: 'asc'
+                }
+              ],
+              select: {
+                id: true,
+                studioName: true
+              }
+            },
+            platforms: {
+              orderBy: [
+                {
+                  platformName: 'asc'
+                }
+              ],
+              select: {
+                id: true,
+                platformName: true
+              }
+            },
+            publishers: {
+              orderBy: [
+                {
+                  publisherName: 'asc'
+                }
+              ],
+              select: {
+                id: true,
+                publisherName: true
+              }
+            },
+            summary: true
           }
         },
         gameBanner: true,
-        gameName: true,
         gameLaunchers: {
           orderBy: [
             {
-              dateRelease: 'asc'
+              platforms: {
+                platformName: 'asc'
+              }
             }
           ],
           select: {
@@ -132,7 +208,13 @@ export class GameRepository {
             }
           }
         },
+        gameName: true,
         gameStudios: {
+          orderBy: [
+            {
+              studioName: 'asc'
+            }
+          ],
           select: {
             id: true,
             studioName: true
@@ -160,8 +242,7 @@ export class GameRepository {
             publisherName: true
           }
         },
-        summary: true,
-        _count: true
+        summary: true
       }
     })
   }
@@ -201,6 +282,11 @@ export class GameRepository {
           }
         },
         dlcs: {
+          orderBy: [
+            {
+              dlcName: 'asc'
+            }
+          ],
           select: {
             id: true,
             dlcBanner: true,
@@ -210,12 +296,24 @@ export class GameRepository {
         gameBanner: true,
         gameName: true,
         gameStudios: {
+          orderBy: [
+            {
+              studioName: 'asc'
+            }
+          ],
           select: {
             id: true,
             studioName: true
           }
         },
         gameLaunchers: {
+          orderBy: [
+            {
+              platforms: {
+                platformName: 'asc'
+              }
+            }
+          ],
           select: {
             dateRelease: true,
             platformId: true,
@@ -223,17 +321,28 @@ export class GameRepository {
           }
         },
         platforms: {
+          orderBy: [
+            {
+              platformName: 'asc'
+            }
+          ],
           select: {
             id: true,
             platformName: true
           }
         },
         publishers: {
+          orderBy: [
+            {
+              publisherName: 'asc'
+            }
+          ],
           select: {
             id: true,
             publisherName: true
           }
-        }
+        },
+        summary: true
       }
     })
   }

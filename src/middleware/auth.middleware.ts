@@ -1,54 +1,34 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { prisma } from '../database/db'
-import { app } from '../server'
+import { ClientError } from '../errors/client-error'
 
-interface JwtPayload {
-  userId: string
-}
-
-export function authMiddleware(
+export async function authMiddleware(
   request: FastifyRequest,
-  reply: FastifyReply,
-  done: () => void
+  reply: FastifyReply
 ) {
-  const authHeader = request.headers.authorization
+  try {
+    // Pega o token do header Authorization
+    const authHeader = request.headers.authorization
 
-  if (!authHeader)
-    return reply.status(401).send({ message: 'The token was not informed!' })
-
-  const parts = authHeader.split(' ')
-  if (parts.length !== 2)
-    return reply.status(401).send({ message: 'Invalid token!' })
-
-  const [scheme, token] = parts
-
-  if (!/^Bearer$/i.test(scheme))
-    return reply.status(401).send({ message: 'Malformatted Token!' })
-
-  app.jwt.verify(token, async (err, decoded) => {
-    if (err) return reply.status(401).send({ message: 'Invalid token!' })
-
-    const blacklistedToken = await prisma.blacklistedToken.findUnique({
-      where: {
-        token
-      }
-    })
-
-    if (blacklistedToken) {
-      return reply.status(401).send({ message: 'Token has been invalidated!' })
+    if (!authHeader) {
+      throw new ClientError('No token provided')
     }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: (decoded as JwtPayload).userId
-      }
-    })
+    const [, token] = authHeader.split(' ') // Remove o "Bearer" do início
 
-    if (!user || !user.id)
-      return reply.status(401).send({ message: 'Invalid token!' })
+    if (!token) {
+      throw new ClientError('No token provided')
+    }
 
-    request.authUser = { id: user.id }
+    // Verifica e decodifica o token
+    const decoded = request.server.jwt.verify(token)
 
-    return done()
-  })
+    // Adiciona o usuário decodificado à request para uso nas rotas
+    request.user = decoded
+  } catch (error: any) {
+    if (error.code === 'FAST_JWT_EXPIRED') {
+      return reply.status(401).send({ message: 'Token expired' })
+    }
+
+    return reply.status(401).send({ message: 'Invalid token' })
+  }
 }

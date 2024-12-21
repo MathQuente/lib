@@ -18,7 +18,7 @@ export async function gameRoutes(app: FastifyInstance) {
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
-          200: GameSchema.GetGameResponseSchema
+          // 200: GameSchema.GetGameResponseSchema
         }
       }
     },
@@ -31,7 +31,7 @@ export async function gameRoutes(app: FastifyInstance) {
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {
-          200: GameSchema.GetGamesResponseSchema
+          // 200: GameSchema.GetGamesResponseSchema
         }
       }
     },

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -11,32 +12,53 @@ generator dbml {
   provider = "prisma-dbml-generator"
 }
 
-model BlacklistedToken {
+model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
-  userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
+  isValid   Boolean  @default(true)
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
+  @@map("refresh_token")
 }
 
-model Game {
-  id           String   @id @default(uuid())
-  createdAt    DateTime @default(now()) @map("created_at")
-  gameBanner   String   @map("game_banner")
-  gameName     String   @unique @map("game_name")
-  gameStudioId String   @map("game_studio_id")
-  publisherId  String
-  updatedAt    DateTime @default(now()) @map("updated_at")
+model DLC {
+  id        String @id @default(uuid())
+  dlcBanner String @map("dlc_banner")
+  dlcName   String @unique @map("dlc_name")
+  gameId    String @map("gameId")
+  summary   String
 
-  gameStudio GameStudio @relation(fields: [gameStudioId], references: [id], onDelete: Cascade)
-  publisher  Publisher  @relation(fields: [publisherId], references: [id], onDelete: Cascade)
-
+  gameStudios   GameStudio[]
+  publishers    Publisher[]
   categories    GameCategory[]
   platforms     Platform[]
   gameLaunchers GameLauncher[]
   userGames     UserGame[]
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("dlcs")
+}
+
+model Game {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now()) @map("created_at")
+  gameBanner String   @map("game_banner")
+  gameName   String   @unique @map("game_name")
+  summary    String
+  updatedAt  DateTime @default(now()) @map("updated_at")
+
+  gameStudios   GameStudio[]
+  publishers    Publisher[]
+  categories    GameCategory[]
+  platforms     Platform[]
+  gameLaunchers GameLauncher[]
+  userGames     UserGame[]
+  dlcs          DLC[]
 
   @@map("games")
 }
@@ -45,6 +67,7 @@ model GameCategory {
   id           Int    @id @default(autoincrement())
   categoryName String @unique @map("category_name")
   games        Game[]
+  dlcs         DLC[]
 
   @@map("game_categories")
 }
@@ -56,6 +79,8 @@ model GameLauncher {
   platformId  String   @map("plataform_id")
   platforms   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
   game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  dlcId       String?  @map("dlc_id")
+  dlc         DLC?     @relation(fields: [dlcId], references: [id], onDelete: Cascade)
 
   @@id([platformId, gameId])
   @@map("game_launchers")
@@ -65,6 +90,7 @@ model GameStudio {
   id         String @id @default(uuid())
   studioName String @unique @map("studio_name")
   games      Game[]
+  dlcs       DLC[]
 
   @@map("game_studios")
 }
@@ -74,6 +100,7 @@ model Platform {
   platformName  String         @unique @map("plataform_name")
   gameLaunchers GameLauncher[]
   games         Game[]
+  dlcs          DLC[]
 
   @@map("platforms")
 }
@@ -82,36 +109,41 @@ model Publisher {
   id            String @id @default(uuid())
   publisherName String @unique @map("publisher_name")
   games         Game[]
+  dlcs          DLC[]
 
   @@map("publishers")
 }
 
 model User {
-  id             String     @id @default(uuid())
-  email          String     @unique
-  userName       String?    @map("user_name")
+  id             String         @id @default(uuid())
+  email          String         @unique
+  userName       String?        @map("user_name")
   password       String
-  profilePicture String?    @map("profile_picture")
-  userBanner     String?    @map("user_banner")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @default(now()) @map("updated_at")
+  profilePicture String?        @map("profile_picture")
+  userBanner     String?        @map("user_banner")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @default(now()) @map("updated_at")
   userGames      UserGame[]
+  refreshToken   RefreshToken[]
 
   @@map("users")
 }
 
 model UserGame {
-  id                String          @default(uuid())
-  gameId            String          @map("game_id")
+  id                String          @id @default(uuid())
+  gameId            String?         @map("game_id")
   userId            String          @map("user_id")
+  dlcId             String?         @map("dlc_id")
   userGamesStatusId Int
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
   UserGamesStatus   UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game              Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game              Game?           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  dlc               DLC?            @relation(fields: [dlcId], references: [id], onDelete: Cascade)
 
-  @@id([gameId, userId])
+  @@unique([userId, gameId])
+  @@unique([userId, dlcId])
   @@map("user_games")
 }
 
