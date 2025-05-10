@@ -25,6 +25,7 @@ Table dlcs {
   gameLaunchers game_launchers [not null]
   userGames user_games [not null]
   game games [not null]
+  UserGameStats user_game_stats [not null]
 }
 
 Table games {
@@ -41,6 +42,7 @@ Table games {
   gameLaunchers game_launchers [not null]
   userGames user_games [not null]
   dlcs dlcs [not null]
+  UserGameStats user_game_stats [not null]
 }
 
 Table game_categories {
@@ -98,6 +100,7 @@ Table users {
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]
   refreshToken refresh_token [not null]
+  UserGameStats user_game_stats [not null]
 }
 
 Table user_games {
@@ -105,13 +108,13 @@ Table user_games {
   gameId String
   userId String [not null]
   dlcId String
-  userGamesStatusId Int [not null]
+  statuses users_games_status [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
-  UserGamesStatus users_games_status [not null]
   user users [not null]
   game games
   dlc dlcs
+  UserGameStats user_game_stats
 
   indexes {
     (userId, gameId) [unique]
@@ -121,8 +124,21 @@ Table user_games {
 
 Table users_games_status {
   id Int [pk, increment]
-  status String [not null]
+  status Status [not null]
   userGames user_games [not null]
+}
+
+Table user_game_stats {
+  id String [pk]
+  userGameId String [unique, not null]
+  completions Int [not null, default: 0]
+  userGame user_games [not null]
+  DLC dlcs
+  dLCId String
+  Game games
+  gameId String
+  User users
+  userId String
 }
 
 Table DLCToGameStudio {
@@ -165,6 +181,19 @@ Table GameToPlatform {
   gamesId String [ref: > games.id]
 }
 
+Table UserGameToUserGamesStatus {
+  statusesId Int [ref: > users_games_status.id]
+  usergamesId String [ref: > user_games.id]
+}
+
+Enum Status {
+  PLAYED
+  REPLAYING
+  PLAYING
+  BACKLOG
+  WISHLIST
+}
+
 Ref: refresh_token.userId > users.id [delete: Cascade]
 
 Ref: dlcs.gameId > games.id [delete: Cascade]
@@ -175,10 +204,16 @@ Ref: game_launchers.gameId > games.id [delete: Cascade]
 
 Ref: game_launchers.dlcId > dlcs.id [delete: Cascade]
 
-Ref: user_games.userGamesStatusId > users_games_status.id
-
 Ref: user_games.userId > users.id [delete: Cascade]
 
 Ref: user_games.gameId > games.id [delete: Cascade]
 
 Ref: user_games.dlcId > dlcs.id [delete: Cascade]
+
+Ref: user_game_stats.userGameId - user_games.id [delete: Cascade]
+
+Ref: user_game_stats.dLCId > dlcs.id
+
+Ref: user_game_stats.gameId > games.id
+
+Ref: user_game_stats.userId > users.id

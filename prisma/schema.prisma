@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -18,9 +18,8 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   isValid   Boolean  @default(true)
-  
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_token")
 }
@@ -39,7 +38,8 @@ model DLC {
   gameLaunchers GameLauncher[]
   userGames     UserGame[]
 
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game          Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  UserGameStats UserGameStats[]
 
   @@map("dlcs")
 }
@@ -59,6 +59,7 @@ model Game {
   gameLaunchers GameLauncher[]
   userGames     UserGame[]
   dlcs          DLC[]
+  UserGameStats UserGameStats[]
 
   @@map("games")
 }
@@ -115,32 +116,33 @@ model Publisher {
 }
 
 model User {
-  id             String         @id @default(uuid())
-  email          String         @unique
-  userName       String?        @map("user_name")
+  id             String          @id @default(uuid())
+  email          String          @unique
+  userName       String?         @map("user_name")
   password       String
-  profilePicture String?        @map("profile_picture")
-  userBanner     String?        @map("user_banner")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @default(now()) @map("updated_at")
+  profilePicture String?         @map("profile_picture")
+  userBanner     String?         @map("user_banner")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @default(now()) @map("updated_at")
   userGames      UserGame[]
   refreshToken   RefreshToken[]
+  UserGameStats  UserGameStats[]
 
   @@map("users")
 }
 
 model UserGame {
-  id                String          @id @default(uuid())
-  gameId            String?         @map("game_id")
-  userId            String          @map("user_id")
-  dlcId             String?         @map("dlc_id")
-  userGamesStatusId Int
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  UserGamesStatus   UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game              Game?           @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  dlc               DLC?            @relation(fields: [dlcId], references: [id], onDelete: Cascade)
+  id            String            @id @default(uuid())
+  gameId        String?           @map("game_id")
+  userId        String            @map("user_id")
+  dlcId         String?           @map("dlc_id")
+  statuses      UserGamesStatus[] // Relacionamento many-to-many
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game          Game?             @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  dlc           DLC?              @relation(fields: [dlcId], references: [id], onDelete: Cascade)
+  UserGameStats UserGameStats?
 
   @@unique([userId, gameId])
   @@unique([userId, dlcId])
@@ -149,8 +151,33 @@ model UserGame {
 
 model UserGamesStatus {
   id        Int        @id @default(autoincrement())
-  status    String
+  status    Status
   userGames UserGame[]
 
   @@map("users_games_status")
+}
+
+enum Status {
+  PLAYED
+  REPLAYING
+  PLAYING
+  BACKLOG
+  WISHLIST
+}
+
+model UserGameStats {
+  id          String @id @default(uuid())
+  userGameId  String @map("user_game_id") // ← chave estrangeira
+  completions Int    @default(0)
+
+  userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
+  DLC      DLC?     @relation(fields: [dLCId], references: [id])
+  dLCId    String?
+  Game     Game?    @relation(fields: [gameId], references: [id])
+  gameId   String?
+  User     User?    @relation(fields: [userId], references: [id])
+  userId   String?
+
+  @@unique([userGameId]) // ← garante 1:1
+  @@map("user_game_stats")
 }
