@@ -28,12 +28,16 @@ app.register(cors, {
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
 
+if (!process.env.SECRET_JWT_KEY) {
+  throw new Error('SECRET_JWT_KEY environment variable is required')
+}
+
 app.register(fastifyJwt, {
-  secret: 'process.env.SECRET_JWT_KEY'
+  secret: process.env.SECRET_JWT_KEY
 })
 
 app.register(fastifyCookie, {
-  secret: 'process.env.SECRET_JWT_KEY'
+  secret: process.env.SECRET_JWT_KEY
 })
 
 app.setErrorHandler(errorHandler)
