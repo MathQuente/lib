@@ -4,7 +4,7 @@ import { GameRepository } from '../repositories/games.repository'
 import { DlcRepository } from '../repositories/dlcs.repository'
 
 export class GameService {
-  private readonly ITEMS_PER_PAGE = 18
+  private readonly ITEMS_PER_PAGE = 36
 
   constructor(
     private gameRepository: GameRepository,
