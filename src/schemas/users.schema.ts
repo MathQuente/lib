@@ -1,5 +1,13 @@
 import z from 'zod'
 
+enum Status {
+  PLAYED = 'PLAYED',
+  REPLAYING = 'REPLAYING',
+  PLAYING = 'PLAYING',
+  BACKLOG = 'BACKLOG',
+  WISHLIST = 'WISHLIST'
+}
+
 export const CreateUserResponseSchema = z.object({
   token: z.string(),
   user: z.object({
@@ -26,7 +34,7 @@ export const GetUserResponseSchema = z.object({
   user: z.object({
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
-    userName: z.string(),
+    userName: z.string().nullable(),
     gamesAmount: z.number()
   })
 })
@@ -50,8 +58,27 @@ export const GetAllUsersResponseSchema = z.object({
 
 export const UserGameParamsSchema = z.object({
   itemId: z.string().uuid(),
+  userId: z.string().uuid()
+})
+
+export const UserGamePlayedCountUpdateParamsSchema = z.object({
   userId: z.string().uuid(),
-  statusId: z.coerce.number()
+  gameId: z.string().uuid()
+})
+
+export const UserGameBodySchema = z.object({
+  statusIds: z
+    .array(z.number())
+    .min(1, { message: 'pelo menos um status deve ser informado' })
+    .refine(
+      arr =>
+        arr.every(id => [/* ids permitidos, ex: */ 1, 2, 3, 4, 5].includes(id)),
+      { message: 'status inválido na lista' }
+    )
+})
+
+export const UserGamePlayedCountUpdateBodySchema = z.object({
+  incrementValue: z.number().int()
 })
 
 export const RemoveGameParamsSchema = z.object({
@@ -231,10 +258,12 @@ export const UpdateUserGameStatusResponseSchema = z.object({
     gameBanner: z.string(),
     gameName: z.string()
   }),
-  UserGamesStatus: z.object({
-    id: z.number(),
-    status: z.string()
-  })
+  statuses: z.array(
+    z.object({
+      id: z.number(),
+      status: z.string()
+    })
+  )
 })
 
 export const UserBodySchema = z.object({

@@ -1,14 +1,16 @@
+import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/users.dto'
 
 export class UserRepository {
   async addItem(data: AddGameDTO) {
+    const connectStatuses = data.statusIds.map(id => ({ id }))
     if (data.type === 'game') {
       return prisma.userGame.create({
         data: {
           gameId: data.itemId,
           userId: data.userId,
-          userGamesStatusId: data.statusId
+          statuses: { connect: connectStatuses }
         },
         select: {
           game: {
@@ -25,7 +27,7 @@ export class UserRepository {
       data: {
         dlcId: data.itemId,
         userId: data.userId,
-        userGamesStatusId: data.statusId
+        statuses: { connect: connectStatuses }
       },
       select: {
         dlc: {
@@ -35,6 +37,33 @@ export class UserRepository {
             dlcName: true
           }
         }
+      }
+    })
+  }
+
+  async createUserGameStats(
+    userId: string,
+    gameId: string,
+    completions: number = 0
+  ) {
+    const userGame = await prisma.userGame.upsert({
+      where: {
+        userId_gameId: {
+          userId,
+          gameId
+        }
+      },
+      update: {}, // Não atualiza nada se já existir
+      create: {
+        userId,
+        gameId
+      }
+    })
+
+    return prisma.userGameStats.create({
+      data: {
+        userGameId: userGame.id,
+        completions: completions
       }
     })
   }
@@ -84,6 +113,16 @@ export class UserRepository {
     })
   }
 
+  async findManyByIds(statusIds: number[]) {
+    return prisma.userGamesStatus.findMany({
+      where: {
+        id: {
+          in: statusIds
+        }
+      }
+    })
+  }
+
   async findUserItemStatus(
     itemId: string,
     userId: string,
@@ -98,7 +137,7 @@ export class UserRepository {
           }
         },
         select: {
-          UserGamesStatus: {
+          statuses: {
             select: {
               id: true,
               status: true
@@ -116,7 +155,7 @@ export class UserRepository {
         }
       },
       select: {
-        UserGamesStatus: {
+        statuses: {
           select: {
             id: true,
             status: true
@@ -188,8 +227,10 @@ export class UserRepository {
               }
             ]
           : undefined,
-        UserGamesStatus: {
-          id: filter
+        statuses: {
+          some: {
+            id: filter
+          }
         }
       },
       skip: pageIndex * limit,
@@ -359,9 +400,8 @@ export class UserRepository {
             summary: true
           }
         },
-        UserGamesStatus: {
+        statuses: {
           select: {
-            id: true,
             status: true
           }
         }
@@ -370,17 +410,20 @@ export class UserRepository {
   }
 
   async findGamesCountByStatus(userId: string) {
-    const totalGamesByStatus = await prisma.userGame.groupBy({
-      by: ['userGamesStatusId'],
-      where: {
-        userId // Filtrar pelo usuário
-      },
-      _count: {
-        userGamesStatusId: true // Contar a quantidade de registros para cada status
+    const totals = await prisma.userGamesStatus.findMany({
+      select: {
+        id: true,
+        status: true,
+        _count: {
+          select: {
+            userGames: {
+              where: { userId }
+            }
+          }
+        }
       }
     })
-
-    return totalGamesByStatus
+    return totals
   }
 
   async findManyUsers({ pageIndex = 0, limit = 18, query = '' } = {}) {
@@ -453,12 +496,40 @@ export class UserRepository {
     })
   }
 
+  async removeUserGameStats(userId: string, gameId: string) {
+    const userGame = await prisma.userGame.findUnique({
+      where: {
+        userId_gameId: {
+          userId,
+          gameId
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!userGame) {
+      throw new Error('UserGame not found.')
+    }
+
+    return prisma.userGameStats.delete({
+      where: {
+        userGameId: userGame.id
+      },
+      select: {
+        completions: true
+      }
+    })
+  }
+
   async updateItemStatus(
     itemId: string,
     userId: string,
-    statusId: number,
+    statusIds: number[],
     type: 'game' | 'dlc'
   ) {
+    const connectStatuses = statusIds.map(id => ({ id }))
     if (type === 'game') {
       return prisma.userGame.update({
         where: {
@@ -468,7 +539,10 @@ export class UserRepository {
           }
         },
         data: {
-          userGamesStatusId: statusId
+          statuses: {
+            set: [], // Primeiro desconecta todos
+            connect: connectStatuses // Depois conecta os novos
+          }
         },
         select: {
           game: {
@@ -478,7 +552,7 @@ export class UserRepository {
               gameName: true
             }
           },
-          UserGamesStatus: {
+          statuses: {
             select: {
               id: true,
               status: true
@@ -496,7 +570,10 @@ export class UserRepository {
         }
       },
       data: {
-        userGamesStatusId: statusId
+        statuses: {
+          set: [], // Primeiro desconecta todos
+          connect: connectStatuses
+        }
       },
       select: {
         dlc: {
@@ -506,7 +583,7 @@ export class UserRepository {
             dlcName: true
           }
         },
-        UserGamesStatus: {
+        statuses: {
           select: {
             id: true,
             status: true
@@ -540,6 +617,54 @@ export class UserRepository {
         profilePicture: true,
         userBanner: true,
         userName: true
+      }
+    })
+  }
+
+  async findUserGameStats(userId: string, itemId: string) {
+    const stats = await prisma.userGameStats.findFirst({
+      where: {
+        userGame: {
+          userId,
+          gameId: itemId
+        }
+      },
+      select: {
+        completions: true
+      }
+    })
+    return stats
+  }
+
+  async updateUserGamePlayedCount(
+    userId: string,
+    gameId: string,
+    incrementValue: number
+  ) {
+    const userGame = await prisma.userGame.findUnique({
+      where: {
+        userId_gameId: {
+          userId,
+          gameId
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!userGame) {
+      throw new Error('UserGame not found.')
+    }
+
+    return prisma.userGameStats.update({
+      where: {
+        userGameId: userGame.id
+      },
+      data: {
+        completions: {
+          increment: incrementValue
+        }
       }
     })
   }

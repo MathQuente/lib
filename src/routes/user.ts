@@ -49,7 +49,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:userId/addGame/:itemId/:statusId',
+    '/:userId/addGame/:itemId',
     {
       onRequest: [authMiddleware],
       schema: {
@@ -77,7 +77,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/userGamesStatus/:userId/:itemId/:statusId',
+    '/userGamesStatus/:userId/:itemId',
     {
       onRequest: [authMiddleware],
       schema: {
@@ -147,5 +147,36 @@ export async function userRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => userController.deleteUser(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/:userId/gameInfo/:itemId',
+    {
+      onRequest: [authMiddleware],
+      schema: {
+        // querystring: UserSchema.QueryStringSchema,
+        // params: UserSchema.UserParamsSchema,
+        response: {
+          // 200: UserSchema.GetAllUserGamesResponseSchema
+        }
+      }
+    },
+    async (request, reply) => userController.getUserGameStats(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().patch(
+    '/:userId/playedCount/:itemId',
+    {
+      onRequest: [authMiddleware],
+      schema: {
+        // querystring: UserSchema.QueryStringSchema,
+        // params: UserSchema.UserParamsSchema,
+        response: {
+          // 200: UserSchema.GetAllUserGamesResponseSchema
+        }
+      }
+    },
+    async (request, reply) =>
+      userController.updateuserGamePlayedCount(request, reply)
   )
 }

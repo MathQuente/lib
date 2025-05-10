@@ -13,7 +13,7 @@ export class UserService {
     private dlcRepository: DlcRepository
   ) {}
 
-  async addGameOrDlc(itemId: string, userId: string, statusId: number) {
+  async addGameOrDlc(itemId: string, userId: string, statusIds: number[]) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
@@ -41,12 +41,26 @@ export class UserService {
         throw new ClientError('This game is already in your library')
       }
 
+      const selectedStatuses = await this.userRepository.findManyByIds(
+        statusIds
+      )
+
+      const isPlayed = selectedStatuses.some(
+        status => status.status === 'PLAYED'
+      )
+
       const game = await this.userRepository.addItem({
         itemId,
-        statusId,
+        statusIds,
         type,
         userId
       })
+
+      await this.userRepository.createUserGameStats(
+        userId,
+        itemId,
+        isPlayed ? 1 : 0
+      )
 
       return game
     }
@@ -61,7 +75,7 @@ export class UserService {
 
       const dlc = await this.userRepository.addItem({
         itemId,
-        statusId,
+        statusIds,
         type,
         userId
       })
@@ -170,8 +184,8 @@ export class UserService {
     )
 
     const formattedTotalPerStatus = totalPerStatus.map(item => ({
-      statusId: item.userGamesStatusId, // Extraindo o statusId
-      totalGames: item._count.userGamesStatusId // Contando os jogos por status
+      status: item.status, // Extraindo o statusId
+      totalGames: item._count.userGames // Contando os jogos por status
     }))
 
     const resultFiltered = games
@@ -190,7 +204,7 @@ export class UserService {
           newItem.summary = userGame.game.summary
           newItem.gameLaunchers = userGame.game.gameLaunchers
           newItem.dlcs = userGame.game.dlcs
-          newItem.UserGamesStatus = userGame.UserGamesStatus
+          newItem.UserGamesStatus = userGame.statuses
           newItem.type = 'game'
         }
 
@@ -210,7 +224,7 @@ export class UserService {
           newItem.publishers = userGame.dlc.publishers
           newItem.platforms = userGame.dlc.platforms
           newItem.summary = userGame.dlc.summary
-          newItem.UserGamesStatus = userGame.UserGamesStatus
+          newItem.UserGamesStatus = userGame.statuses
           newItem.type = 'dlc'
         }
 
@@ -272,7 +286,7 @@ export class UserService {
     }
   }
 
-  async updateGameOrDlc(itemId: string, userId: string, statusId: number) {
+  async updateGameOrDlc(itemId: string, userId: string, statusIds: number[]) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
@@ -308,7 +322,7 @@ export class UserService {
       const game = await this.userRepository.updateItemStatus(
         itemId,
         userId,
-        statusId,
+        statusIds,
         type
       )
 
@@ -331,7 +345,7 @@ export class UserService {
       const dlc = await this.userRepository.updateItemStatus(
         itemId,
         userId,
-        statusId,
+        statusIds,
         type
       )
 
@@ -353,5 +367,75 @@ export class UserService {
     })
 
     return { user }
+  }
+
+  async findUserGameStats(userId: string, itemId: string) {
+    const user = await this.userRepository.findUserById(userId)
+
+    if (!user) {
+      throw new ClientError('User not found')
+    }
+    const [game, dlc] = await Promise.all([
+      this.gameRepository.findById(itemId),
+      this.dlcRepository.findDlcById(itemId)
+    ])
+
+    if (!game && !dlc) {
+      throw new ClientError(
+        'Item not found - neither game nor DLC exists with this ID'
+      )
+    }
+
+    const gameStats = await this.userRepository.findUserGameStats(
+      userId,
+      itemId
+    )
+
+    return gameStats
+  }
+
+  async updateUserGamePlayedCount(
+    userId: string,
+    gameId: string,
+    incrementValue: number
+  ) {
+    const user = await this.userRepository.findUserById(userId)
+
+    if (!user) {
+      throw new ClientError('User not found')
+    }
+
+    const game = await this.gameRepository.findById(gameId)
+
+    if (!game) {
+      throw new ClientError(
+        'Item not found - neither game nor DLC exists with this ID'
+      )
+    }
+
+    const gameIsReplaying = await this.findUserGameStatus(gameId, userId)
+
+    if (gameIsReplaying) {
+      const gameFounded = gameIsReplaying.statuses.find(
+        gameStatus => gameStatus.status == 'REPLAYING'
+      )
+
+      if (gameFounded) {
+        const result = await this.userRepository.updateItemStatus(
+          game.id,
+          userId,
+          [1],
+          'game'
+        )
+      }
+    }
+
+    const updatedGame = await this.userRepository.updateUserGamePlayedCount(
+      userId,
+      game.id,
+      incrementValue
+    )
+
+    return updatedGame
   }
 }

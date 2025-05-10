@@ -6,14 +6,16 @@ export class UserController {
   constructor(private userService: UserService) {}
 
   async addGameOrDlc(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, statusId, userId } = UserSchema.UserGameParamsSchema.parse(
+    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
+
+    const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
 
     const addItem = await this.userService.addGameOrDlc(
       itemId,
       userId,
-      statusId
+      statusIds
     )
 
     return reply.send(addItem)
@@ -34,7 +36,7 @@ export class UserController {
 
     const { userId } = UserSchema.UserParamsSchema.parse(request.params)
 
-    const { userGames, totalPerStatus, totalGames } =
+    const { totalPerStatus, totalGames, userGames } =
       await this.userService.findManyUserGames(userId, pageIndex, filter, query)
 
     return reply.send({ userGames, totalPerStatus, totalGames })
@@ -79,14 +81,16 @@ export class UserController {
   }
 
   async updateGameOrDlc(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId, statusId } = UserSchema.UserGameParamsSchema.parse(
+    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
+
+    const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
 
     const updateItem = await this.userService.updateGameOrDlc(
       itemId,
       userId,
-      statusId
+      statusIds
     )
 
     return reply.send(updateItem)
@@ -105,5 +109,38 @@ export class UserController {
     })
 
     return reply.send({ user })
+  }
+
+  async getUserGameStats(request: FastifyRequest, reply: FastifyReply) {
+    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+      request.params
+    )
+
+    const UserGameStats = await this.userService.findUserGameStats(
+      userId,
+      itemId
+    )
+
+    return reply.send({ UserGameStats })
+  }
+
+  async updateuserGamePlayedCount(
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) {
+    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+      request.params
+    )
+
+    const { incrementValue } =
+      UserSchema.UserGamePlayedCountUpdateBodySchema.parse(request.body)
+
+    const updateItem = await this.userService.updateUserGamePlayedCount(
+      userId,
+      itemId,
+      incrementValue
+    )
+
+    return reply.send(updateItem)
   }
 }
