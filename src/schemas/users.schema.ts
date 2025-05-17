@@ -1,13 +1,5 @@
 import z from 'zod'
 
-enum Status {
-  PLAYED = 'PLAYED',
-  REPLAYING = 'REPLAYING',
-  PLAYING = 'PLAYING',
-  BACKLOG = 'BACKLOG',
-  WISHLIST = 'WISHLIST'
-}
-
 export const CreateUserResponseSchema = z.object({
   token: z.string(),
   user: z.object({
@@ -32,6 +24,8 @@ export const UserParamsSchema = z.object({
 
 export const GetUserResponseSchema = z.object({
   user: z.object({
+    id: z.string().uuid(),
+    email: z.string().email(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
@@ -49,15 +43,16 @@ export const GetAllUsersResponseSchema = z.object({
   users: z.array(
     z.object({
       id: z.string().uuid(),
-      userBanner: z.string().nullish(),
-      userName: z.string(),
-      profilePicture: z.string().nullish()
+      userBanner: z.string().nullable(),
+      userName: z.string().nullable(),
+      profilePicture: z.string().url().nullable(),
+      userGamesAmount: z.number()
     })
   )
 })
 
 export const UserGameParamsSchema = z.object({
-  itemId: z.string().uuid(),
+  gameId: z.string().uuid(),
   userId: z.string().uuid()
 })
 
@@ -134,114 +129,31 @@ export const UpdateUserResponseSchema = z.object({
 })
 
 export const GetUserGameStatusResponse = z.object({
-  UserGamesStatus: z.object({
-    id: z.number(),
-    status: z.string()
-  })
+  userGameStatuses: z.array(
+    z.object({
+      id: z.number(),
+      status: z.string()
+    })
+  )
 })
 
 export const GetAllUserGamesResponseSchema = z.object({
   userGames: z.array(
     z.object({
-      dlc: z
-        .object({
-          id: z.string().uuid(),
-          categories: z.array(
-            z.object({
-              id: z.number(),
-              categoryName: z.string()
-            })
-          ),
-          dlcBanner: z.string().url(),
-          dlcName: z.string(),
-          gameLaunchers: z
-            .array(
-              z.object({
-                dateRelease: z.date(),
-                platforms: z.object({
-                  id: z.string().uuid(),
-                  platformName: z.string()
-                })
-              })
-            )
-            .nullish(),
-          game: z.object({
-            id: z.string().uuid(),
-            gameBanner: z.string().url()
-          }),
-          gameStudios: z.array(
-            z.object({
-              id: z.string().uuid(),
-              studioName: z.string()
-            })
-          ),
-          platforms: z.array(
-            z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          ),
-          publishers: z.array(
-            z.object({
-              id: z.string().uuid(),
-              publisherName: z.string()
-            })
-          ),
-          summary: z.string()
-        })
-        .optional(),
-      game: z
-        .object({
-          id: z.string().uuid(),
-          categories: z.array(
-            z.object({
-              id: z.number(),
-              categoryName: z.string()
-            })
-          ),
-          dlcs: z.array(
-            z.object({
-              id: z.string().uuid(),
-              dlcName: z.string(),
-              dlcBanner: z.string().url()
-            })
-          ),
-          gameName: z.string(),
-          gameBanner: z.string().url(),
-          gameLaunchers: z
-            .array(
-              z.object({
-                dateRelease: z.date(),
-                platforms: z.object({
-                  id: z.string().uuid(),
-                  platformName: z.string()
-                })
-              })
-            )
-            .nullish(),
-          gameStudios: z.array(
-            z.object({
-              id: z.string().uuid(),
-              studioName: z.string()
-            })
-          ),
-          platforms: z.array(
-            z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          ), // Corrigido para array
-          publishers: z.array(
-            z.object({
-              id: z.string().uuid(),
-              publisherName: z.string()
-            })
-          ),
-          summary: z.string()
-        })
-        .optional() // Permitir que o `game` esteja ausente
+      id: z.string().uuid(),
+      gameName: z.string(),
+      gameBanner: z.string().url(),
+      isDlc: z.boolean(),
+      statuses: z.array(z.string())
     })
-  )
+  ),
+  totalPerStatus: z.array(
+    z.object({
+      status: z.string(),
+      totalGames: z.number()
+    })
+  ),
+  totalGames: z.number()
 })
 
 export const UpdateUserBodySchema = z
@@ -269,4 +181,10 @@ export const UpdateUserGameStatusResponseSchema = z.object({
 export const UserBodySchema = z.object({
   email: z.string().email().min(1, 'Email is a required field.'),
   password: z.string().min(6, 'Password required at least 6 characters.')
+})
+
+export const GetUserGameStatsResponse = z.object({
+  userGameStats: z.object({
+    completions: z.number()
+  })
 })

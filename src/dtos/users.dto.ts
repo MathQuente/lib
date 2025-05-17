@@ -5,10 +5,9 @@ export interface CreateUserDTO {
 }
 
 export interface AddGameDTO {
-  itemId: string
+  gameId: string
   userId: string
   statusIds: number[]
-  type: 'game' | 'dlc'
 }
 
 export interface UpdateUserDTO {

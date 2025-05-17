@@ -6,18 +6,25 @@ import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
 import { GameRepository } from '../repositories/games.repository'
-import { DlcRepository } from '../repositories/dlcs.repository'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
   const gameRepository = new GameRepository()
-  const dlcRepository = new DlcRepository()
-  const userService = new UserService(
-    userRepository,
-    gameRepository,
-    dlcRepository
-  )
+  const userService = new UserService(userRepository, gameRepository)
   const userController = new UserController(userService)
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/me',
+    {
+      onRequest: [authMiddleware],
+      schema: {
+        response: {
+          200: UserSchema.GetUserResponseSchema
+        }
+      }
+    },
+    async (request, reply) => userController.getMe(request, reply)
+  )
 
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId',
@@ -49,7 +56,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:userId/addGame/:itemId',
+    '/:userId/games/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
@@ -59,25 +66,26 @@ export async function userRoutes(app: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => userController.addGameOrDlc(request, reply)
+    async (request, reply) =>
+      userController.addGameToUserLibrary(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/:userId/removeItem/:itemId',
+    '/:userId/games/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
-        params: UserSchema.RemoveGameParamsSchema,
+        params: UserSchema.UserGameParamsSchema,
         response: {
           201: UserSchema.RemoveGameResponseSchema
         }
       }
     },
-    async (request, reply) => userController.removeGameOrDlc(request, reply)
+    async (request, reply) => userController.removeGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/userGamesStatus/:userId/:itemId',
+    '/:userId/gameStatus/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
@@ -87,22 +95,21 @@ export async function userRoutes(app: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => userController.updateGameOrDlc(request, reply)
+    async (request, reply) => userController.updateGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:userId/:itemId',
+    '/:userId/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
-        params: UserSchema.GetUserGameStatusParamsSchema,
+        params: UserSchema.UserGameParamsSchema,
         response: {
-          // 200: UserSchema.GetUserGameStatusResponse
+          200: UserSchema.GetUserGameStatusResponse
         }
       }
     },
-    async (request, reply) =>
-      userController.getUserGameOrDlcStatus(request, reply)
+    async (request, reply) => userController.getUserGameStatus(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
@@ -113,7 +120,7 @@ export async function userRoutes(app: FastifyInstance) {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
         response: {
-          // 200: UserSchema.GetAllUserGamesResponseSchema
+          200: UserSchema.GetAllUserGamesResponseSchema
         }
       }
     },
@@ -150,14 +157,13 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:userId/gameInfo/:itemId',
+    '/:userId/gameInfo/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
-        // querystring: UserSchema.QueryStringSchema,
-        // params: UserSchema.UserParamsSchema,
+        params: UserSchema.UserGameParamsSchema,
         response: {
-          // 200: UserSchema.GetAllUserGamesResponseSchema
+          200: UserSchema.GetUserGameStatsResponse
         }
       }
     },
@@ -165,18 +171,17 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/:userId/playedCount/:itemId',
+    '/:userId/playedCount/:gameId',
     {
       onRequest: [authMiddleware],
       schema: {
-        // querystring: UserSchema.QueryStringSchema,
-        // params: UserSchema.UserParamsSchema,
+        params: UserSchema.UserGameParamsSchema,
         response: {
-          // 200: UserSchema.GetAllUserGamesResponseSchema
+          200: UserSchema.GetUserGameStatsResponse
         }
       }
     },
     async (request, reply) =>
-      userController.updateuserGamePlayedCount(request, reply)
+      userController.updateUserGamePlayedCount(request, reply)
   )
 }

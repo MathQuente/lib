@@ -1,40 +1,22 @@
-import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/users.dto'
 
 export class UserRepository {
-  async addItem(data: AddGameDTO) {
+  async addGameToUserLibrary(data: AddGameDTO) {
     const connectStatuses = data.statusIds.map(id => ({ id }))
-    if (data.type === 'game') {
-      return prisma.userGame.create({
-        data: {
-          gameId: data.itemId,
-          userId: data.userId,
-          statuses: { connect: connectStatuses }
-        },
-        select: {
-          game: {
-            select: {
-              id: true,
-              gameBanner: true,
-              gameName: true
-            }
-          }
-        }
-      })
-    }
+
     return prisma.userGame.create({
       data: {
-        dlcId: data.itemId,
+        gameId: data.gameId,
         userId: data.userId,
         statuses: { connect: connectStatuses }
       },
       select: {
-        dlc: {
+        game: {
           select: {
             id: true,
-            dlcBanner: true,
-            dlcName: true
+            gameBanner: true,
+            gameName: true
           }
         }
       }
@@ -53,7 +35,7 @@ export class UserRepository {
           gameId
         }
       },
-      update: {}, // Não atualiza nada se já existir
+      update: {},
       create: {
         userId,
         gameId
@@ -101,6 +83,8 @@ export class UserRepository {
         id: userId
       },
       select: {
+        id: true,
+        email: true,
         userBanner: true,
         userName: true,
         profilePicture: true,
@@ -123,34 +107,11 @@ export class UserRepository {
     })
   }
 
-  async findUserItemStatus(
-    itemId: string,
-    userId: string,
-    type: 'game' | 'dlc'
-  ) {
-    if (type === 'game') {
-      return prisma.userGame.findUnique({
-        where: {
-          userId_gameId: {
-            gameId: itemId,
-            userId
-          }
-        },
-        select: {
-          statuses: {
-            select: {
-              id: true,
-              status: true
-            }
-          }
-        }
-      })
-    }
-
+  async findUserGameStatus(gameId: string, userId: string) {
     return prisma.userGame.findUnique({
       where: {
-        userId_dlcId: {
-          dlcId: itemId,
+        userId_gameId: {
+          gameId,
           userId
         }
       },
@@ -165,40 +126,20 @@ export class UserRepository {
     })
   }
 
-  async findUserItem(itemId: string, userId: string, type: 'game' | 'dlc') {
-    if (type === 'game') {
-      return prisma.userGame.findUnique({
-        where: {
-          userId_gameId: {
-            gameId: itemId,
-            userId
-          }
-        },
-        select: {
-          game: {
-            select: {
-              id: true,
-              gameBanner: true,
-              gameName: true
-            }
-          }
-        }
-      })
-    }
-
+  async findUserGame(gameId: string, userId: string) {
     return prisma.userGame.findUnique({
       where: {
-        userId_dlcId: {
-          dlcId: itemId,
+        userId_gameId: {
+          gameId,
           userId
         }
       },
       select: {
-        dlc: {
+        game: {
           select: {
             id: true,
-            dlcBanner: true,
-            dlcName: true
+            gameBanner: true,
+            gameName: true
           }
         }
       }
@@ -218,11 +159,6 @@ export class UserRepository {
               {
                 game: {
                   gameName: { contains: query }
-                }
-              },
-              {
-                dlc: {
-                  dlcName: { contains: query }
                 }
               }
             ]
@@ -244,160 +180,9 @@ export class UserRepository {
         game: {
           select: {
             id: true,
-            categories: {
-              orderBy: [
-                {
-                  categoryName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                categoryName: true
-              }
-            },
-            dlcs: {
-              orderBy: [
-                {
-                  dlcName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                dlcBanner: true,
-                dlcName: true
-              }
-            },
             gameBanner: true,
-            gameLaunchers: {
-              orderBy: [
-                {
-                  platforms: {
-                    platformName: 'asc'
-                  }
-                }
-              ],
-              select: {
-                dateRelease: true,
-                platforms: {
-                  select: {
-                    id: true,
-                    platformName: true
-                  }
-                }
-              }
-            },
             gameName: true,
-            gameStudios: {
-              orderBy: [
-                {
-                  studioName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                studioName: true
-              }
-            },
-            platforms: {
-              orderBy: [
-                {
-                  platformName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                platformName: true
-              }
-            },
-            publishers: {
-              orderBy: [
-                {
-                  publisherName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                publisherName: true
-              }
-            },
-            summary: true
-          }
-        },
-        dlc: {
-          select: {
-            id: true,
-            categories: {
-              orderBy: [
-                {
-                  categoryName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                categoryName: true
-              }
-            },
-            dlcBanner: true,
-            dlcName: true,
-            gameLaunchers: {
-              orderBy: [
-                {
-                  platforms: {
-                    platformName: 'asc'
-                  }
-                }
-              ],
-              select: {
-                dateRelease: true,
-                platforms: {
-                  select: {
-                    id: true,
-                    platformName: true
-                  }
-                }
-              }
-            },
-            game: {
-              select: {
-                id: true,
-                gameBanner: true,
-                gameName: true
-              }
-            },
-            gameStudios: {
-              orderBy: [
-                {
-                  studioName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                studioName: true
-              }
-            },
-            platforms: {
-              orderBy: [
-                {
-                  platformName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                platformName: true
-              }
-            },
-            publishers: {
-              orderBy: [
-                {
-                  publisherName: 'asc'
-                }
-              ],
-              select: {
-                id: true,
-                publisherName: true
-              }
-            },
-            summary: true
+            isDlc: true
           }
         },
         statuses: {
@@ -456,40 +241,20 @@ export class UserRepository {
     })
   }
 
-  async removeItem(itemId: string, userId: string, type: 'game' | 'dlc') {
-    if (type === 'game') {
-      return prisma.userGame.delete({
-        where: {
-          userId_gameId: {
-            gameId: itemId,
-            userId
-          }
-        },
-        select: {
-          game: {
-            select: {
-              id: true,
-              gameBanner: true,
-              gameName: true
-            }
-          }
-        }
-      })
-    }
-
+  async removeGame(gameId: string, userId: string) {
     return prisma.userGame.delete({
       where: {
-        userId_dlcId: {
-          dlcId: itemId,
+        userId_gameId: {
+          gameId,
           userId
         }
       },
       select: {
-        dlc: {
+        game: {
           select: {
             id: true,
-            dlcBanner: true,
-            dlcName: true
+            gameBanner: true,
+            gameName: true
           }
         }
       }
@@ -523,64 +288,28 @@ export class UserRepository {
     })
   }
 
-  async updateItemStatus(
-    itemId: string,
-    userId: string,
-    statusIds: number[],
-    type: 'game' | 'dlc'
-  ) {
+  async updateGameStatus(gameId: string, userId: string, statusIds: number[]) {
     const connectStatuses = statusIds.map(id => ({ id }))
-    if (type === 'game') {
-      return prisma.userGame.update({
-        where: {
-          userId_gameId: {
-            gameId: itemId,
-            userId
-          }
-        },
-        data: {
-          statuses: {
-            set: [], // Primeiro desconecta todos
-            connect: connectStatuses // Depois conecta os novos
-          }
-        },
-        select: {
-          game: {
-            select: {
-              id: true,
-              gameBanner: true,
-              gameName: true
-            }
-          },
-          statuses: {
-            select: {
-              id: true,
-              status: true
-            }
-          }
-        }
-      })
-    }
 
     return prisma.userGame.update({
       where: {
-        userId_dlcId: {
-          dlcId: itemId,
+        userId_gameId: {
+          gameId,
           userId
         }
       },
       data: {
         statuses: {
           set: [], // Primeiro desconecta todos
-          connect: connectStatuses
+          connect: connectStatuses // Depois conecta os novos
         }
       },
       select: {
-        dlc: {
+        game: {
           select: {
             id: true,
-            dlcBanner: true,
-            dlcName: true
+            gameBanner: true,
+            gameName: true
           }
         },
         statuses: {
@@ -621,12 +350,12 @@ export class UserRepository {
     })
   }
 
-  async findUserGameStats(userId: string, itemId: string) {
+  async findUserGameStats(gameId: string, userId: string) {
     const stats = await prisma.userGameStats.findFirst({
       where: {
         userGame: {
           userId,
-          gameId: itemId
+          gameId
         }
       },
       select: {
@@ -665,6 +394,9 @@ export class UserRepository {
         completions: {
           increment: incrementValue
         }
+      },
+      select: {
+        completions: true
       }
     })
   }

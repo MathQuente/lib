@@ -1,30 +1,31 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { UserService } from '../services/users.service'
 import * as UserSchema from '../schemas/users.schema'
+import { ClientError } from '../errors/client-error'
 
 export class UserController {
   constructor(private userService: UserService) {}
 
-  async addGameOrDlc(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+  async addGameToUserLibrary(request: FastifyRequest, reply: FastifyReply) {
+    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
     const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    const addItem = await this.userService.addGameOrDlc(
-      itemId,
+    const { game } = await this.userService.addGameToUserLibrary(
+      gameId,
       userId,
       statusIds
     )
 
-    return reply.send(addItem)
+    return reply.send({ game })
   }
 
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
     const { userId } = UserSchema.UserParamsSchema.parse(request.params)
 
-    const { user } = await this.userService.deleteUser(userId)
+    const { user } = await this.userService.delete(userId)
 
     return reply.send({ user })
   }
@@ -42,10 +43,32 @@ export class UserController {
     return reply.send({ userGames, totalPerStatus, totalGames })
   }
 
+  async getMe(request: FastifyRequest, reply: FastifyReply) {
+    const authHeader = request.headers.authorization
+
+    if (!authHeader) {
+      throw new ClientError('No token provided')
+    }
+
+    const [, token] = authHeader.split(' ')
+
+    if (!token) {
+      throw new ClientError('No token provided')
+    }
+
+    const decoded = JSON.parse(
+      Buffer.from(token.split('.')[1], 'base64').toString()
+    )
+
+    const { user } = await this.userService.findMe(decoded.userId)
+
+    return reply.send({ user })
+  }
+
   async getUser(request: FastifyRequest, reply: FastifyReply) {
     const { userId } = UserSchema.UserParamsSchema.parse(request.params)
 
-    const { user } = await this.userService.findUser(userId)
+    const { user } = await this.userService.findById(userId)
 
     return reply.send({ user })
   }
@@ -60,40 +83,43 @@ export class UserController {
     return reply.send({ users })
   }
 
-  async getUserGameOrDlcStatus(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId } = UserSchema.GetUserGameStatusParamsSchema.parse(
+  async getUserGameStatus(request: FastifyRequest, reply: FastifyReply) {
+    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
-    const itemStatus = await this.userService.findUserGameStatus(itemId, userId)
+    const { userGameStatuses } = await this.userService.findUserGameStatus(
+      gameId,
+      userId
+    )
 
-    return reply.send(itemStatus)
+    return reply.send({ userGameStatuses })
   }
 
-  async removeGameOrDlc(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId } = UserSchema.RemoveGameParamsSchema.parse(
+  async removeGame(request: FastifyRequest, reply: FastifyReply) {
+    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
-    const removeItem = await this.userService.removeGameOrDlc(itemId, userId)
+    const { game } = await this.userService.removeGame(gameId, userId)
 
-    return reply.send(removeItem)
+    return reply.send({ game })
   }
 
-  async updateGameOrDlc(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+  async updateGame(request: FastifyRequest, reply: FastifyReply) {
+    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
     const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    const updateItem = await this.userService.updateGameOrDlc(
-      itemId,
+    const { game, statuses } = await this.userService.updateGame(
+      gameId,
       userId,
       statusIds
     )
 
-    return reply.send(updateItem)
+    return reply.send({ game, statuses })
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
@@ -102,7 +128,7 @@ export class UserController {
 
     const { userId } = UserSchema.UserParamsSchema.parse(request.params)
 
-    const { user } = await this.userService.updateUser(userId, {
+    const { user } = await this.userService.update(userId, {
       profilePicture,
       userBanner,
       userName
@@ -112,35 +138,35 @@ export class UserController {
   }
 
   async getUserGameStats(request: FastifyRequest, reply: FastifyReply) {
-    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
-    const UserGameStats = await this.userService.findUserGameStats(
-      userId,
-      itemId
+    const { userGameStats } = await this.userService.findUserGameStats(
+      gameId,
+      userId
     )
 
-    return reply.send({ UserGameStats })
+    return reply.send({ userGameStats })
   }
 
-  async updateuserGamePlayedCount(
+  async updateUserGamePlayedCount(
     request: FastifyRequest,
     reply: FastifyReply
   ) {
-    const { itemId, userId } = UserSchema.UserGameParamsSchema.parse(
+    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
       request.params
     )
 
     const { incrementValue } =
       UserSchema.UserGamePlayedCountUpdateBodySchema.parse(request.body)
 
-    const updateItem = await this.userService.updateUserGamePlayedCount(
+    const { userGameStats } = await this.userService.updateUserGamePlayedCount(
       userId,
-      itemId,
+      gameId,
       incrementValue
     )
 
-    return reply.send(updateItem)
+    return reply.send({ userGameStats })
   }
 }
