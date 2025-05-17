@@ -12,36 +12,23 @@ Table refresh_token {
   user users [not null]
 }
 
-Table dlcs {
-  id String [pk]
-  dlcBanner String [not null]
-  dlcName String [unique, not null]
-  gameId String [not null]
-  summary String [not null]
-  gameStudios game_studios [not null]
-  publishers publishers [not null]
-  categories game_categories [not null]
-  platforms platforms [not null]
-  gameLaunchers game_launchers [not null]
-  userGames user_games [not null]
-  game games [not null]
-  UserGameStats user_game_stats [not null]
-}
-
 Table games {
   id String [pk]
   createdAt DateTime [default: `now()`, not null]
   gameBanner String [not null]
   gameName String [unique, not null]
   summary String [not null]
+  isDlc Boolean [not null, default: false]
+  parentGameId String
   updatedAt DateTime [default: `now()`, not null]
+  parentGame games
+  dlcs games [not null]
   gameStudios game_studios [not null]
   publishers publishers [not null]
   categories game_categories [not null]
   platforms platforms [not null]
   gameLaunchers game_launchers [not null]
   userGames user_games [not null]
-  dlcs dlcs [not null]
   UserGameStats user_game_stats [not null]
 }
 
@@ -49,7 +36,6 @@ Table game_categories {
   id Int [pk, increment]
   categoryName String [unique, not null]
   games games [not null]
-  dlcs dlcs [not null]
 }
 
 Table game_launchers {
@@ -59,8 +45,6 @@ Table game_launchers {
   platformId String [not null]
   platforms platforms [not null]
   game games [not null]
-  dlcId String
-  dlc dlcs
 
   indexes {
     (platformId, gameId) [pk]
@@ -71,7 +55,6 @@ Table game_studios {
   id String [pk]
   studioName String [unique, not null]
   games games [not null]
-  dlcs dlcs [not null]
 }
 
 Table platforms {
@@ -79,14 +62,12 @@ Table platforms {
   platformName String [unique, not null]
   gameLaunchers game_launchers [not null]
   games games [not null]
-  dlcs dlcs [not null]
 }
 
 Table publishers {
   id String [pk]
   publisherName String [unique, not null]
   games games [not null]
-  dlcs dlcs [not null]
 }
 
 Table users {
@@ -113,7 +94,6 @@ Table user_games {
   updatedAt DateTime [not null]
   user users [not null]
   game games
-  dlc dlcs
   UserGameStats user_game_stats
 
   indexes {
@@ -133,32 +113,10 @@ Table user_game_stats {
   userGameId String [unique, not null]
   completions Int [not null, default: 0]
   userGame user_games [not null]
-  DLC dlcs
-  dLCId String
   Game games
   gameId String
   User users
   userId String
-}
-
-Table DLCToGameStudio {
-  gamestudiosId String [ref: > game_studios.id]
-  dlcsId String [ref: > dlcs.id]
-}
-
-Table DLCToPublisher {
-  publishersId String [ref: > publishers.id]
-  dlcsId String [ref: > dlcs.id]
-}
-
-Table DLCToGameCategory {
-  categoriesId Int [ref: > game_categories.id]
-  dlcsId String [ref: > dlcs.id]
-}
-
-Table DLCToPlatform {
-  platformsId String [ref: > platforms.id]
-  dlcsId String [ref: > dlcs.id]
 }
 
 Table GameToGameStudio {
@@ -196,23 +154,17 @@ Enum Status {
 
 Ref: refresh_token.userId > users.id [delete: Cascade]
 
-Ref: dlcs.gameId > games.id [delete: Cascade]
+Ref: games.parentGameId - games.id [delete: Set Null]
 
 Ref: game_launchers.platformId > platforms.id [delete: Cascade]
 
 Ref: game_launchers.gameId > games.id [delete: Cascade]
 
-Ref: game_launchers.dlcId > dlcs.id [delete: Cascade]
-
 Ref: user_games.userId > users.id [delete: Cascade]
 
 Ref: user_games.gameId > games.id [delete: Cascade]
 
-Ref: user_games.dlcId > dlcs.id [delete: Cascade]
-
 Ref: user_game_stats.userGameId - user_games.id [delete: Cascade]
-
-Ref: user_game_stats.dLCId > dlcs.id
 
 Ref: user_game_stats.gameId > games.id
 

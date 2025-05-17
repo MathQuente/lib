@@ -24,33 +24,18 @@ model RefreshToken {
   @@map("refresh_token")
 }
 
-model DLC {
-  id        String @id @default(uuid())
-  dlcBanner String @map("dlc_banner")
-  dlcName   String @unique @map("dlc_name")
-  gameId    String @map("gameId")
-  summary   String
-
-  gameStudios   GameStudio[]
-  publishers    Publisher[]
-  categories    GameCategory[]
-  platforms     Platform[]
-  gameLaunchers GameLauncher[]
-  userGames     UserGame[]
-
-  game          Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  UserGameStats UserGameStats[]
-
-  @@map("dlcs")
-}
-
 model Game {
-  id         String   @id @default(uuid())
-  createdAt  DateTime @default(now()) @map("created_at")
-  gameBanner String   @map("game_banner")
-  gameName   String   @unique @map("game_name")
-  summary    String
-  updatedAt  DateTime @default(now()) @map("updated_at")
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now()) @map("created_at")
+  gameBanner   String   @map("game_banner")
+  gameName     String   @unique @map("game_name")
+  summary      String
+  isDlc        Boolean  @default(false) @map("is_dlc")
+  parentGameId String?  @map("parent_game_id")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  parentGame Game?  @relation("GameToDLC", fields: [parentGameId], references: [id], onDelete: SetNull)
+  dlcs       Game[] @relation("GameToDLC")
 
   gameStudios   GameStudio[]
   publishers    Publisher[]
@@ -58,7 +43,7 @@ model Game {
   platforms     Platform[]
   gameLaunchers GameLauncher[]
   userGames     UserGame[]
-  dlcs          DLC[]
+
   UserGameStats UserGameStats[]
 
   @@map("games")
@@ -68,7 +53,6 @@ model GameCategory {
   id           Int    @id @default(autoincrement())
   categoryName String @unique @map("category_name")
   games        Game[]
-  dlcs         DLC[]
 
   @@map("game_categories")
 }
@@ -80,8 +64,6 @@ model GameLauncher {
   platformId  String   @map("plataform_id")
   platforms   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
   game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  dlcId       String?  @map("dlc_id")
-  dlc         DLC?     @relation(fields: [dlcId], references: [id], onDelete: Cascade)
 
   @@id([platformId, gameId])
   @@map("game_launchers")
@@ -91,7 +73,6 @@ model GameStudio {
   id         String @id @default(uuid())
   studioName String @unique @map("studio_name")
   games      Game[]
-  dlcs       DLC[]
 
   @@map("game_studios")
 }
@@ -101,7 +82,6 @@ model Platform {
   platformName  String         @unique @map("plataform_name")
   gameLaunchers GameLauncher[]
   games         Game[]
-  dlcs          DLC[]
 
   @@map("platforms")
 }
@@ -110,7 +90,6 @@ model Publisher {
   id            String @id @default(uuid())
   publisherName String @unique @map("publisher_name")
   games         Game[]
-  dlcs          DLC[]
 
   @@map("publishers")
 }
@@ -132,16 +111,16 @@ model User {
 }
 
 model UserGame {
-  id            String            @id @default(uuid())
-  gameId        String?           @map("game_id")
-  userId        String            @map("user_id")
-  dlcId         String?           @map("dlc_id")
-  statuses      UserGamesStatus[] // Relacionamento many-to-many
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
-  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game          Game?             @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  dlc           DLC?              @relation(fields: [dlcId], references: [id], onDelete: Cascade)
+  id        String            @id @default(uuid())
+  gameId    String?           @map("game_id")
+  userId    String            @map("user_id")
+  dlcId     String?           @map("dlc_id")
+  statuses  UserGamesStatus[] // Relacionamento many-to-many
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game      Game?             @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
   UserGameStats UserGameStats?
 
   @@unique([userId, gameId])
@@ -171,12 +150,11 @@ model UserGameStats {
   completions Int    @default(0)
 
   userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
-  DLC      DLC?     @relation(fields: [dLCId], references: [id])
-  dLCId    String?
-  Game     Game?    @relation(fields: [gameId], references: [id])
-  gameId   String?
-  User     User?    @relation(fields: [userId], references: [id])
-  userId   String?
+
+  Game   Game?   @relation(fields: [gameId], references: [id])
+  gameId String?
+  User   User?   @relation(fields: [userId], references: [id])
+  userId String?
 
   @@unique([userGameId]) // ← garante 1:1
   @@map("user_game_stats")
