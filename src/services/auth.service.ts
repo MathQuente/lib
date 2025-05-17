@@ -9,7 +9,7 @@ import { generateFromEmail } from 'unique-username-generator'
 export class AuthService {
   constructor(private authRepository: AuthRepository, private jwt: JWT) {}
 
-  async generateTokens(userId: string, reply: FastifyReply) {
+  async generateTokens(userId: string) {
     const accessToken = this.jwt.sign({ userId }, { expiresIn: '15min' })
     const refreshToken = this.jwt.sign({ userId }, { expiresIn: '7d' })
 
@@ -17,20 +17,20 @@ export class AuthService {
 
     await this.authRepository.saveToken(refreshToken, userId, expiresAt)
 
-    return { accessToken, refreshToken }
+    return { accessToken, refreshToken, expiresAt }
   }
 
   async validateRefreshToken(refreshToken: string) {
     try {
-      // Tenta verificar e decodificar o token
-      const decoded = this.jwt.verify(refreshToken) as { userId: string }
-
       // Verifique se o token existe no banco de dados
       const storedToken = await this.authRepository.findToken(refreshToken)
 
       if (!storedToken || storedToken.expiresAt < new Date()) {
         throw new Error('invalid or expired refresh token')
       }
+
+      // Tenta verificar e decodificar o token
+      const decoded = this.jwt.verify(refreshToken) as { userId: string }
 
       // Se o token for válido, invalide o token antigo
       await this.authRepository.invalidateToken(refreshToken)
@@ -46,6 +46,18 @@ export class AuthService {
       // Caso o token seja malformado ou inválido, trate com outro erro
       throw new Error('Invalid refresh token')
     }
+  }
+
+  async refreshTokens(refreshToken: string) {
+    const userId = await this.validateRefreshToken(refreshToken)
+
+    const {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresAt
+    } = await this.generateTokens(userId)
+
+    return { accessToken, refreshToken: newRefreshToken, expiresAt }
   }
 
   async createUser(data: CreateUserDTO) {
@@ -76,7 +88,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       user: {
-        userId: user.id
+        id: user.id
       }
     }
   }

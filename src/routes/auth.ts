@@ -12,7 +12,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app
     .withTypeProvider<ZodTypeProvider>()
-    .post('/', async (request, reply) =>
+    .post('/register', async (request, reply) =>
       authController.createUser(request, reply)
     )
 

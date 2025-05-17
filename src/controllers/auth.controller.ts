@@ -20,34 +20,22 @@ export class AuthController {
 
     const user = await this.authService.validateUser(email, password)
 
-    const tokens = await this.authService.generateTokens(user.id, reply)
+    const tokens = await this.authService.generateTokens(user.id)
 
     return reply.send(tokens)
   }
 
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
     const authHeader = request.headers.authorization
-
-    if (!authHeader) {
-      throw new ClientError('No token provided')
-    }
-
-    const [, token] = authHeader.split(' ') // Remove o "Bearer" do início
-
-    if (!token) {
+    if (!authHeader) throw new ClientError('No token provided')
+    const [, token] = authHeader.split(' ')
+    if (!token)
       return reply.status(401).send({ message: 'Refresh token not provided' })
-    }
 
-    try {
-      const userId = await this.authService.validateRefreshToken(token)
-      const tokens = await this.authService.generateTokens(userId, reply)
+    const { accessToken, refreshToken, expiresAt } =
+      await this.authService.refreshTokens(token)
 
-      return reply.send(tokens)
-    } catch (error: any) {
-      reply.status(400).send({
-        message: error.message || 'Invalid refresh token'
-      })
-    }
+    return reply.send({ accessToken, refreshToken })
   }
 
   async logoutHandler(request: FastifyRequest, reply: FastifyReply) {
