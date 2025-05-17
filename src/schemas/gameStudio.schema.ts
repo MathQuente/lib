@@ -21,21 +21,13 @@ export const GetStudioResponseSchema = z.object({
   gameStudio: z.object({
     id: z.string().uuid(),
     studioName: z.string(),
-    gamesAndDlcsAmount: z.object({
-      total: z.number(),
-      games: z.number(),
-      dlcs: z.number()
-    }),
+    gamesAmount: z.number(),
     games: z.array(
       z.object({
         id: z.string().uuid(),
-        gameBanner: z.string()
-      })
-    ),
-    dlcs: z.array(
-      z.object({
-        id: z.string().uuid(),
-        dlcBanner: z.string()
+        gameName: z.string(),
+        gameBanner: z.string(),
+        isDlc: z.boolean()
       })
     )
   })
@@ -46,10 +38,7 @@ export const GetAllStudiosResponseSchema = z.object({
     z.object({
       id: z.string().uuid(),
       studioName: z.string(),
-      gamesAndDlcsAmount: z.object({
-        games: z.number(),
-        dlcs: z.number()
-      })
+      gamesAmount: z.number()
     })
   )
 })

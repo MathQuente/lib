@@ -18,7 +18,11 @@ export class GameStudioService {
 
     const { id } = await this.gameStudioRepository.create(studioName)
 
-    return { gameStudioId: id }
+    return {
+      gameStudio: {
+        id
+      }
+    }
   }
 
   async getStudioById(gameStudioId: string, pageIndex: number) {
@@ -34,36 +38,29 @@ export class GameStudioService {
     return {
       id: gameStudio?.id,
       studioName: gameStudio?.studioName,
-      gamesAndDlcsAmount: {
-        total: (gameStudio?._count.games || 0) + (gameStudio?._count.dlcs || 0),
-        games: gameStudio?._count.games,
-        dlcs: gameStudio?._count.dlcs
-      },
-      games: gameStudio?.games.map(game => ({
+      gamesAmount: gameStudio.games.length,
+      games: gameStudio.games.map(game => ({
         id: game.id,
-        gameBanner: game.gameBanner
-      })),
-      dlcs: gameStudio?.dlcs.map(dlc => ({
-        id: dlc.id,
-        dlcBanner: dlc.dlcBanner
+        gameBanner: game.gameBanner,
+        gameName: game.gameName,
+        isDlc: game.isDlc
       }))
     }
   }
 
   async getAllStudios(pageIndex: number) {
-    const gameStudios = await this.gameStudioRepository.findAllStudios({
+    const gameStudios = await this.gameStudioRepository.findAll({
       pageIndex,
       limit: this.ITEMS_PER_PAGE
     })
 
-    return gameStudios.map(gameStudio => ({
-      id: gameStudio.id,
-      studioName: gameStudio.studioName,
-      gamesAndDlcsAmount: {
-        games: gameStudio._count.games,
-        dlcs: gameStudio._count.dlcs
-      }
-    }))
+    return {
+      gameStudios: gameStudios.map(gameStudio => ({
+        id: gameStudio.id,
+        studioName: gameStudio.studioName,
+        gamesAmount: gameStudio._count.games
+      }))
+    }
   }
 
   async updateStudio(gameStudioId: string, studioName: string) {
@@ -72,7 +69,7 @@ export class GameStudioService {
     )
 
     if (!gameStudioAlreadyExist) {
-      throw new ClientError('this studio has been deleted')
+      throw new ClientError('Studio not found.')
     }
 
     const gameStudioWithSameAlreadyExist =

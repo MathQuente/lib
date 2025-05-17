@@ -10,11 +10,11 @@ export class GameStudioController {
       request.body
     )
 
-    const { gameStudioId } = await this.gameStudioController.createGameStudio(
+    const { gameStudio } = await this.gameStudioController.createGameStudio(
       studioName
     )
 
-    return reply.send({ gameStudioId })
+    return reply.send({ gameStudio })
   }
 
   async getStudio(request: FastifyRequest, reply: FastifyReply) {
@@ -39,7 +39,9 @@ export class GameStudioController {
       request.query
     )
 
-    const gameStudios = await this.gameStudioController.getAllStudios(pageIndex)
+    const { gameStudios } = await this.gameStudioController.getAllStudios(
+      pageIndex
+    )
 
     return reply.send({ gameStudios })
   }

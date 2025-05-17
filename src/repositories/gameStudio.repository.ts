@@ -27,26 +27,14 @@ export class GameStudioRepository {
           take: limit,
           select: {
             id: true,
-            gameBanner: true
-          }
-        },
-        dlcs: {
-          orderBy: [
-            {
-              dlcName: 'asc'
-            }
-          ],
-          skip: (pageIndex || 0) * (limit || 0),
-          take: limit,
-          select: {
-            id: true,
-            dlcBanner: true
+            gameBanner: true,
+            gameName: true,
+            isDlc: true
           }
         },
         _count: {
           select: {
-            games: true,
-            dlcs: true
+            games: true
           }
         }
       }
@@ -64,7 +52,7 @@ export class GameStudioRepository {
     })
   }
 
-  async findAllStudios({ pageIndex = 0, limit = 14 } = {}) {
+  async findAll({ pageIndex = 0, limit = 14 } = {}) {
     return prisma.gameStudio.findMany({
       orderBy: [
         {
@@ -78,8 +66,7 @@ export class GameStudioRepository {
         studioName: true,
         _count: {
           select: {
-            games: true,
-            dlcs: true
+            games: true
           }
         }
       }

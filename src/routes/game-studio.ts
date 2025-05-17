@@ -43,7 +43,7 @@ export async function gameStudioRoutes(app: FastifyInstance) {
       schema: {
         querystring: GameStudioSchemas.GameStudioQueryStringSchema,
         response: {
-          200: GameStudioSchemas.GetAllStudiosResponseSchema
+          // 200: GameStudioSchemas.GetAllStudiosResponseSchema
         }
       }
     },
