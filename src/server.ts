@@ -7,7 +7,6 @@ import {
 import cors from '@fastify/cors'
 import { gameRoutes } from './routes/game'
 import { gameStudioRoutes } from './routes/game-studio'
-import { dlcsRoutes } from './routes/dlcs'
 
 import { fastifyJwt } from '@fastify/jwt'
 import * as dotenv from 'dotenv'
@@ -44,7 +43,7 @@ app.setErrorHandler(errorHandler)
 
 app.register(gameStudioRoutes, { prefix: '/gameStudios' })
 app.register(gameRoutes, { prefix: '/games' })
-app.register(dlcsRoutes, { prefix: '/dlcs' })
+
 app.register(platformsRoutes, { prefix: '/platforms' })
 app.register(authRoutes, { prefix: '/auth' })
 app.register(userRoutes, { prefix: '/users' })
