@@ -16,9 +16,9 @@ export class GameController {
   async getGame(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
 
-    const gameAndDlc = await this.gameService.findGameById(gameId)
+    const { game } = await this.gameService.findGameById(gameId)
 
-    return reply.send({ gameAndDlc })
+    return reply.send({ game })
   }
 
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
@@ -26,7 +26,7 @@ export class GameController {
       request.query
     )
 
-    const { games, total } = await this.gameService.findAllGamesAndDlcs(
+    const { games, total } = await this.gameService.findAllGames(
       pageIndex,
       query
     )
@@ -34,13 +34,13 @@ export class GameController {
     return reply.send({ games, total })
   }
 
-  async addPlatformRelease(request: FastifyRequest, reply: FastifyReply) {
+  async createGameDateRelease(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
 
     const { dateRelease, platformId } =
       GameSchema.CreateGameDateReleaseBodySchema.parse(request.body)
 
-    const { gameDateRelease } = await this.gameService.addPlatformRelease(
+    const { gameDateRelease } = await this.gameService.createGameDateRelease(
       gameId,
       dateRelease,
       platformId
@@ -59,7 +59,9 @@ export class GameController {
       gameStudios,
       platforms,
       publishers,
-      summary
+      summary,
+      isDlc,
+      parentGameId
     } = GameSchema.UpdateGameBodySchema.parse(request.body)
 
     const { game } = await this.gameService.updateGame(gameId, {
@@ -69,7 +71,9 @@ export class GameController {
       gameStudios,
       platforms,
       publishers,
-      summary
+      summary,
+      isDlc,
+      parentGameId
     })
 
     return reply.send({ game })
@@ -84,7 +88,7 @@ export class GameController {
   }
 
   async getAllGameStatus(request: FastifyRequest, reply: FastifyReply) {
-    const status = await this.gameService.findAllGameStatus()
+    const { status } = await this.gameService.findAllGameStatus()
 
     return reply.send({ status })
   }

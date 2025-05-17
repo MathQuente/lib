@@ -4,11 +4,11 @@ import { GameRepository } from '../repositories/games.repository'
 import { GameService } from '../services/games.service'
 import { GameController } from '../controllers/games.controller'
 import * as GameSchema from '../schemas/games.schema'
-import { DlcRepository } from '../repositories/dlcs.repository'
+import { PlatformRepository } from '../repositories/platform.repository'
 
 const gameRepository = new GameRepository()
-const dlcRepository = new DlcRepository()
-const gameService = new GameService(gameRepository, dlcRepository)
+const platformRepository = new PlatformRepository()
+const gameService = new GameService(gameRepository, platformRepository)
 const gameController = new GameController(gameService)
 
 export async function gameRoutes(app: FastifyInstance) {
@@ -18,7 +18,7 @@ export async function gameRoutes(app: FastifyInstance) {
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
-          // 200: GameSchema.GetGameResponseSchema
+          200: GameSchema.GetGameResponseSchema
         }
       }
     },
@@ -31,7 +31,7 @@ export async function gameRoutes(app: FastifyInstance) {
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {
-          // 200: GameSchema.GetGamesResponseSchema
+          200: GameSchema.GetGamesResponseSchema
         }
       }
     },
@@ -62,7 +62,8 @@ export async function gameRoutes(app: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => gameController.addPlatformRelease(request, reply)
+    async (request, reply) =>
+      gameController.createGameDateRelease(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(

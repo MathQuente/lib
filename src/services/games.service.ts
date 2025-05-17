@@ -1,14 +1,14 @@
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/games.dto'
 import { ClientError } from '../errors/client-error'
 import { GameRepository } from '../repositories/games.repository'
-import { DlcRepository } from '../repositories/dlcs.repository'
+import { PlatformRepository } from '../repositories/platform.repository'
 
 export class GameService {
-  private readonly ITEMS_PER_PAGE = 36
+  private readonly itemsPerPage = 36
 
   constructor(
     private gameRepository: GameRepository,
-    private dlcRepository: DlcRepository
+    private platformRepository: PlatformRepository
   ) {}
 
   async createGame(data: CreateGameDTO) {
@@ -20,7 +20,7 @@ export class GameService {
       throw new ClientError('This game name is already used to another game')
     }
 
-    const game = await this.gameRepository.createGame(data)
+    const game = await this.gameRepository.create(data)
 
     return {
       game: {
@@ -30,7 +30,7 @@ export class GameService {
     }
   }
 
-  async addPlatformRelease(
+  async createGameDateRelease(
     gameId: string,
     dateRelease: Date,
     platformId: string
@@ -38,7 +38,15 @@ export class GameService {
     const gameAlreadyExist = await this.gameRepository.findById(gameId)
 
     if (!gameAlreadyExist) {
-      throw new ClientError('This game has not found.')
+      throw new ClientError('Game not found.')
+    }
+
+    const platformAlreadyExist = await this.platformRepository.findById(
+      platformId
+    )
+
+    if (!platformAlreadyExist) {
+      throw new ClientError('Platform not found.')
     }
 
     const gameDateIsAlreadyUsed = await this.gameRepository.findDateRelease(
@@ -50,7 +58,7 @@ export class GameService {
       throw new ClientError('The game is already released in this date.')
     }
 
-    const gameDateRelease = await this.gameRepository.createGameRelease(
+    const gameDateRelease = await this.gameRepository.createGameDateRelease(
       gameId,
       dateRelease,
       platformId
@@ -72,7 +80,7 @@ export class GameService {
       throw new ClientError('This game has been already removed')
     }
 
-    const game = await this.gameRepository.deleteGame(gameId)
+    const game = await this.gameRepository.delete(gameId)
 
     return {
       game: {
@@ -85,73 +93,25 @@ export class GameService {
   async findAllGameStatus() {
     const status = await this.gameRepository.findManyGameStatus()
 
-    return status.map(currentStatus => ({
-      id: currentStatus.id,
-      status: currentStatus.status
-    }))
+    return {
+      status: status.map(currentStatus => ({
+        id: currentStatus.id,
+        status: currentStatus.status
+      }))
+    }
   }
 
-  async findAllGamesAndDlcs(
-    pageIndex: number,
-    search: string | null | undefined
-  ) {
-    const games = await this.gameRepository.findManyGames(search)
-
-    const resultFiltered = games.flatMap(game => [
-      {
-        id: game.id,
-        name: game.gameName,
-        banner: game.gameBanner,
-        gameStudios: game.gameStudios,
-        categories: game.categories,
-        publishers: game.publishers,
-        platforms: game.platforms,
-        summary: game.summary,
-        gameLaunchers: game.gameLaunchers,
-        dlcs: game.dlcs,
-        type: 'game'
-      },
-      ...game.dlcs.map(dlc => ({
-        id: dlc.id,
-        name: dlc.dlcName,
-        banner: dlc.dlcBanner,
-        categories: dlc.categories,
-        game: dlc.game,
-        gameStudios: dlc.gameStudios,
-        gameLaunchers: dlc.gameLaunchers,
-        publishers: dlc.publishers,
-        platforms: dlc.platforms,
-        summary: dlc.summary,
-        type: 'dlc'
-      }))
+  async findAllGames(pageIndex: number, search: string | null) {
+    const [games, total] = await Promise.all([
+      this.gameRepository.findManyGames(pageIndex, this.itemsPerPage, search),
+      this.gameRepository.countGames(search)
     ])
 
-    const startIndex = pageIndex * this.ITEMS_PER_PAGE
-    const paginatedResutls = resultFiltered.slice(
-      startIndex,
-      startIndex + this.ITEMS_PER_PAGE
-    )
-
     return {
-      games: paginatedResutls,
-      total: resultFiltered.length
-    }
-  }
-
-  async findGameById(gameId: string) {
-    const game = await this.gameRepository.findById(gameId)
-
-    const dlc = await this.dlcRepository.findDlcById(gameId)
-
-    if (!game && !dlc) {
-      throw new ClientError('Item with this id has not founded.')
-    }
-
-    if (game) {
-      return {
+      games: games.map(game => ({
         id: game.id,
-        name: game.gameName,
-        banner: game.gameBanner,
+        gameName: game.gameName,
+        gameBanner: game.gameBanner,
         gameStudios: game.gameStudios.map(studio => ({
           id: studio.id,
           studioName: studio.studioName
@@ -171,49 +131,73 @@ export class GameService {
         summary: game.summary,
         gameLaunchers: game.gameLaunchers.map(launcher => ({
           dateRelease: launcher.dateRelease,
-          platforms: launcher.platforms
+          platform: {
+            id: launcher.platforms.id,
+            platformName: launcher.platforms.platformName
+          }
         })),
+        isDlc: game.isDlc,
         dlcs: game.dlcs.map(dlc => ({
           id: dlc.id,
-          banner: dlc.dlcBanner,
-          name: dlc.dlcName
+          gameBanner: dlc.gameBanner,
+          gameName: dlc.gameName
         })),
-        type: 'game'
-      }
+        parentGame: game.parentGame
+      })),
+      total
+    }
+  }
+
+  async findGameById(gameId: string) {
+    const game = await this.gameRepository.findById(gameId)
+
+    if (!game) {
+      throw new ClientError('Game not found.')
     }
 
     return {
-      id: dlc?.id,
-      name: dlc?.dlcName,
-      banner: dlc?.dlcBanner,
       game: {
-        id: dlc?.game.id,
-        banner: dlc?.game.gameBanner,
-        name: dlc?.game.gameName
-      },
-      gameStudios: dlc?.gameStudios.map(studio => ({
-        id: studio.id,
-        studioName: studio.studioName
-      })),
-      categories: dlc?.categories.map(category => ({
-        id: category.id,
-        categoryName: category.categoryName
-      })),
-      publishers: dlc?.publishers.map(publisher => ({
-        id: publisher.id,
-        publisherName: publisher.publisherName
-      })),
-      platforms: dlc?.platforms.map(platform => ({
-        id: platform.id,
-        platformName: platform.platformName
-      })),
-      summary: dlc?.summary,
-      gameLaunchers: dlc?.gameLaunchers.map(launcher => ({
-        dateRelease: launcher.dateRelease,
-        platforms: launcher.platforms
-      })),
-      dlcs: [], // DLC não tem DLCs
-      type: 'dlc'
+        id: game.id,
+        gameName: game.gameName,
+        gameBanner: game.gameBanner,
+        gameStudios: game.gameStudios.map(studio => ({
+          id: studio.id,
+          studioName: studio.studioName
+        })),
+        categories: game.categories.map(category => ({
+          id: category.id,
+          categoryName: category.categoryName
+        })),
+        publishers: game.publishers.map(publisher => ({
+          id: publisher.id,
+          publisherName: publisher.publisherName
+        })),
+        platforms: game.platforms.map(platform => ({
+          id: platform.id,
+          platformName: platform.platformName
+        })),
+        summary: game.summary,
+        gameLaunchers: game.gameLaunchers.map(launcher => ({
+          dateRelease: launcher.dateRelease,
+          platform: {
+            id: launcher.platforms.id,
+            platformName: launcher.platforms.platformName
+          }
+        })),
+        isDlc: game.isDlc,
+        dlcs: game.dlcs.map(dlc => ({
+          id: dlc.id,
+          gameBanner: dlc.gameBanner,
+          gameName: dlc.gameName
+        })),
+        parentGame: game.parentGame
+          ? {
+              id: game.parentGame.id,
+              gameName: game.parentGame.gameName,
+              gameBanner: game.parentGame.gameBanner
+            }
+          : null
+      }
     }
   }
 
@@ -238,17 +222,19 @@ export class GameService {
     const gameAlreadyExist = await this.gameRepository.findById(gameId)
 
     if (!gameAlreadyExist) {
-      throw new ClientError('This game has not found.')
+      throw new ClientError('Game not found.')
     }
 
-    const game = await this.gameRepository.updateGame(gameId, {
+    const game = await this.gameRepository.update(gameId, {
       categories: data.categories,
       gameBanner: data.gameBanner,
       gameName: data.gameName,
       gameStudios: data.gameStudios,
       platforms: data.platforms,
       publishers: data.publishers,
-      summary: data.summary
+      summary: data.summary,
+      isDlc: data.isDlc,
+      parentGameId: data.parentGameId
     })
 
     return { game }

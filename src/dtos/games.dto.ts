@@ -6,6 +6,8 @@ export interface CreateGameDTO {
   platforms: { platformName: string }[]
   publishers: { publisherName: string }[]
   summary: string
+  isDlc: boolean
+  parentGameId?: string | null
 }
 
 export interface UpdateGameDTO {
@@ -16,4 +18,6 @@ export interface UpdateGameDTO {
   platforms?: { platformName: string }[]
   publishers?: { publisherName: string }[]
   summary?: string
+  isDlc: boolean
+  parentGameId?: string | null
 }
