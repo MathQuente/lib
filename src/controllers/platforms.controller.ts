@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { PlatformService } from '../services/platform.service'
+import { PlatformService } from '../services/platforms.service'
 import * as PlatformSchemas from '../schemas/platform.schema'
 
 export class PlatformController {

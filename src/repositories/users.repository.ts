@@ -1,5 +1,5 @@
 import { prisma } from '../database/db'
-import { AddGameDTO, UpdateUserDTO } from '../dtos/users.dto'
+import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {

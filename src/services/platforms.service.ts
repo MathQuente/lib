@@ -1,5 +1,5 @@
 import { ClientError } from '../errors/client-error'
-import { PlatformRepository } from '../repositories/platform.repository'
+import { PlatformRepository } from '../repositories/platforms.repository'
 
 export class PlatformService {
   private readonly ITEMS_PER_PAGE = 14

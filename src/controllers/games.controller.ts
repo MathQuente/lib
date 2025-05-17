@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import * as GameSchema from '../schemas/games.schema'
+import * as GameSchema from '../schemas/game.schema'
 import { GameService } from '../services/games.service'
 
 export class GameController {

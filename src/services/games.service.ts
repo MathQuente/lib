@@ -1,7 +1,7 @@
-import { CreateGameDTO, UpdateGameDTO } from '../dtos/games.dto'
+import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
 import { ClientError } from '../errors/client-error'
 import { GameRepository } from '../repositories/games.repository'
-import { PlatformRepository } from '../repositories/platform.repository'
+import { PlatformRepository } from '../repositories/platforms.repository'
 
 export class GameService {
   private readonly itemsPerPage = 36

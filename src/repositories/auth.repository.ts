@@ -1,5 +1,5 @@
 import { prisma } from '../database/db'
-import { CreateUserDTO } from '../dtos/users.dto'
+import { CreateUserDTO } from '../dtos/user.dto'
 
 export class AuthRepository {
   async saveToken(token: string, userId: string, expiresAt: Date) {

@@ -3,7 +3,7 @@ import { FastifyReply } from 'fastify'
 import { AuthRepository } from '../repositories/auth.repository'
 import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
-import { CreateUserDTO } from '../dtos/users.dto'
+import { CreateUserDTO } from '../dtos/user.dto'
 import { generateFromEmail } from 'unique-username-generator'
 
 export class AuthService {

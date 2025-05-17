@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import * as GameStudioSchemas from '../schemas/gameStudio.schema'
-import { GameStudioRepository } from '../repositories/gameStudio.repository'
-import { GameStudioService } from '../services/gameStudio.service'
-import { GameStudioController } from '../controllers/gameStudio.controller'
+import { GameStudioRepository } from '../repositories/gameStudios.repository'
+import { GameStudioService } from '../services/gameStudios.service'
+import { GameStudioController } from '../controllers/gameStudios.controller'
 
 export async function gameStudioRoutes(app: FastifyInstance) {
   const gameStudioRepository = new GameStudioRepository()

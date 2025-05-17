@@ -6,12 +6,12 @@ import {
 
 import cors from '@fastify/cors'
 import { gameRoutes } from './routes/game'
-import { gameStudioRoutes } from './routes/game-studio'
+import { gameStudioRoutes } from './routes/gameStudios'
 
 import { fastifyJwt } from '@fastify/jwt'
 import * as dotenv from 'dotenv'
 import { platformsRoutes } from './routes/platforms'
-import { userRoutes } from './routes/user'
+import { userRoutes } from './routes/users'
 import { errorHandler } from './error-handler'
 import { fastifyCookie } from '@fastify/cookie'
 import { authRoutes } from './routes/auth'

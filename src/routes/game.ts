@@ -3,8 +3,8 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { GameRepository } from '../repositories/games.repository'
 import { GameService } from '../services/games.service'
 import { GameController } from '../controllers/games.controller'
-import * as GameSchema from '../schemas/games.schema'
-import { PlatformRepository } from '../repositories/platform.repository'
+import * as GameSchema from '../schemas/game.schema'
+import { PlatformRepository } from '../repositories/platforms.repository'
 
 const gameRepository = new GameRepository()
 const platformRepository = new PlatformRepository()

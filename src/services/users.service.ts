@@ -1,4 +1,4 @@
-import { UpdateUserDTO } from '../dtos/users.dto'
+import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 
 import { GameRepository } from '../repositories/games.repository'

@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { UserService } from '../services/users.service'
-import * as UserSchema from '../schemas/users.schema'
+import * as UserSchema from '../schemas/user.schema'
 import { ClientError } from '../errors/client-error'
 
 export class UserController {

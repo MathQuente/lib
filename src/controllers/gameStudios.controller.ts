@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { GameStudioService } from '../services/gameStudio.service'
+import { GameStudioService } from '../services/gameStudios.service'
 import * as GameStudioSchemas from '../schemas/gameStudio.schema'
 
 export class GameStudioController {

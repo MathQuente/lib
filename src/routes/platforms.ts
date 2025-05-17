@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { PlatformController } from '../controllers/platform.controller'
-import { PlatformService } from '../services/platform.service'
-import { PlatformRepository } from '../repositories/platform.repository'
+import { PlatformController } from '../controllers/platforms.controller'
+import { PlatformService } from '../services/platforms.service'
+import { PlatformRepository } from '../repositories/platforms.repository'
 import * as PlatformSchemas from '../schemas/platform.schema'
 export async function platformsRoutes(app: FastifyInstance) {
   const platformRepository = new PlatformRepository()

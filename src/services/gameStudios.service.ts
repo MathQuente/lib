@@ -1,5 +1,5 @@
 import { ClientError } from '../errors/client-error'
-import { GameStudioRepository } from '../repositories/gameStudio.repository'
+import { GameStudioRepository } from '../repositories/gameStudios.repository'
 
 export class GameStudioService {
   private readonly ITEMS_PER_PAGE = 14

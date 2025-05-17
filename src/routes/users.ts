@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { authMiddleware } from '../middleware/auth.middleware'
-import * as UserSchema from '../schemas/users.schema'
+import * as UserSchema from '../schemas/user.schema'
 import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
