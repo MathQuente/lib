@@ -25,17 +25,7 @@ export const GetPlatformResponseSchema = z.object({
         gameBanner: z.string()
       })
     ),
-    dlcs: z.array(
-      z.object({
-        id: z.string().uuid(),
-        dlcName: z.string(),
-        dlcBanner: z.string()
-      })
-    ),
-    gamesAndDlcsAmount: z.object({
-      games: z.number(),
-      dlcs: z.number()
-    })
+    gamesTotal: z.number()
   })
 })
 
@@ -55,17 +45,7 @@ export const GetAllPlatformsResponseSchema = z.object({
           gameBanner: z.string()
         })
       ),
-      dlcs: z.array(
-        z.object({
-          id: z.string().uuid(),
-          dlcName: z.string(),
-          dlcBanner: z.string()
-        })
-      ),
-      gamesAndDlcsAmount: z.object({
-        games: z.number(),
-        dlcs: z.number()
-      })
+      gamesTotal: z.number()
     })
   )
 })

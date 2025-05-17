@@ -23,7 +23,11 @@ export class PlatformService {
     const { id } = await this.platformRepository.create(platformName)
 
     // return the ID
-    return { platformId: id }
+    return {
+      platform: {
+        id
+      }
+    }
   }
 
   async getPlatformById(platformId: string) {
@@ -32,7 +36,7 @@ export class PlatformService {
 
     // if not, throw error
     if (!platform) {
-      throw new ClientError('This platform doesnt exist')
+      throw new ClientError('Platform not found.')
     }
 
     // return object with the platform
@@ -40,21 +44,12 @@ export class PlatformService {
       platform: {
         id: platform.id,
         platformName: platform.platformName,
-        gamesAndDlcsAmount: {
-          total: (platform?._count.games || 0) + (platform?._count.dlcs || 0),
-          games: platform?._count.games,
-          dlcs: platform?._count.dlcs
-        },
         games: platform?.games.map(game => ({
           id: game.id,
           gameName: game.gameName,
           gameBanner: game.gameBanner
         })),
-        dlcs: platform?.dlcs.map(dlc => ({
-          id: dlc.id,
-          dlcName: dlc.dlcName,
-          dlcBanner: dlc.dlcBanner
-        }))
+        gamesTotal: platform._count.games
       }
     }
   }
@@ -67,16 +62,14 @@ export class PlatformService {
     })
 
     //return object with all platforms
-    return platforms.map(platform => ({
-      id: platform.id,
-      platformName: platform.platformName,
-      games: platform.games,
-      dlcs: platform.dlcs,
-      gamesAndDlcsAmount: {
-        games: platform._count.games,
-        dlcs: platform._count.dlcs
-      }
-    }))
+    return {
+      platforms: platforms.map(platform => ({
+        id: platform.id,
+        platformName: platform.platformName,
+        games: platform.games,
+        gamesTotal: platform._count.games
+      }))
+    }
   }
 
   async updatePlatofrm(platformId: string, platformName: string) {
@@ -85,7 +78,7 @@ export class PlatformService {
     )
 
     if (!platformAlreadyExists) {
-      throw new ClientError('This platform not exists')
+      throw new ClientError('Platform not found.')
     }
 
     const platformWithSameName = await this.platformRepository.findByName(

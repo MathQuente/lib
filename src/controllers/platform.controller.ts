@@ -12,12 +12,10 @@ export class PlatformController {
     )
 
     // get platformId from request.params
-    const { platformId } = await this.platformService.createPlatform(
-      platformName
-    )
+    const { platform } = await this.platformService.createPlatform(platformName)
 
-    // return object with platformId
-    return reply.send({ platformId })
+    // return object platform
+    return reply.send({ platform })
   }
 
   async getPlatform(request: FastifyRequest, reply: FastifyReply) {
@@ -37,7 +35,7 @@ export class PlatformController {
     )
 
     // get all platforms
-    const platforms = await this.platformService.getAllPlatforms(pageIndex)
+    const { platforms } = await this.platformService.getAllPlatforms(pageIndex)
 
     return reply.send({ platforms })
   }

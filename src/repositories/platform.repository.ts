@@ -42,23 +42,13 @@ export class PlatformRepository {
           select: {
             id: true,
             gameName: true,
-            gameBanner: true
-          }
-        },
-        dlcs: {
-          orderBy: [{ dlcName: 'asc' }],
-          skip: pageIndex * limit,
-          take: limit,
-          select: {
-            id: true,
-            dlcName: true,
-            dlcBanner: true
+            gameBanner: true,
+            isDlc: true
           }
         },
         _count: {
           select: {
-            games: true,
-            dlcs: true
+            games: true
           }
         }
       }
@@ -81,23 +71,13 @@ export class PlatformRepository {
           select: {
             id: true,
             gameName: true,
-            gameBanner: true
-          }
-        },
-        dlcs: {
-          orderBy: [{ dlcName: 'asc' }],
-          skip: pageIndex * limit,
-          take: limit,
-          select: {
-            id: true,
-            dlcName: true,
-            dlcBanner: true
+            gameBanner: true,
+            isDlc: true
           }
         },
         _count: {
           select: {
-            games: true,
-            dlcs: true
+            games: true
           }
         }
       }
