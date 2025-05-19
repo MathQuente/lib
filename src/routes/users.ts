@@ -6,11 +6,17 @@ import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
 import { GameRepository } from '../repositories/games.repository'
+import { RatingRepository } from '../repositories/rating.repository'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
   const gameRepository = new GameRepository()
-  const userService = new UserService(userRepository, gameRepository)
+  const ratingRepository = new RatingRepository()
+  const userService = new UserService(
+    userRepository,
+    gameRepository,
+    ratingRepository
+  )
   const userController = new UserController(userService)
 
   app.withTypeProvider<ZodTypeProvider>().get(

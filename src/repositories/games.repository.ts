@@ -1,3 +1,4 @@
+import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
 
@@ -325,6 +326,14 @@ export class GameRepository {
             }
           ]
         }
+      }
+    })
+  }
+
+  async findStatusByName(status: Status) {
+    return prisma.userGamesStatus.findFirst({
+      where: {
+        status: status
       }
     })
   }

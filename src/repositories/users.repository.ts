@@ -141,6 +141,11 @@ export class UserRepository {
             gameBanner: true,
             gameName: true
           }
+        },
+        statuses: {
+          select: {
+            id: true
+          }
         }
       }
     })

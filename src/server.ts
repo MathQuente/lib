@@ -15,6 +15,7 @@ import { userRoutes } from './routes/users'
 import { errorHandler } from './error-handler'
 import { fastifyCookie } from '@fastify/cookie'
 import { authRoutes } from './routes/auth'
+import { ratingRoutes } from './routes/rating'
 
 dotenv.config()
 
@@ -43,7 +44,7 @@ app.setErrorHandler(errorHandler)
 
 app.register(gameStudioRoutes, { prefix: '/gameStudios' })
 app.register(gameRoutes, { prefix: '/games' })
-
+app.register(ratingRoutes, { prefix: '/rating'})
 app.register(platformsRoutes, { prefix: '/platforms' })
 app.register(authRoutes, { prefix: '/auth' })
 app.register(userRoutes, { prefix: '/users' })

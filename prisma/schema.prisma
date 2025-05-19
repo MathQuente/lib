@@ -45,6 +45,7 @@ model Game {
   userGames     UserGame[]
 
   UserGameStats UserGameStats[]
+  Rating        Rating[]
 
   @@map("games")
 }
@@ -94,6 +95,20 @@ model Publisher {
   @@map("publishers")
 }
 
+model Rating {
+  id        String   @id @default(uuid()) @map("rating_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  gameId    String   @map("game_id")
+  value     Float      @map("value")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, gameId])
+  @@map("ratings")
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -106,6 +121,7 @@ model User {
   userGames      UserGame[]
   refreshToken   RefreshToken[]
   UserGameStats  UserGameStats[]
+  Rating         Rating[]
 
   @@map("users")
 }

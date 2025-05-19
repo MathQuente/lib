@@ -2,6 +2,7 @@ import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 
 import { GameRepository } from '../repositories/games.repository'
+import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 
 export class UserService {
@@ -9,7 +10,8 @@ export class UserService {
 
   constructor(
     private userRepository: UserRepository,
-    private gameRepository: GameRepository
+    private gameRepository: GameRepository,
+    private ratingRepository: RatingRepository
   ) {}
 
   async addGameToUserLibrary(
@@ -217,6 +219,15 @@ export class UserService {
 
     const { game } = await this.userRepository.removeGame(gameId, userId)
 
+    const rating = await this.ratingRepository.findUniqueByUserGame(
+      gameId,
+      userId
+    )
+
+    if (rating) {
+      await this.ratingRepository.delete(gameId, userId)
+    }
+
     return { game }
   }
 
@@ -233,24 +244,27 @@ export class UserService {
       throw new ClientError('Game not found. Game not DLC exists with this ID')
     }
 
-    const gameIsInUserLibrary = await this.userRepository.findUserGame(
-      gameId,
-      userId
-    )
+    const userGame = await this.userRepository.findUserGame(gameId, userId)
 
-    if (!gameIsInUserLibrary) {
+    if (!userGame?.game) {
       throw new ClientError(
         'This game is not in your library, you cant update.'
       )
     }
 
+    const test = await this.userRepository.updateUserGamePlayedCount(
+      userId,
+      userGame.game.id,
+      1
+    )
+    console.log(test)
     const { game, statuses } = await this.userRepository.updateGameStatus(
       gameId,
       userId,
       statusIds
     )
 
-    return { game, statuses }
+    return { game, statuses, test }
   }
 
   async update(userId: string, data: UpdateUserDTO) {
