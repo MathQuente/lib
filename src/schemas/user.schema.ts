@@ -123,7 +123,7 @@ export const GetUserGameStatusParamsSchema = z.object({
 export const UpdateUserResponseSchema = z.object({
   user: z.object({
     profilePicture: z.string(),
-    userBanner: z.string(),
+    userBanner: z.string().nullable(),
     userName: z.string()
   })
 })

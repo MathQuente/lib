@@ -6,7 +6,7 @@ import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 
 export class UserService {
-  private readonly ITEMS_PER_PAGE = 18
+  private readonly ITEMS_PER_PAGE = 30
 
   constructor(
     private userRepository: UserRepository,
@@ -252,19 +252,20 @@ export class UserService {
       )
     }
 
-    const test = await this.userRepository.updateUserGamePlayedCount(
-      userId,
-      userGame.game.id,
-      1
-    )
-    console.log(test)
+    const userGamePlayedCountUpdated =
+      await this.userRepository.updateUserGamePlayedCount(
+        userId,
+        userGame.game.id,
+        1
+      )
+
     const { game, statuses } = await this.userRepository.updateGameStatus(
       gameId,
       userId,
       statusIds
     )
 
-    return { game, statuses, test }
+    return { game, statuses, userGamePlayedCountUpdated }
   }
 
   async update(userId: string, data: UpdateUserDTO) {

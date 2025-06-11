@@ -6,7 +6,6 @@ import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { GameRepository } from '../repositories/games.repository'
 import * as RatingSchema from '../schemas/rating.schema'
-import { authMiddleware } from '../middleware/auth.middleware'
 
 export async function ratingRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
@@ -22,7 +21,7 @@ export async function ratingRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
@@ -37,7 +36,7 @@ export async function ratingRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
@@ -65,7 +64,7 @@ export async function ratingRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {

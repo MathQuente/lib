@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { authMiddleware } from '../middleware/auth.middleware'
+
 import * as UserSchema from '../schemas/user.schema'
 import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
@@ -22,10 +22,10 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/me',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         response: {
-          200: UserSchema.GetUserResponseSchema
+          // 200: UserSchema.GetUserResponseSchema
         }
       }
     },
@@ -35,7 +35,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
@@ -50,7 +50,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         response: {
@@ -64,7 +64,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().post(
     '/:userId/games/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
@@ -79,7 +79,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/:userId/games/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
@@ -93,7 +93,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/:userId/gameStatus/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
@@ -107,7 +107,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
@@ -121,7 +121,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId/userGames',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
@@ -136,7 +136,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/:userId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserParamsSchema,
         body: UserSchema.UpdateUserBodySchema,
@@ -151,7 +151,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/:userId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserParamsSchema,
         response: {
@@ -165,7 +165,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId/gameInfo/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
@@ -179,7 +179,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/:userId/playedCount/:gameId',
     {
-      onRequest: [authMiddleware],
+      preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {

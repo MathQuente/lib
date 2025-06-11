@@ -44,23 +44,13 @@ export class UserController {
   }
 
   async getMe(request: FastifyRequest, reply: FastifyReply) {
-    const authHeader = request.headers.authorization
+    const userId = request.user.userId
 
-    if (!authHeader) {
-      throw new ClientError('No token provided')
+    if (!userId) {
+      throw new ClientError('User ID not found in token')
     }
 
-    const [, token] = authHeader.split(' ')
-
-    if (!token) {
-      throw new ClientError('No token provided')
-    }
-
-    const decoded = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64').toString()
-    )
-
-    const { user } = await this.userService.findMe(decoded.userId)
+    const { user } = await this.userService.findMe(userId)
 
     return reply.send({ user })
   }

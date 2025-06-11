@@ -1,5 +1,4 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import { AuthenticatedRequest } from '../types/authenticatedRequest'
 import { RatingService } from '../services/rating.service'
 import * as RatingSchema from '../schemas/rating.schema'
 
@@ -24,6 +23,7 @@ export class RatingController {
 
   async getUserGameRating(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = RatingSchema.RatingParamsSchema.parse(request.params)
+
     const userId = request.user.userId
 
     const { rating } = await this.ratingService.findUniqueByUserGame(

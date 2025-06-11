@@ -193,6 +193,9 @@ export class UserRepository {
         statuses: {
           select: {
             status: true
+          },
+          orderBy: {
+            id: 'asc'
           }
         }
       }
@@ -305,9 +308,10 @@ export class UserRepository {
       },
       data: {
         statuses: {
-          set: [], // Primeiro desconecta todos
-          connect: connectStatuses // Depois conecta os novos
-        }
+          set: [],
+          connect: connectStatuses
+        },
+        updatedAt: new Date()
       },
       select: {
         game: {
@@ -328,7 +332,7 @@ export class UserRepository {
   }
 
   async updateUser(userId: string, data: UpdateUserDTO) {
-    let updateData: Partial<UpdateUserDTO> = {}
+    let updateData: Partial<UpdateUserDTO> = data
 
     if (data.profilePicture) {
       updateData.profilePicture = data.profilePicture
@@ -346,7 +350,7 @@ export class UserRepository {
       where: {
         id: userId
       },
-      data,
+      data: updateData,
       select: {
         profilePicture: true,
         userBanner: true,

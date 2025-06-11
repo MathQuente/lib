@@ -11,14 +11,14 @@ const platformRepository = new PlatformRepository()
 const gameService = new GameService(gameRepository, platformRepository)
 const gameController = new GameController(gameService)
 
-export async function gameRoutes(app: FastifyInstance) {
+export async function gameRoutes(app: FastifyInstance, opts: any) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:gameId',
     {
       schema: {
-        params: GameSchema.GameParamsSchema,
+        params: [GameSchema.GameParamsSchema],
         response: {
-          200: GameSchema.GetGameResponseSchema
+          200: [GameSchema.GetGameResponseSchema]
         }
       }
     },
