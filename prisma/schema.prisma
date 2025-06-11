@@ -101,7 +101,7 @@ model Rating {
   userId    String   @map("user_id")
   game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
   gameId    String   @map("game_id")
-  value     Float      @map("value")
+  value     Float    @map("value")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -116,6 +116,7 @@ model User {
   password       String
   profilePicture String?         @map("profile_picture")
   userBanner     String?         @map("user_banner")
+  googleId       String?         @unique
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @default(now()) @map("updated_at")
   userGames      UserGame[]
@@ -131,7 +132,7 @@ model UserGame {
   gameId    String?           @map("game_id")
   userId    String            @map("user_id")
   dlcId     String?           @map("dlc_id")
-  statuses  UserGamesStatus[] // Relacionamento many-to-many
+  statuses  UserGamesStatus[]
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -162,7 +163,7 @@ enum Status {
 
 model UserGameStats {
   id          String @id @default(uuid())
-  userGameId  String @map("user_game_id") // ← chave estrangeira
+  userGameId  String @map("user_game_id")
   completions Int    @default(0)
 
   userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
@@ -172,6 +173,6 @@ model UserGameStats {
   User   User?   @relation(fields: [userId], references: [id])
   userId String?
 
-  @@unique([userGameId]) // ← garante 1:1
+  @@unique([userGameId])
   @@map("user_game_stats")
 }
