@@ -7,7 +7,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "tsx watch --env-file .env src/server.ts"
+    "dev": "tsx watch --env-file .env src/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,13 +22,14 @@
     "unique-username-generator": "^1.3.0"
   },
   "dependencies": {
-    "@fastify/cookie": "^6.0.0",
-    "@fastify/cors": "^9.0.1",
-    "@fastify/jwt": "^8.0.0",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/jwt": "^9.1.0",
+    "@fastify/oauth2": "^8.1.2",
     "@prisma/client": "^5.12.1",
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.5",
-    "fastify": "^4.28.1",
+    "fastify": "^5.3.3",
     "fastify-type-provider-zod": "^1.1.9",
     "fastify-zod": "^1.4.0",
     "zod": "^3.22.4",

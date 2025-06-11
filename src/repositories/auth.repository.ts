@@ -21,6 +21,13 @@ export class AuthRepository {
     })
   }
 
+  async findUserByGoogleId(googleId: string) {
+    return prisma.user.findUnique({
+      where: { googleId },
+      select: { id: true, email: true, userName: true, profilePicture: true }
+    })
+  }
+
   async createUser(data: CreateUserDTO) {
     return prisma.user.create({
       data: {
@@ -31,6 +38,25 @@ export class AuthRepository {
       select: {
         id: true
       }
+    })
+  }
+
+  async createUserWithGoogle(data: {
+    email: string
+    name: string
+    picture: string
+    googleId: string
+    password: string
+  }) {
+    return prisma.user.create({
+      data: {
+        email: data.email,
+        userName: data.name,
+        profilePicture: data.picture,
+        googleId: data.googleId,
+        password: data.password
+      },
+      select: { id: true }
     })
   }
 

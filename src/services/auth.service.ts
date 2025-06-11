@@ -10,7 +10,8 @@ export class AuthService {
   constructor(private authRepository: AuthRepository, private jwt: JWT) {}
 
   async generateTokens(userId: string) {
-    const accessToken = this.jwt.sign({ userId }, { expiresIn: '15min' })
+    const accessToken = this.jwt.sign({ userId }, { expiresIn: '15m' })
+
     const refreshToken = this.jwt.sign({ userId }, { expiresIn: '7d' })
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -22,28 +23,27 @@ export class AuthService {
 
   async validateRefreshToken(refreshToken: string) {
     try {
-      // Verifique se o token existe no banco de dados
+      // Primeiro verifica no banco
       const storedToken = await this.authRepository.findToken(refreshToken)
 
       if (!storedToken || storedToken.expiresAt < new Date()) {
         throw new Error('invalid or expired refresh token')
       }
 
-      // Tenta verificar e decodificar o token
+      // Depois verifica a assinatura JWT
       const decoded = this.jwt.verify(refreshToken) as { userId: string }
 
-      // Se o token for válido, invalide o token antigo
+      // Remove o token usado (rotação de tokens)
       await this.authRepository.invalidateToken(refreshToken)
 
-      // Retorne o userId decodificado
       return decoded.userId
     } catch (error: any) {
-      // Captura o erro se o token expirou
-      if (error.code === 'FAST_JWT_EXPIRED') {
+      if (
+        error.code === 'FAST_JWT_EXPIRED' ||
+        error.message?.includes('expired')
+      ) {
         throw new Error('Refresh token expired')
       }
-
-      // Caso o token seja malformado ou inválido, trate com outro erro
       throw new Error('Invalid refresh token')
     }
   }
@@ -78,11 +78,7 @@ export class AuthService {
       userName: userNameGeneretad
     })
 
-    const accessToken = this.jwt.sign(
-      { userId: user.id },
-      { expiresIn: '15min' }
-    )
-    const refreshToken = this.jwt.sign({ userId: user.id }, { expiresIn: '7d' })
+    const { accessToken, refreshToken } = await this.generateTokens(user.id)
 
     return {
       accessToken,
@@ -91,6 +87,45 @@ export class AuthService {
         id: user.id
       }
     }
+  }
+
+  async loginWithGoogle(profile: {
+    sub: string
+    email: string
+    name: string
+    picture: string
+  }) {
+    let user = await this.authRepository.findUserByGoogleId(profile.sub)
+
+    if (!user) {
+      const array = new Uint8Array(32)
+      crypto.getRandomValues(array)
+      const randomPassword = Array.from(array, byte =>
+        byte.toString(16).padStart(2, '0')
+      ).join('')
+      const hashedPassword = await bcrypt.hash(randomPassword, 10)
+
+      const created = await this.authRepository.createUserWithGoogle({
+        email: profile.email,
+        name: profile.name,
+        picture: profile.picture,
+        googleId: profile.sub,
+        password: hashedPassword
+      })
+      user = {
+        id: created.id,
+        email: profile.email,
+        userName: profile.name,
+        profilePicture: profile.picture
+      }
+    }
+
+    // Depois de ter o user.id, gere seus tokens (reaproveitando generateTokens)
+    const { accessToken, refreshToken, expiresAt } = await this.generateTokens(
+      user.id
+    )
+
+    return { user, accessToken, refreshToken, expiresAt }
   }
 
   async validateUser(email: string, password: string) {
@@ -102,7 +137,11 @@ export class AuthService {
       throw new ClientError('Email or password wrong')
     }
 
-    return user
+    return {
+      user: {
+        id: user.id
+      }
+    }
   }
 
   async logout(refreshToken: string) {
