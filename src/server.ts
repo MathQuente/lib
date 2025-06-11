@@ -1,54 +1,55 @@
-import fastify from 'fastify'
+import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler
 } from 'fastify-type-provider-zod'
-
-import cors from '@fastify/cors'
+import { Jwt } from './jwt'
+import { authRoutes } from './routes/auth'
+import { userRoutes } from './routes/users'
 import { gameRoutes } from './routes/game'
 import { gameStudioRoutes } from './routes/gameStudios'
-
-import { fastifyJwt } from '@fastify/jwt'
-import * as dotenv from 'dotenv'
-import { platformsRoutes } from './routes/platforms'
-import { userRoutes } from './routes/users'
-import { errorHandler } from './error-handler'
-import { fastifyCookie } from '@fastify/cookie'
-import { authRoutes } from './routes/auth'
 import { ratingRoutes } from './routes/rating'
+import { platformsRoutes } from './routes/platforms'
 
-dotenv.config()
-
-export const app = fastify()
-
-app.register(cors, {
-  origin: ['http://127.0.0.1:5173', 'http://localhost:5173']
-})
-
-app.setValidatorCompiler(validatorCompiler)
-app.setSerializerCompiler(serializerCompiler)
-
-if (!process.env.SECRET_JWT_KEY) {
-  throw new Error('SECRET_JWT_KEY environment variable is required')
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => Promise<void>
+  }
 }
 
-app.register(fastifyJwt, {
-  secret: process.env.SECRET_JWT_KEY
-})
+export class Server {
+  private static app: FastifyInstance = fastify()
+  private static port: number = 3333
+  private static host: string = '0.0.0.0'
 
-app.register(fastifyCookie, {
-  secret: process.env.SECRET_JWT_KEY
-})
+  public static async start() {
+    this.setupZodTypeProvider()
 
-app.setErrorHandler(errorHandler)
+    Jwt.initSetup(this.app)
+    this.initRoutes()
 
-app.register(gameStudioRoutes, { prefix: '/gameStudios' })
-app.register(gameRoutes, { prefix: '/games' })
-app.register(ratingRoutes, { prefix: '/rating'})
-app.register(platformsRoutes, { prefix: '/platforms' })
-app.register(authRoutes, { prefix: '/auth' })
-app.register(userRoutes, { prefix: '/users' })
+    await this.app.listen({
+      port: Server.port,
+      host: Server.host
+    })
 
-app.listen({ port: 3333 }).then(() => {
-  console.log('HTTP server running!')
-})
+    console.log(`🚀 Server running on http://${Server.host}:${Server.port}`)
+  }
+
+  private static setupZodTypeProvider() {
+    this.app.setValidatorCompiler(validatorCompiler)
+    this.app.setSerializerCompiler(serializerCompiler)
+  }
+
+  private static initRoutes() {
+    this.app.register(authRoutes, { prefix: '/auth' })
+    this.app.register(userRoutes, { prefix: '/users' })
+    this.app.register(gameRoutes, { prefix: '/games' })
+    this.app.register(gameStudioRoutes, { prefix: '/gameStudio' })
+    this.app.register(ratingRoutes, { prefix: '/rating' })
+    this.app.register(platformsRoutes, { prefix: '/platform' })
+  }
+}
