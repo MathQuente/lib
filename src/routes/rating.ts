@@ -48,7 +48,7 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:gameId/ratings/average',
+    '/:gameId/average',
     {
       schema: {
         params: RatingSchema.RatingParamsSchema,

@@ -28,11 +28,11 @@ export class RatingService {
     const playedStatus = await this.gameRepository.findStatusByName('PLAYED')
     if (!playedStatus) throw new ClientError('Status FINALIZADO')
 
-    if (!userGame?.game || !userGame.statuses) {
+    if (!userGame?.game || !userGame.UserGamesStatus) {
       await this.userRepository.addGameToUserLibrary({
         gameId,
         userId,
-        statusIds: [playedStatus.id]
+        statusIds: playedStatus.id
       })
 
       await this.userRepository.createUserGameStats(userId, gameId, 1)
@@ -42,11 +42,13 @@ export class RatingService {
       return { rating: rating.value }
     }
 
-    const hasPlayed = userGame.statuses.some(s => s.id === playedStatus.id)
+    const hasPlayed = userGame.UserGamesStatus.id === playedStatus.id
     if (!hasPlayed) {
-      await this.userRepository.updateGameStatus(gameId, userId, [
+      await this.userRepository.updateGameStatus(
+        gameId,
+        userId,
         playedStatus.id
-      ])
+      )
 
       await this.userRepository.updateUserGamePlayedCount(
         userId,
@@ -118,16 +120,10 @@ export class RatingService {
       throw new ClientError('Game not found.')
     }
 
-    const rating = await this.ratingRepository.findRating(game.id)
-
-    if (!rating) {
-      return { average: null }
-    }
-
     const average = await this.ratingRepository.findAverageRatingOfGame(gameId)
 
     return {
-      average: average._avg.value
+      average: average._avg.value || 0
     }
   }
 
