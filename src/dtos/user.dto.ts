@@ -7,7 +7,7 @@ export interface CreateUserDTO {
 export interface AddGameDTO {
   gameId: string
   userId: string
-  statusIds: number[]
+  statusIds: number
 }
 
 export interface UpdateUserDTO {

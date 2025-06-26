@@ -3,13 +3,11 @@ import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
-    const connectStatuses = data.statusIds.map(id => ({ id }))
-
     return prisma.userGame.create({
       data: {
         gameId: data.gameId,
         userId: data.userId,
-        statuses: { connect: connectStatuses }
+        userGamesStatusId: data.statusIds
       },
       select: {
         game: {
@@ -38,7 +36,8 @@ export class UserRepository {
       update: {},
       create: {
         userId,
-        gameId
+        gameId,
+        userGamesStatusId: 1
       }
     })
 
@@ -97,12 +96,10 @@ export class UserRepository {
     })
   }
 
-  async findManyByIds(statusIds: number[]) {
+  async findManyByIds(statusIds: number) {
     return prisma.userGamesStatus.findMany({
       where: {
-        id: {
-          in: statusIds
-        }
+        id: statusIds
       }
     })
   }
@@ -116,7 +113,7 @@ export class UserRepository {
         }
       },
       select: {
-        statuses: {
+        UserGamesStatus: {
           select: {
             id: true,
             status: true
@@ -142,7 +139,7 @@ export class UserRepository {
             gameName: true
           }
         },
-        statuses: {
+        UserGamesStatus: {
           select: {
             id: true
           }
@@ -168,11 +165,11 @@ export class UserRepository {
               }
             ]
           : undefined,
-        statuses: {
-          some: {
-            id: filter
-          }
-        }
+        UserGamesStatus: filter
+          ? {
+              id: filter
+            }
+          : undefined
       },
       skip: pageIndex * limit,
       take: limit,
@@ -190,12 +187,9 @@ export class UserRepository {
             isDlc: true
           }
         },
-        statuses: {
+        UserGamesStatus: {
           select: {
             status: true
-          },
-          orderBy: {
-            id: 'asc'
           }
         }
       }
@@ -296,9 +290,7 @@ export class UserRepository {
     })
   }
 
-  async updateGameStatus(gameId: string, userId: string, statusIds: number[]) {
-    const connectStatuses = statusIds.map(id => ({ id }))
-
+  async updateGameStatus(gameId: string, userId: string, statusIds: number) {
     return prisma.userGame.update({
       where: {
         userId_gameId: {
@@ -307,10 +299,7 @@ export class UserRepository {
         }
       },
       data: {
-        statuses: {
-          set: [],
-          connect: connectStatuses
-        },
+        userGamesStatusId: statusIds,
         updatedAt: new Date()
       },
       select: {
@@ -321,7 +310,7 @@ export class UserRepository {
             gameName: true
           }
         },
-        statuses: {
+        UserGamesStatus: {
           select: {
             id: true,
             status: true

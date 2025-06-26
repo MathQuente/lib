@@ -126,7 +126,7 @@ export async function userRoutes(app: FastifyInstance) {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
         response: {
-          200: UserSchema.GetAllUserGamesResponseSchema
+          // 200: UserSchema.GetAllUserGamesResponseSchema
         }
       }
     },

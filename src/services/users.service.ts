@@ -17,7 +17,7 @@ export class UserService {
   async addGameToUserLibrary(
     gameId: string,
     userId: string,
-    statusIds: number[]
+    statusIds: number
   ) {
     const user = await this.userRepository.findUserById(userId)
 
@@ -129,7 +129,7 @@ export class UserService {
     )
 
     return {
-      userGameStatuses: userGameStatuses?.statuses || []
+      userGameStatuses: userGameStatuses?.UserGamesStatus || null
     }
   }
 
@@ -173,12 +173,12 @@ export class UserService {
       }
     )
 
-    const userGames = rawUserGames.map(item => ({
-      id: item.game?.id,
-      gameName: item.game?.gameName,
-      gameBanner: item.game?.gameBanner,
-      isDlc: item.game?.isDlc,
-      statuses: item.statuses.map(status => status.status)
+    const userGames = rawUserGames.map(game => ({
+      id: game.game?.id,
+      gameName: game.game?.gameName,
+      gameBanner: game.game?.gameBanner,
+      isDlc: game.game?.isDlc,
+      statuses: game.UserGamesStatus.status
     }))
 
     const totalPerStatus = await this.userRepository.findGamesCountByStatus(
@@ -231,7 +231,7 @@ export class UserService {
     return { game }
   }
 
-  async updateGame(gameId: string, userId: string, statusIds: number[]) {
+  async updateGame(gameId: string, userId: string, statusIds: number) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
@@ -259,13 +259,10 @@ export class UserService {
         1
       )
 
-    const { game, statuses } = await this.userRepository.updateGameStatus(
-      gameId,
-      userId,
-      statusIds
-    )
+    const { game, UserGamesStatus } =
+      await this.userRepository.updateGameStatus(gameId, userId, statusIds)
 
-    return { game, statuses, userGamePlayedCountUpdated }
+    return { game, statuses: UserGamesStatus, userGamePlayedCountUpdated }
   }
 
   async update(userId: string, data: UpdateUserDTO) {
@@ -321,18 +318,6 @@ export class UserService {
 
     if (!existingGame) {
       throw new ClientError('Game not found. Game not exists with this ID')
-    }
-
-    const { userGameStatuses } = await this.findUserGameStatus(gameId, userId)
-
-    if (userGameStatuses) {
-      const gameFounded = userGameStatuses.find(
-        gameStatus => gameStatus.status == 'REPLAYING'
-      )
-
-      if (gameFounded) {
-        await this.userRepository.updateGameStatus(existingGame.id, userId, [1])
-      }
     }
 
     const userGameStats = await this.userRepository.updateUserGamePlayedCount(
