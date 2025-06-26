@@ -101,51 +101,71 @@ export class GameService {
     }
   }
 
-  async findAllGames(pageIndex: number, search: string | null) {
+  async findAllGames(
+    pageIndex: number,
+    search: string | null,
+    sortBy: 'gameName' | 'dateRelease' | 'rating',
+    sortOrder: 'asc' | 'desc' = 'asc'
+  ) {
     const [games, total] = await Promise.all([
-      this.gameRepository.findManyGames(pageIndex, this.itemsPerPage, search),
+      this.gameRepository.findManyGames(
+        pageIndex,
+        this.itemsPerPage,
+        search,
+        sortBy,
+        sortOrder
+      ),
       this.gameRepository.countGames(search)
     ])
 
     return {
       games: games.map(game => ({
-        id: game.id,
-        gameName: game.gameName,
-        gameBanner: game.gameBanner,
-        gameStudios: game.gameStudios.map(studio => ({
+        id: game?.id,
+        gameName: game?.gameName,
+        gameBanner: game?.gameBanner,
+        gameStudios: game?.gameStudios.map(studio => ({
           id: studio.id,
           studioName: studio.studioName
         })),
-        categories: game.categories.map(category => ({
+        categories: game?.categories.map(category => ({
           id: category.id,
           categoryName: category.categoryName
         })),
-        publishers: game.publishers.map(publisher => ({
+        publishers: game?.publishers.map(publisher => ({
           id: publisher.id,
           publisherName: publisher.publisherName
         })),
-        platforms: game.platforms.map(platform => ({
+        platforms: game?.platforms.map(platform => ({
           id: platform.id,
           platformName: platform.platformName
         })),
-        summary: game.summary,
-        gameLaunchers: game.gameLaunchers.map(launcher => ({
-          dateRelease: launcher.dateRelease,
+        summary: game?.summary,
+        gameLaunchers: game?.gameLaunchers.map(launcher => ({
+          // dateRelease: launcher.dateRelease,
           platform: {
             id: launcher.platforms.id,
             platformName: launcher.platforms.platformName
           }
         })),
-        isDlc: game.isDlc,
-        dlcs: game.dlcs.map(dlc => ({
+        isDlc: game?.isDlc,
+        dlcs: game?.dlcs.map(dlc => ({
           id: dlc.id,
           gameBanner: dlc.gameBanner,
           gameName: dlc.gameName
         })),
-        parentGame: game.parentGame
+        parentGame: game?.parentGame
       })),
       total
     }
+  }
+
+  async findMostBeated() {
+    const mostBeateds = await this.gameRepository.findManyGamesByMostBeated()
+    const gamesTrending = await this.gameRepository.findManyGamesByTrending()
+    const recentGames = await this.gameRepository.findManyGamesByRecentDate()
+    const futureGames = await this.gameRepository.findManyGamesByFutureRelease()
+
+    return { mostBeateds, gamesTrending, recentGames, futureGames }
   }
 
   async findGameById(gameId: string) {

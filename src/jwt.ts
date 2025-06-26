@@ -47,7 +47,7 @@ export class Jwt {
     })
   }
 
-  private static authenticateDecorator = (fastify: FastifyInstance) => {  
+  private static authenticateDecorator = (fastify: FastifyInstance) => {
     fastify.decorate(
       'authenticate',
       async (request: FastifyRequest, response: FastifyReply) => {

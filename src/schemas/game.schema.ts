@@ -1,4 +1,4 @@
-import z from 'zod'
+import { z } from 'zod'
 
 export const CreateGameDateReleaseBodySchema = z.object({
   dateRelease: z.coerce.date(),
@@ -73,7 +73,12 @@ export const GameParamsSchema = z.object({
 
 export const GameQueryStringSchema = z.object({
   query: z.string().nullable(),
-  pageIndex: z.coerce.number().default(0)
+  pageIndex: z.coerce.number().default(0),
+  sortBy: z
+    .enum(['gameName', 'dateRelease', 'rating'])
+    .optional()
+    .default('gameName'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('asc')
 })
 
 export const GetGameResponseSchema = z.object({

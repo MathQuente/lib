@@ -22,16 +22,24 @@ export class GameController {
   }
 
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
-    const { pageIndex, query } = GameSchema.GameQueryStringSchema.parse(
-      request.query
-    )
+    const { pageIndex, query, sortBy, sortOrder } =
+      GameSchema.GameQueryStringSchema.parse(request.query)
 
     const { games, total } = await this.gameService.findAllGames(
       pageIndex,
-      query
+      query,
+      sortBy,
+      sortOrder
     )
 
     return reply.send({ games, total })
+  }
+
+  async test(request: FastifyRequest, reply: FastifyReply) {
+    const { mostBeateds, gamesTrending, recentGames, futureGames } =
+      await this.gameService.findMostBeated()
+
+    return reply.send({ mostBeateds, gamesTrending, recentGames, futureGames })
   }
 
   async createGameDateRelease(request: FastifyRequest, reply: FastifyReply) {

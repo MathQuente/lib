@@ -16,9 +16,9 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
     '/:gameId',
     {
       schema: {
-        params: [GameSchema.GameParamsSchema],
+        params: GameSchema.GameParamsSchema,
         response: {
-          200: [GameSchema.GetGameResponseSchema]
+          200: GameSchema.GetGameResponseSchema
         }
       }
     },
@@ -31,7 +31,7 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {
-          200: GameSchema.GetGamesResponseSchema
+          // 200: GameSchema.GetGamesResponseSchema
         }
       }
     },
@@ -116,5 +116,18 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       }
     },
     async (request, reply) => gameController.getSimilarGames(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/test',
+    {
+      // schema: {
+      //   querystring: GameSchema.GameQueryStringSchema,
+      //   response: {
+      //     200: GameSchema.GetGamesResponseSchema
+      //   }
+      // }
+    },
+    async (request, reply) => gameController.test(request, reply)
   )
 }
