@@ -41,7 +41,8 @@ Table game_categories {
 
 Table game_launchers {
   id String [not null]
-  dateRelease DateTime [not null]
+  dateRelease DateTime
+  releasePeriod String
   gameId String [not null]
   platformId String [not null]
   platforms platforms [not null]
@@ -107,12 +108,13 @@ Table user_games {
   gameId String
   userId String [not null]
   dlcId String
-  statuses users_games_status [not null]
+  userGamesStatusId Int [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   user users [not null]
   game games
   UserGameStats user_game_stats
+  UserGamesStatus users_games_status [not null]
 
   indexes {
     (userId, gameId) [unique]
@@ -157,11 +159,6 @@ Table GameToPlatform {
   gamesId String [ref: > games.id]
 }
 
-Table UserGameToUserGamesStatus {
-  statusesId Int [ref: > users_games_status.id]
-  usergamesId String [ref: > user_games.id]
-}
-
 Enum Status {
   PLAYED
   REPLAYING
@@ -185,6 +182,8 @@ Ref: ratings.gameId > games.id [delete: Cascade]
 Ref: user_games.userId > users.id [delete: Cascade]
 
 Ref: user_games.gameId > games.id [delete: Cascade]
+
+Ref: user_games.userGamesStatusId > users_games_status.id
 
 Ref: user_game_stats.userGameId - user_games.id [delete: Cascade]
 

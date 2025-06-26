@@ -60,7 +60,8 @@ model GameCategory {
 
 model GameLauncher {
   id          String   @default(uuid())
-  dateRelease DateTime
+  dateRelease DateTime? @map("date_release")
+  releasePeriod String? @map("release_period")
   gameId      String   @map("game_id")
   platformId  String   @map("plataform_id")
   platforms   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
@@ -128,17 +129,18 @@ model User {
 }
 
 model UserGame {
-  id        String            @id @default(uuid())
-  gameId    String?           @map("game_id")
-  userId    String            @map("user_id")
-  dlcId     String?           @map("dlc_id")
-  statuses  UserGamesStatus[]
-  createdAt DateTime          @default(now()) @map("created_at")
-  updatedAt DateTime          @updatedAt @map("updated_at")
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game      Game?             @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  id                String   @id @default(uuid())
+  gameId            String?  @map("game_id")
+  userId            String   @map("user_id")
+  dlcId             String?  @map("dlc_id")
+  userGamesStatusId Int      @map("user_games_status_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game              Game?    @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
-  UserGameStats UserGameStats?
+  UserGameStats   UserGameStats?
+  UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
 
   @@unique([userId, gameId])
   @@unique([userId, dlcId])
