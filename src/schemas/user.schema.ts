@@ -62,14 +62,7 @@ export const UserGamePlayedCountUpdateParamsSchema = z.object({
 })
 
 export const UserGameBodySchema = z.object({
-  statusIds: z
-    .array(z.number())
-    .min(1, { message: 'pelo menos um status deve ser informado' })
-    .refine(
-      arr =>
-        arr.every(id => [/* ids permitidos, ex: */ 1, 2, 3, 4, 5].includes(id)),
-      { message: 'status inválido na lista' }
-    )
+  statusIds: z.number()
 })
 
 export const UserGamePlayedCountUpdateBodySchema = z.object({
@@ -129,12 +122,12 @@ export const UpdateUserResponseSchema = z.object({
 })
 
 export const GetUserGameStatusResponse = z.object({
-  userGameStatuses: z.array(
-    z.object({
+  userGameStatuses: z
+    .object({
       id: z.number(),
       status: z.string()
     })
-  )
+    .nullable()
 })
 
 export const GetAllUserGamesResponseSchema = z.object({
