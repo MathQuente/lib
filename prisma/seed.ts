@@ -657,7 +657,7 @@ async function main() {
         'https://image.api.playstation.com/cdn/UP0700/CUSA03388_00/GYzgzVghCIlvNllqjNotnYErBNZGv1lW.png',
       summary:
         'Primeira DLC que leva os jogadores a um novo reino congelado cheio de novos desafios.',
-      isDLc: true,
+      isDlc: true,
       parentGameId: darkSouls3.id,
       categories: {
         connectOrCreate: [
@@ -752,7 +752,7 @@ async function main() {
         'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2138330/2e5045a9745983a73f7443dd441e6cdf0560d758/hero_capsule_2x.jpg?t=1746520760',
       summary:
         'Expansão que adiciona nova área e história envolvendo serviços secretos e conspirações governamentais.',
-      isDLc: true,
+      isDlc: true,
       parentGameId: cyberpunk.id,
       categories: {
         connectOrCreate: [
@@ -1137,7 +1137,7 @@ async function main() {
   })
 
   // Witcher 3: Hearts of Stone
-  await prisma.game.upsert({
+  const heartsOfStone = await prisma.game.upsert({
     where: { gameName: 'The Witcher 3: Hearts of Stone' },
     update: {},
     create: {
@@ -1146,7 +1146,7 @@ async function main() {
         'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/378649/2a616401d52422ab58c8e96584bdf7be5e33a7a4/hero_capsule_2x.jpg?t=1746522483',
       summary:
         'Jornada adicional com novas missões envolvendo um misterioso imortal e contratos sombrios.',
-      isDLc: true,
+      isDlc: true,
       parentGameId: witcher3.id,
       categories: {
         connectOrCreate: [
@@ -1177,7 +1177,7 @@ async function main() {
   })
 
   // Witcher 3: Blood and Wine
-  await prisma.game.upsert({
+  const bloodAndWine = await prisma.game.upsert({
     where: { gameName: 'The Witcher 3: Blood and Wine' },
     update: {},
     create: {
@@ -1186,7 +1186,7 @@ async function main() {
         'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/378648/4388b2db7fc0bc39035a371cb5ae74e8b901ce31/hero_capsule_2x.jpg?t=1746522821',
       summary:
         'A última expansão que leva Geralt a Toussaint, reino repleto de vinhedos e mistérios mortais.',
-      isDLc: true,
+      isDlc: true,
       parentGameId: witcher3.id,
       categories: {
         connectOrCreate: [
@@ -1614,7 +1614,7 @@ async function main() {
 
   // The Last of Us Part II
   const tlou2 = await prisma.game.upsert({
-    where: { gameName: 'The Last of Us Part II Remastared' },
+    where: { gameName: 'The Last of Us Part II' },
     update: {},
     create: {
       gameName: 'The Last of Us Part II',
@@ -1867,7 +1867,7 @@ async function main() {
   })
 
   // Outer Wilds
-  await prisma.game.upsert({
+  const outerWilds = await prisma.game.upsert({
     where: { gameName: 'Outer Wilds' },
     update: {},
     create: {
@@ -1915,7 +1915,7 @@ async function main() {
   })
 
   // Cuphead
-  await prisma.game.upsert({
+  const cuphead = await prisma.game.upsert({
     where: { gameName: 'Cuphead' },
     update: {},
     create: {
@@ -1962,7 +1962,7 @@ async function main() {
   })
 
   // Valheim
-  await prisma.game.upsert({
+  const valhiem = await prisma.game.upsert({
     where: { gameName: 'Valheim' },
     update: {},
     create: {
@@ -2008,7 +2008,7 @@ async function main() {
   })
 
   // Deathloop
-  await prisma.game.upsert({
+  const deathloop = await prisma.game.upsert({
     where: { gameName: 'DEATHLOOP' },
     update: {},
     create: {
@@ -2047,7 +2047,7 @@ async function main() {
   })
 
   // Nier: Automata
-  await prisma.game.upsert({
+  const nier = await prisma.game.upsert({
     where: { gameName: 'Nier: Automata' },
     update: {},
     create: {
@@ -2090,7 +2090,7 @@ async function main() {
   })
 
   // Sea of Thieves
-  await prisma.game.upsert({
+  const seaOfThieves = await prisma.game.upsert({
     where: { gameName: 'Sea of Thieves' },
     update: {},
     create: {
@@ -2133,7 +2133,7 @@ async function main() {
   })
 
   // Celeste
-  await prisma.game.upsert({
+  const celeste = await prisma.game.upsert({
     where: { gameName: 'Celeste' },
     update: {},
     create: {
@@ -2182,7 +2182,7 @@ async function main() {
   })
 
   // Far Cry 6
-  await prisma.game.upsert({
+  const farCry6 = await prisma.game.upsert({
     where: { gameName: 'Far Cry 6' },
     update: {},
     create: {
@@ -2230,7 +2230,7 @@ async function main() {
   })
 
   // Forza Horizon 5
-  await prisma.game.upsert({
+  const forzaHorizon5 = await prisma.game.upsert({
     where: { gameName: 'Forza Horizon 5' },
     update: {},
     create: {
@@ -2276,7 +2276,7 @@ async function main() {
   })
 
   // Age of Empires IV
-  await prisma.game.upsert({
+  const ageOfEmpiresIV = await prisma.game.upsert({
     where: { gameName: 'Age of Empires IV' },
     update: {},
     create: {
@@ -2315,7 +2315,7 @@ async function main() {
   })
 
   // Kingdom Hearts III
-  await prisma.game.upsert({
+  const kingdomHeartsIII = await prisma.game.upsert({
     where: { gameName: 'KINGDOM HEARTS III + Re Mind' },
     update: {},
     create: {
@@ -2358,7 +2358,7 @@ async function main() {
   })
 
   // Marvel's Guardians of the Galaxy
-  await prisma.game.upsert({
+  const MarvelsGuardiansOfTheGalaxy = await prisma.game.upsert({
     where: { gameName: "Marvel's Guardians of the Galaxy" },
     update: {},
     create: {
@@ -2400,7 +2400,7 @@ async function main() {
   })
 
   // Dying Light 2 Stay Human
-  await prisma.game.upsert({
+  const dyingLight2 = await prisma.game.upsert({
     where: { gameName: 'Dying Light 2 Stay Human' },
     update: {},
     create: {
@@ -2446,7 +2446,7 @@ async function main() {
   })
 
   // Destiny 2
-  await prisma.game.upsert({
+  const destiny2 = await prisma.game.upsert({
     where: { gameName: 'Destiny 2' },
     update: {},
     create: {
@@ -2486,7 +2486,7 @@ async function main() {
   })
 
   // Overwatch 2
-  await prisma.game.upsert({
+  const overwatch2 = await prisma.game.upsert({
     where: { gameName: 'Overwatch 2' },
     update: {},
     create: {
@@ -2528,7 +2528,7 @@ async function main() {
   })
 
   // Apex Legends
-  await prisma.game.upsert({
+  const apexLegends = await prisma.game.upsert({
     where: { gameName: 'Apex Legends' },
     update: {},
     create: {
@@ -2571,7 +2571,7 @@ async function main() {
   })
 
   // Tom Clancy's Rainbow Six Siege
-  await prisma.game.upsert({
+  const rainbow = await prisma.game.upsert({
     where: { gameName: "Tom Clancy's Rainbow Six Siege" },
     update: {},
     create: {
@@ -2610,6 +2610,522 @@ async function main() {
           { platformName: 'Xbox Series X/S' }
         ]
       }
+    }
+  })
+
+  // 1. Grand Theft Auto VI (lançamento em 26 de maio de 2026)
+  const gta6 = await prisma.game.upsert({
+    where: { gameName: 'Grand Theft Auto VI' },
+    update: {},
+    create: {
+      gameName: 'Grand Theft Auto VI',
+      gameBanner:
+        'https://upload.wikimedia.org/wikipedia/ru/thumb/f/f0/GTA_VI_Poster.jpg/960px-GTA_VI_Poster.jpg',
+      summary:
+        'A próxima entrada da série Grand Theft Auto, com Vice City como cenário principal.',
+      categories: {
+        connectOrCreate: [
+          /* Action, Open World */
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Rockstar Games' },
+          create: { studioName: 'Rockstar Games' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: 'Rockstar Games' },
+            create: { publisherName: 'Rockstar Games' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: gta6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-05-26'),
+      gameId: gta6.id,
+      platformId: ps5Platform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxSeriesPlatform.id!, gameId: gta6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-05-26'),
+      gameId: gta6.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: gta6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-05-26'),
+      gameId: gta6.id,
+      platformId: pcPlatform.id!
+    }
+  })
+
+  // 2. Resident Evil Requiem (lançado em 27 de fevereiro de 2026)
+  const reRequiem = await prisma.game.upsert({
+    where: { gameName: 'Resident Evil Requiem' },
+    update: {},
+    create: {
+      gameName: 'Resident Evil Requiem',
+      gameBanner:
+        'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3764200/bde37e52add84267aeaf70c9f32d72381684d928/library_600x900_2x.jpg',
+      summary:
+        'O nono jogo principal de Resident Evil, retorno ao horror clássico em Raccoon City.',
+      categories: {
+        connectOrCreate: [
+          /* Horror, Survival, Adventure */
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Capcom' },
+          create: { studioName: 'Capcom' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: 'Capcom' },
+            create: { publisherName: 'Capcom' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: reRequiem.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-02-27'),
+      gameId: reRequiem.id,
+      platformId: ps5Platform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id!,
+        gameId: reRequiem.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-02-27'),
+      gameId: reRequiem.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: reRequiem.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2026-02-27'),
+      gameId: reRequiem.id,
+      platformId: pcPlatform.id!
+    }
+  })
+
+  // 3. METAL GEAR SOLID Δ: Snake Eater (lançamento em 28 de agosto de 2025)
+  const mgsDelta = await prisma.game.upsert({
+    where: { gameName: 'METAL GEAR SOLID Δ: Snake Eater' },
+    update: {},
+    create: {
+      gameName: 'METAL GEAR SOLID Δ: Snake Eater',
+      gameBanner:
+        'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2417610/library_600x900_2x.jpg?t=1749734161',
+      summary:
+        'Remake do clássico MGS3, com gráficos modernos e novo modo multiplayer “Fox Hunt”.',
+      categories: {
+        connectOrCreate: [
+          /* Action, Stealth */
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Konami' },
+          create: { studioName: 'Konami' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: 'Konami' },
+            create: { publisherName: 'Konami' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: mgsDelta.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-08-28'),
+      gameId: mgsDelta.id,
+      platformId: ps5Platform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id!,
+        gameId: mgsDelta.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-08-28'),
+      gameId: mgsDelta.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: mgsDelta.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-08-28'),
+      gameId: mgsDelta.id,
+      platformId: pcPlatform.id!
+    }
+  })
+
+  // 4. WUCHANG: Fallen Feathers (lançamento em 24 de julho de 2025)
+  const wuchang = await prisma.game.upsert({
+    where: { gameName: 'WUCHANG: Fallen Feathers' },
+    update: {},
+    create: {
+      gameName: 'WUCHANG: Fallen Feathers',
+      gameBanner:
+        'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2277560/f76b753512a5e146dadb4c2dc4a33775221b7fb7/library_600x900_2x.jpg',
+      summary:
+        'RPG soulslike ambientado na China da Dinastia Ming, com protagonista pirateira amnésica.',
+      categories: {
+        connectOrCreate: [
+          /* Action, RPG */
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Leenzee' },
+          create: { studioName: 'Leenzee' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: '505 Games' },
+            create: { publisherName: '505 Games' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: wuchang.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-07-24'),
+      gameId: wuchang.id,
+      platformId: ps5Platform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id!,
+        gameId: wuchang.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-07-24'),
+      gameId: wuchang.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: wuchang.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-07-24'),
+      gameId: wuchang.id,
+      platformId: pcPlatform.id!
+    }
+  })
+
+  // 5. Borderlands 4 – lançamento em 12 de setembro de 2025
+  const borderlands4 = await prisma.game.upsert({
+    where: { gameName: 'Borderlands 4' },
+    update: {},
+    create: {
+      gameName: 'Borderlands 4',
+      gameBanner:
+        'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1285190/e68c1eeacfc21e61e5a03ae81a20694856665af4/library_600x900_2x.jpg',
+      summary:
+        'O próximo looter‑shooter cooperativo ambientado no planeta Kairos.',
+      categories: {
+        connectOrCreate: [
+          {
+            where: { categoryName: 'Shooter' },
+            create: { categoryName: 'Shooter' }
+          },
+          {
+            where: { categoryName: 'Action RPG' },
+            create: { categoryName: 'Action RPG' }
+          }
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Gearbox Software' },
+          create: { studioName: 'Gearbox Software' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          { where: { publisherName: '2K' }, create: { publisherName: '2K' } }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id!,
+        gameId: borderlands4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-09-12'),
+      gameId: borderlands4.id,
+      platformId: ps5Platform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id!,
+        gameId: borderlands4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-09-12'),
+      gameId: borderlands4.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: borderlands4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-09-12'),
+      gameId: borderlands4.id,
+      platformId: pcPlatform.id!
+    }
+  })
+
+  // 6. Death Stranding 2: On the Beach – lançamento em 26 de junho de 2025 (PS5; versão PC provável posteriormente)
+  const ds2 = await prisma.game.upsert({
+    where: { gameName: 'Death Stranding 2: On the Beach' },
+    update: {},
+    create: {
+      gameName: 'Death Stranding 2: On the Beach',
+      gameBanner:
+        'https://upload.wikimedia.org/wikipedia/pt/4/49/Death_Stranding_2_On_The_Beach_Poster.jpg',
+      summary:
+        'Sequência pós‑apocalíptica de Kojima com mais liberdade, combate e transporte.',
+      categories: {
+        connectOrCreate: [
+          {
+            where: { categoryName: 'Action' },
+            create: { categoryName: 'Action' }
+          },
+          {
+            where: { categoryName: 'Adventure' },
+            create: { categoryName: 'Adventure' }
+          }
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Kojima Productions' },
+          create: { studioName: 'Kojima Productions' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: 'Sony Interactive Entertainment' },
+            create: { publisherName: 'Sony Interactive Entertainment' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [{ platformName: 'PS5' }]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: ds2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2025-06-26'),
+      gameId: ds2.id,
+      platformId: ps5Platform.id!
+    }
+  })
+
+  const mixtape = await prisma.game.upsert({
+    where: { gameName: 'Mixtape' },
+    update: {},
+    create: {
+      gameName: 'Mixtape',
+      gameBanner:
+        'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2582320/a392d647446fb58123fb1e1651c7fa7ab234e2ee/library_600x900_2x.jpg',
+      summary:
+        'On their last night together, three friends embark on one final adventure. Play through a mixtape of memories, set to the soundtrack of a generation.',
+      categories: {
+        connectOrCreate: [
+          {
+            where: { categoryName: 'Action' },
+            create: { categoryName: 'Action' }
+          },
+          {
+            where: { categoryName: 'Adventure' },
+            create: { categoryName: 'Adventure' }
+          }
+        ]
+      },
+      gameStudios: {
+        connectOrCreate: {
+          where: { studioName: 'Beethoven and Dinosaur' },
+          create: { studioName: 'Beethoven and Dinosaur' }
+        }
+      },
+      publishers: {
+        connectOrCreate: [
+          {
+            where: { publisherName: 'Annapurna Interactive' },
+            create: { publisherName: 'Annapurna Interactive' }
+          }
+        ]
+      },
+      platforms: {
+        connect: [
+          { platformName: 'PS5' },
+          { platformName: 'Xbox Series X/S' },
+          { platformName: 'PC' }
+        ]
+      }
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id!, gameId: mixtape.id }
+    },
+    update: {},
+    create: {
+      releasePeriod: '2025',
+      gameId: mixtape.id,
+      platformId: ps5Platform.id!
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id!,
+        gameId: mixtape.id
+      }
+    },
+    update: {},
+    create: {
+      releasePeriod: '2025',
+      gameId: mixtape.id,
+      platformId: xboxSeriesPlatform.id!
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id!, gameId: mixtape.id }
+    },
+    update: {},
+    create: {
+      releasePeriod: '2025',
+      gameId: mixtape.id,
+      platformId: pcPlatform.id!
     }
   })
 
@@ -3282,6 +3798,2597 @@ async function main() {
       dateRelease: new Date('2019-03-22'),
       gameId: sekiro.id,
       platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Red Dead Redemption 2
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: rdr2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-11-05'),
+      gameId: rdr2.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: rdr2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-10-26'),
+      gameId: rdr2.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: rdr2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-10-26'),
+      gameId: rdr2.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Cyberpunk 2077
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: cyberpunk.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-12-10'),
+      gameId: cyberpunk.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: cyberpunk.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-15'),
+      gameId: cyberpunk.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: cyberpunk.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-15'),
+      gameId: cyberpunk.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: cyberpunk.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-12-10'),
+      gameId: cyberpunk.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: cyberpunk.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-12-10'),
+      gameId: cyberpunk.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // God of War
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: godOfWar.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-01-14'),
+      gameId: godOfWar.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: godOfWar.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-04-20'),
+      gameId: godOfWar.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  // Hades
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: hades.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-09-17'),
+      gameId: hades.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: hades.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-08-13'),
+      gameId: hades.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: hades.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-08-13'),
+      gameId: hades.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: hades.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-08-13'),
+      gameId: hades.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Horizon Forbidden West
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: horizonFW.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2024-03-21'),
+      gameId: horizonFW.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: horizonFW.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-18'),
+      gameId: horizonFW.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  // Final Fantasy VII Remake
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: ff7Remake.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-12-16'),
+      gameId: ff7Remake.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: ff7Remake.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-04-10'),
+      gameId: ff7Remake.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  // Baldur's Gate 3
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: baldursGate3.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-08-03'),
+      gameId: baldursGate3.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: baldursGate3.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-09-06'),
+      gameId: baldursGate3.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: baldursGate3.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-12-07'),
+      gameId: baldursGate3.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Hollow Knight
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: hollowKnight.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-02-24'),
+      gameId: hollowKnight.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: hollowKnight.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-09-25'),
+      gameId: hollowKnight.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: hollowKnight.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-09-25'),
+      gameId: hollowKnight.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: hollowKnight.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-06-12'),
+      gameId: hollowKnight.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Sekiro: Shadows Die Twice
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: sekiro.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-03-22'),
+      gameId: sekiro.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: sekiro.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-03-22'),
+      gameId: sekiro.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: sekiro.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-03-22'),
+      gameId: sekiro.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Dark Souls III
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: darkSouls3.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-04-12'),
+      gameId: darkSouls3.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: darkSouls3.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-04-12'),
+      gameId: darkSouls3.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: darkSouls3.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-04-12'),
+      gameId: darkSouls3.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Dark Souls III: Ashes of Ariandel
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: ashesOfAriandel.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-25'),
+      gameId: ashesOfAriandel.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: ashesOfAriandel.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-25'),
+      gameId: ashesOfAriandel.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: ashesOfAriandel.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-25'),
+      gameId: ashesOfAriandel.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // The Legend of Zelda: Breath of the Wild
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: zeldaBotW.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-03-03'),
+      gameId: zeldaBotW.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Cyberpunk 2077: Phantom Liberty
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: phantomLiberty.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-09-26'),
+      gameId: phantomLiberty.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: phantomLiberty.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-09-26'),
+      gameId: phantomLiberty.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: phantomLiberty.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-09-26'),
+      gameId: phantomLiberty.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Stardew Valley
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: stardewValley.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-02-26'),
+      gameId: stardewValley.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: stardewValley.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-04'),
+      gameId: stardewValley.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: stardewValley.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-04'),
+      gameId: stardewValley.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: stardewValley.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-10-05'),
+      gameId: stardewValley.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // The Elder Scrolls V: Skyrim
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: skyrim.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2011-11-11'),
+      gameId: skyrim.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: skyrim.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-28'),
+      gameId: skyrim.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: skyrim.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-11'),
+      gameId: skyrim.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: skyrim.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-28'),
+      gameId: skyrim.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: skyrim.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-11'),
+      gameId: skyrim.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: skyrim.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-11-17'),
+      gameId: skyrim.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Fallout 4
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: fallout4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-11-10'),
+      gameId: fallout4.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: fallout4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-11-10'),
+      gameId: fallout4.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: fallout4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2024-04-25'),
+      gameId: fallout4.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: fallout4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-11-10'),
+      gameId: fallout4.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: fallout4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2024-04-25'),
+      gameId: fallout4.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Disco Elysium
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: discoElysium.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-15'),
+      gameId: discoElysium.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: discoElysium.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-30'),
+      gameId: discoElysium.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: discoElysium.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-30'),
+      gameId: discoElysium.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: discoElysium.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-30'),
+      gameId: discoElysium.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: discoElysium.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-30'),
+      gameId: discoElysium.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: discoElysium.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-12'),
+      gameId: discoElysium.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Death Stranding
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: deathStranding.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-07-14'),
+      gameId: deathStranding.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: deathStranding.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-11-08'),
+      gameId: deathStranding.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: deathStranding.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-03-30'),
+      gameId: deathStranding.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Monster Hunter: World
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: monsterHunterWorld.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-08-09'),
+      gameId: monsterHunterWorld.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: monsterHunterWorld.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-26'),
+      gameId: monsterHunterWorld.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: monsterHunterWorld.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-26'),
+      gameId: monsterHunterWorld.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Control
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: control.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-08-27'),
+      gameId: control.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: control.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-08-27'),
+      gameId: control.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: control.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-02-02'),
+      gameId: control.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: control.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-08-27'),
+      gameId: control.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: control.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-02-02'),
+      gameId: control.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Resident Evil 4 Remake
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: residentEvil4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-24'),
+      gameId: residentEvil4.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: residentEvil4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-24'),
+      gameId: residentEvil4.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: residentEvil4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-24'),
+      gameId: residentEvil4.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: residentEvil4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-24'),
+      gameId: residentEvil4.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Diablo IV
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: diablo4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-06-05'),
+      gameId: diablo4.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: diablo4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-06-05'),
+      gameId: diablo4.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: diablo4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-06-05'),
+      gameId: diablo4.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: diablo4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-06-05'),
+      gameId: diablo4.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: diablo4.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-06-05'),
+      gameId: diablo4.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Hogwarts Legacy
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-02-10'),
+      gameId: hogwartsLegacy.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-05-05'),
+      gameId: hogwartsLegacy.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-02-10'),
+      gameId: hogwartsLegacy.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-05-05'),
+      gameId: hogwartsLegacy.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-02-10'),
+      gameId: hogwartsLegacy.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: hogwartsLegacy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-11-14'),
+      gameId: hogwartsLegacy.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Star Wars Jedi: Fallen Order
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: jediFallenOrder.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-03-06'),
+      gameId: jediFallenOrder.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: jediFallenOrder.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-11-15'),
+      gameId: jediFallenOrder.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: jediFallenOrder.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: jediFallenOrder.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: jediFallenOrder.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-11-15'),
+      gameId: jediFallenOrder.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: jediFallenOrder.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: jediFallenOrder.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Assassin's Creed Valhalla
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: acValhalla.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: acValhalla.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: acValhalla.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: acValhalla.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: acValhalla.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: acValhalla.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: acValhalla.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: acValhalla.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: acValhalla.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: acValhalla.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Doom Eternal
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: doomEternal.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-03-20'),
+      gameId: doomEternal.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: doomEternal.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-03-20'),
+      gameId: doomEternal.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: doomEternal.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-28'),
+      gameId: doomEternal.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: doomEternal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-03-20'),
+      gameId: doomEternal.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: doomEternal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-28'),
+      gameId: doomEternal.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Resident Evil Village
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: revillage.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-05-07'),
+      gameId: revillage.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: revillage.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-05-07'),
+      gameId: revillage.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: revillage.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-01-25'),
+      gameId: revillage.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: revillage.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-05-07'),
+      gameId: revillage.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: revillage.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-01-25'),
+      gameId: revillage.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Ghost of Tsushima
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: ghostTsushima.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2024-05-16'),
+      gameId: ghostTsushima.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: ghostTsushima.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-07-17'),
+      gameId: ghostTsushima.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: ghostTsushima.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-08-20'),
+      gameId: ghostTsushima.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // The Last of Us Part II
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: tlou2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-01-18'),
+      gameId: tlou2.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: tlou2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-06-19'),
+      gameId: tlou2.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Uncharted 4: A Thief's End
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: uncharted4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-19'),
+      gameId: uncharted4.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: uncharted4.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-05-10'),
+      gameId: uncharted4.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Metro Exodus
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: metroExodus.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-02-15'),
+      gameId: metroExodus.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: metroExodus.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-02-15'),
+      gameId: metroExodus.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: metroExodus.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-06-18'),
+      gameId: metroExodus.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: metroExodus.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-02-15'),
+      gameId: metroExodus.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: metroExodus.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-06-18'),
+      gameId: metroExodus.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Persona 5 Royal
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: persona5Royal.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-21'),
+      gameId: persona5Royal.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: persona5Royal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-31'),
+      gameId: persona5Royal.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: persona5Royal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-31'),
+      gameId: persona5Royal.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: persona5Royal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-21'),
+      gameId: persona5Royal.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: persona5Royal.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-10-21'),
+      gameId: persona5Royal.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Civilization VI
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: civ6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-10-21'),
+      gameId: civ6.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  // Marvel's Spider-Man Remastered
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: spiderMan.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-08-12'),
+      gameId: spiderMan.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: spiderMan.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: spiderMan.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Outer Wilds - Lançado em 30 de maio de 2019
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: outerWilds.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-05-30'),
+      gameId: outerWilds.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: outerWilds.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-15'),
+      gameId: outerWilds.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: outerWilds.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: outerWilds.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: outerWilds.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-06-18'),
+      gameId: outerWilds.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: outerWilds.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: outerWilds.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Cuphead - Lançado em 29 de setembro de 2017
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: cuphead.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-09-29'),
+      gameId: cuphead.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: cuphead.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-09-29'),
+      gameId: cuphead.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: cuphead.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-07-28'),
+      gameId: cuphead.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: cuphead.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-04-18'),
+      gameId: cuphead.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // Valheim - Lançado em 2 de fevereiro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: valhiem.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-02-02'),
+      gameId: valhiem.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: valhiem.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-14'),
+      gameId: valhiem.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: valhiem.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2023-03-14'),
+      gameId: valhiem.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Deathloop - Lançado em 14 de setembro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: deathloop.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-09-14'),
+      gameId: deathloop.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: deathloop.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-09-14'),
+      gameId: deathloop.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Nier: Automata - Lançado em 23 de fevereiro de 2017
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: nier.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-03-17'),
+      gameId: nier.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: nier.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-02-23'),
+      gameId: nier.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: nier.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-06-26'),
+      gameId: nier.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Sea of Thieves - Lançado em 20 de março de 2018
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: seaOfThieves.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-03-20'),
+      gameId: seaOfThieves.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: seaOfThieves.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-03-20'),
+      gameId: seaOfThieves.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: seaOfThieves.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: seaOfThieves.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Celeste - Lançado em 25 de janeiro de 2018
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: celeste.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-25'),
+      gameId: celeste.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: celeste.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-25'),
+      gameId: celeste.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: celeste.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: celeste.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: celeste.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-25'),
+      gameId: celeste.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: celeste.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2018-01-25'),
+      gameId: celeste.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: celeste.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: celeste.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Far Cry 6 - Lançado em 7 de outubro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: farCry6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-07'),
+      gameId: farCry6.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: farCry6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-07'),
+      gameId: farCry6.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: farCry6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-07'),
+      gameId: farCry6.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: xboxOnePlatform.id, gameId: farCry6.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-07'),
+      gameId: farCry6.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: farCry6.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-07'),
+      gameId: farCry6.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Forza Horizon 5 - Lançado em 9 de novembro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: forzaHorizon5.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-09'),
+      gameId: forzaHorizon5.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: forzaHorizon5.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-09'),
+      gameId: forzaHorizon5.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: forzaHorizon5.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-11-09'),
+      gameId: forzaHorizon5.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Age of Empires IV - Lançado em 28 de outubro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: ageOfEmpiresIV.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-28'),
+      gameId: ageOfEmpiresIV.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  // Kingdom Hearts III - Lançado em 29 de janeiro de 2019
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: kingdomHeartsIII.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-03-30'),
+      gameId: kingdomHeartsIII.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: kingdomHeartsIII.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-01-29'),
+      gameId: kingdomHeartsIII.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: kingdomHeartsIII.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-01-29'),
+      gameId: kingdomHeartsIII.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Marvel's Guardians of the Galaxy - Lançado em 26 de outubro de 2021
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: pcPlatform.id,
+        gameId: MarvelsGuardiansOfTheGalaxy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-26'),
+      gameId: MarvelsGuardiansOfTheGalaxy.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: MarvelsGuardiansOfTheGalaxy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-26'),
+      gameId: MarvelsGuardiansOfTheGalaxy.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: MarvelsGuardiansOfTheGalaxy.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2021-10-26'),
+      gameId: MarvelsGuardiansOfTheGalaxy.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Dying Light 2 Stay Human - Lançado em 4 de fevereiro de 2022
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: dyingLight2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-04'),
+      gameId: dyingLight2.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: dyingLight2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-04'),
+      gameId: dyingLight2.id,
+      platformId: ps4Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: dyingLight2.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-02-04'),
+      gameId: dyingLight2.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // Destiny 2 - Lançado em 6 de setembro de 2017
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: destiny2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2017-10-24'),
+      gameId: destiny2.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: destiny2.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: destiny2.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: destiny2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: destiny2.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  // Overwatch 2 - Lançado em 4 de outubro de 2022
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: overwatch2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-04'),
+      gameId: overwatch2.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: overwatch2.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-04'),
+      gameId: overwatch2.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: overwatch2.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-10-04'),
+      gameId: overwatch2.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Apex Legends - Lançado em 4 de fevereiro de 2019
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: apexLegends.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-02-04'),
+      gameId: apexLegends.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: apexLegends.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-12'),
+      gameId: apexLegends.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: apexLegends.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-11-10'),
+      gameId: apexLegends.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // Tom Clancy's Rainbow Six Siege - Lançado em 1 de dezembro de 2015
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: rainbow.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-12-01'),
+      gameId: rainbow.id,
+      platformId: pcPlatform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: rainbow.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-12-01'),
+      gameId: rainbow.id,
+      platformId: ps5Platform.id
+    }
+  })
+
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: rainbow.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2020-12-01'),
+      gameId: rainbow.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // The Witcher 3: Hearts of Stone – lançado em 13 de outubro de 2015 (PC, PS4, Xbox One) :contentReference[oaicite:0]{index=0}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: heartsOfStone.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-10-13'),
+      gameId: heartsOfStone.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps4Platform.id,
+        gameId: heartsOfStone.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-10-13'),
+      gameId: heartsOfStone.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: heartsOfStone.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2015-10-13'),
+      gameId: heartsOfStone.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // The Witcher 3: Hearts of Stone – lançado em 15 de outubro de 2019 (Nintendo Switch) :contentReference[oaicite:1]{index=1}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: heartsOfStone.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-15'),
+      gameId: heartsOfStone.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // The Witcher 3: Hearts of Stone – lançado em 14 de dezembro de 2022 (PS5, Xbox Series X/S) :contentReference[oaicite:2]{index=2}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: ps5Platform.id,
+        gameId: heartsOfStone.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-12-14'),
+      gameId: heartsOfStone.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: heartsOfStone.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-12-14'),
+      gameId: heartsOfStone.id,
+      platformId: xboxSeriesPlatform.id
+    }
+  })
+
+  // The Witcher 3: Blood and Wine – lançado em 31 de maio de 2016 (PC, PS4, Xbox One) :contentReference[oaicite:3]{index=3}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: pcPlatform.id, gameId: bloodAndWine.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-05-31'),
+      gameId: bloodAndWine.id,
+      platformId: pcPlatform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps4Platform.id, gameId: bloodAndWine.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-05-31'),
+      gameId: bloodAndWine.id,
+      platformId: ps4Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxOnePlatform.id,
+        gameId: bloodAndWine.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2016-05-31'),
+      gameId: bloodAndWine.id,
+      platformId: xboxOnePlatform.id
+    }
+  })
+
+  // The Witcher 3: Blood and Wine – lançado em 15 de outubro de 2019 (Nintendo Switch) :contentReference[oaicite:4]{index=4}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: switchPlatform.id,
+        gameId: bloodAndWine.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2019-10-15'),
+      gameId: bloodAndWine.id,
+      platformId: switchPlatform.id
+    }
+  })
+
+  // The Witcher 3: Blood and Wine – lançado em 14 de dezembro de 2022 (PS5, Xbox Series X/S) :contentReference[oaicite:5]{index=5}
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: { platformId: ps5Platform.id, gameId: bloodAndWine.id }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-12-14'),
+      gameId: bloodAndWine.id,
+      platformId: ps5Platform.id
+    }
+  })
+  await prisma.gameLauncher.upsert({
+    where: {
+      platformId_gameId: {
+        platformId: xboxSeriesPlatform.id,
+        gameId: bloodAndWine.id
+      }
+    },
+    update: {},
+    create: {
+      dateRelease: new Date('2022-12-14'),
+      gameId: bloodAndWine.id,
+      platformId: xboxSeriesPlatform.id
     }
   })
 
