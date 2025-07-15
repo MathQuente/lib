@@ -161,7 +161,7 @@ Table GameToPlatform {
 
 Enum Status {
   PLAYED
-  REPLAYING
+  PAUSED
   PLAYING
   BACKLOG
   WISHLIST

@@ -6397,7 +6397,7 @@ async function main() {
     data: [
       { id: 1, status: 'PLAYED' },
       { id: 2, status: 'PLAYING' },
-      { id: 3, status: 'REPLAYING' },
+      { id: 3, status: 'PAUSED' },
       { id: 4, status: 'BACKLOG' },
       { id: 5, status: 'WISHLIST' }
     ]
