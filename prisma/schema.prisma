@@ -59,13 +59,13 @@ model GameCategory {
 }
 
 model GameLauncher {
-  id          String   @default(uuid())
-  dateRelease DateTime? @map("date_release")
-  releasePeriod String? @map("release_period")
-  gameId      String   @map("game_id")
-  platformId  String   @map("plataform_id")
-  platforms   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  id            String    @default(uuid())
+  dateRelease   DateTime? @map("date_release")
+  releasePeriod String?   @map("release_period")
+  gameId        String    @map("game_id")
+  platformId    String    @map("plataform_id")
+  platforms     Platform  @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@id([platformId, gameId])
   @@map("game_launchers")
@@ -157,7 +157,7 @@ model UserGamesStatus {
 
 enum Status {
   PLAYED
-  REPLAYING
+  PAUSED
   PLAYING
   BACKLOG
   WISHLIST
