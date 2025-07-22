@@ -68,4 +68,26 @@ export class RatingRepository {
       }
     })
   }
+
+  async findManyByGame(gameId: string) {
+    return prisma.rating.count({
+      where: {
+        gameId
+      },
+      select: {
+        value: true
+      }
+    })
+  }
+
+  async findRatingDistribution(gameId: string) {
+    return prisma.rating.groupBy({
+      by: ['value'],
+      where: { gameId },
+      _count: {
+        value: true
+      },
+      orderBy: { value: 'asc' }
+    })
+  }
 }

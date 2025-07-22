@@ -14,19 +14,19 @@ export class RatingService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found.')
+      throw new ClientError('User not found.', 404)
     }
 
     const game = await this.gameRepository.findById(gameId)
 
     if (!game) {
-      throw new ClientError('Game not found.')
+      throw new ClientError('Game not found.', 404)
     }
 
     const userGame = await this.userRepository.findUserGame(game.id, user.id)
 
     const playedStatus = await this.gameRepository.findStatusByName('PLAYED')
-    if (!playedStatus) throw new ClientError('Status FINALIZADO')
+    if (!playedStatus) throw new ClientError('Status PLAYED not found', 404)
 
     if (!userGame?.game || !userGame.UserGamesStatus) {
       await this.userRepository.addGameToUserLibrary({
@@ -97,13 +97,16 @@ export class RatingService {
     const game = await this.gameRepository.findById(gameId)
 
     if (!game) {
-      throw new ClientError('Game not found.')
+      throw new ClientError('Game not found.', 404)
     }
 
-    const existingRating = await this.ratingRepository.findRating(game.id)
+    const existingRating = await this.ratingRepository.findUniqueByUserGame(
+      gameId,
+      userId
+    )
 
     if (!existingRating) {
-      throw new ClientError('Already delete rating.')
+      throw new ClientError('Rating not found.', 404)
     }
 
     const rating = await this.ratingRepository.delete(game.id, user.id)
@@ -139,6 +142,25 @@ export class RatingService {
         },
         value
       }))
+    }
+  }
+
+  async findRatingDistribution(gameId: string) {
+    const ratings = await this.ratingRepository.findRatingDistribution(gameId)
+
+    return {
+      ratings: ratings.map(rating => ({
+        rating: rating.value,
+        count: rating._count.value
+      }))
+    }
+  }
+
+  async findManyByGame(gameId: string) {
+    const rating = await this.ratingRepository.findManyByGame(gameId)
+
+    return {
+      ratings: rating.value
     }
   }
 }

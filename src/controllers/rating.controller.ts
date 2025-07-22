@@ -18,7 +18,7 @@ export class RatingController {
       userId
     )
 
-    return reply.send({ rating })
+    return reply.status(201).send({ rating })
   }
 
   async getUserGameRating(request: FastifyRequest, reply: FastifyReply) {
@@ -45,15 +45,31 @@ export class RatingController {
   async deleteRating(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = RatingSchema.RatingParamsSchema.parse(request.params)
 
-    const { userId } = request.user
+    const userId = request.user.userId
 
-    const { rating } = await this.ratingService.deleteRating(gameId, userId)
+    await this.ratingService.deleteRating(gameId, userId)
 
-    return reply.send({ rating })
+    return reply.status(204).send()
   }
 
   async getAllRatings(request: FastifyRequest, reply: FastifyReply) {
     const { ratings } = await this.ratingService.findManyRating()
+
+    return reply.send({ ratings })
+  }
+
+  async getRatingDistribution(request: FastifyRequest, reply: FastifyReply) {
+    const { gameId } = RatingSchema.RatingParamsSchema.parse(request.params)
+
+    const { ratings } = await this.ratingService.findRatingDistribution(gameId)
+
+    return reply.send({ ratings })
+  }
+
+  async getManyRatingByGame(request: FastifyRequest, reply: FastifyReply) {
+    const { gameId } = RatingSchema.RatingParamsSchema.parse(request.params)
+
+    const { ratings } = await this.ratingService.findManyByGame(gameId)
 
     return reply.send({ ratings })
   }

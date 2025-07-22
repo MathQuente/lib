@@ -8,8 +8,31 @@ export const RatingBodySchema = z.object({
   value: z.coerce.number().min(0).max(5)
 })
 
-export const RatingResponseSchema = z.object({
+export const CreateRatingResponseSchema = z.object({
+  rating: z.number()
+})
+
+export const GetRatingResponseSchema = z.object({
   rating: z.number().nullable()
+})
+
+export const GetRatingAverageResponseSchema = z.object({
+  average: z.number()
+})
+
+export const DeleteRatingResponseSchema = z.void()
+
+export const GetRatingDistributionResponseSchema = z.object({
+  ratings: z.array(
+    z.object({
+      rating: z.number(),
+      count: z.number()
+    })
+  )
+})
+
+export const GetManyRatingsByGameResponseSchema = z.object({
+  ratings: z.number()
 })
 
 export const GetRatingsResponseSchema = z.object({
