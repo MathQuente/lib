@@ -10,6 +10,7 @@ import { gameRoutes } from './routes/game'
 import { gameStudioRoutes } from './routes/gameStudios'
 import { ratingRoutes } from './routes/rating'
 import { platformsRoutes } from './routes/platforms'
+import { errorHandler } from './error-handler'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -27,7 +28,7 @@ export class Server {
 
   public static async start() {
     this.setupZodTypeProvider()
-
+    this.initErrrHandler()
     Jwt.initSetup(this.app)
     this.initRoutes()
 
@@ -51,5 +52,9 @@ export class Server {
     this.app.register(gameStudioRoutes, { prefix: '/gameStudio' })
     this.app.register(ratingRoutes, { prefix: '/rating' })
     this.app.register(platformsRoutes, { prefix: '/platform' })
+  }
+
+  private static initErrrHandler() {
+    this.app.setErrorHandler(errorHandler)
   }
 }
