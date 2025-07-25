@@ -7,6 +7,7 @@ import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
 import { GameRepository } from '../repositories/games.repository'
 import { RatingRepository } from '../repositories/rating.repository'
+import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
@@ -40,7 +41,9 @@ export async function userRoutes(app: FastifyInstance) {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
         response: {
-          200: UserSchema.GetUserResponseSchema
+          200: UserSchema.GetUserResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -50,11 +53,11 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
-      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         response: {
-          200: UserSchema.GetAllUsersResponseSchema
+          200: UserSchema.GetAllUsersResponseSchema,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -62,13 +65,16 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:userId/games/:gameId',
+    '/games/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          201: UserSchema.AddGameResponseSchema
+          201: UserSchema.AddGameResponseSchema,
+          404: ErrorSchemas.NotFound,
+          409: ErrorSchemas.BadRequest,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -77,13 +83,16 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/:userId/games/:gameId',
+    '/games/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          201: UserSchema.RemoveGameResponseSchema
+          200: UserSchema.RemoveGameResponseSchema,
+          404: ErrorSchemas.NotFound,
+          409: ErrorSchemas.BadRequest,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -91,13 +100,16 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/:userId/gameStatus/:gameId',
+    '/gameStatus/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          200: UserSchema.UpdateUserGameStatusResponseSchema
+          200: UserSchema.UpdateUserGameStatusResponseSchema,
+          400: ErrorSchemas.BadRequest,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -105,13 +117,15 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:userId/:gameId',
+    '/gameStatus/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          200: UserSchema.GetUserGameStatusResponse
+          200: UserSchema.GetUserGameStatusResponse,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -119,14 +133,15 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:userId/userGames',
+    '/userGames',
     {
       preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
-        params: UserSchema.UserParamsSchema,
         response: {
-          // 200: UserSchema.GetAllUserGamesResponseSchema
+          200: UserSchema.GetAllUserGamesResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -134,14 +149,15 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/:userId',
+    '/',
     {
       preHandler: [app.authenticate],
       schema: {
-        params: UserSchema.UserParamsSchema,
         body: UserSchema.UpdateUserBodySchema,
         response: {
-          200: UserSchema.UpdateUserResponseSchema
+          200: UserSchema.UpdateUserResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -149,13 +165,14 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/:userId',
+    '',
     {
       preHandler: [app.authenticate],
       schema: {
-        params: UserSchema.UserParamsSchema,
         response: {
-          200: UserSchema.DeleteUserResponseSchema
+          200: UserSchema.DeleteUserResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -163,13 +180,15 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:userId/gameInfo/:gameId',
+    '/playedCount/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          200: UserSchema.GetUserGameStatsResponse
+          200: UserSchema.GetUserGameStatsResponse,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -177,17 +196,34 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/:userId/playedCount/:gameId',
+    '/playedCount/:gameId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: UserSchema.UserGameParamsSchema,
         response: {
-          200: UserSchema.GetUserGameStatsResponse
+          200: UserSchema.GetUserGameStatsResponse,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
     async (request, reply) =>
       userController.updateUserGamePlayedCount(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/featuredGames',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        response: {
+          200: UserSchema.GetGamesToDisplayResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => userController.getGamesToDisplay(request, reply)
   )
 }

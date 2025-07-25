@@ -1,9 +1,12 @@
+import { Status } from '@prisma/client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 
 import { GameRepository } from '../repositories/games.repository'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { Game } from '../types/game'
+import { randomInt } from 'crypto'
 
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
@@ -22,25 +25,21 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const existingGame = await this.gameRepository.findById(gameId)
 
     if (!existingGame) {
-      throw new ClientError('Game not found - game not exists with this ID')
+      throw new ClientError('Game not found.', 404)
     }
 
     const gameHasBeenAlreadyAddtoUserLibrary =
       await this.userRepository.findUserGame(gameId, userId)
 
     if (gameHasBeenAlreadyAddtoUserLibrary) {
-      throw new ClientError('This game is already in your library')
+      throw new ClientError('This game is already in your library', 409)
     }
-
-    const selectedStatuses = await this.userRepository.findManyByIds(statusIds)
-
-    const isPlayed = selectedStatuses.some(status => status.status === 'PLAYED')
 
     const { game } = await this.userRepository.addGameToUserLibrary({
       gameId,
@@ -48,20 +47,16 @@ export class UserService {
       userId
     })
 
-    await this.userRepository.createUserGameStats(
-      userId,
-      gameId,
-      isPlayed ? 1 : 0
-    )
+    await this.userRepository.createUserGameStats(userId, gameId)
 
     return { game }
   }
 
   async delete(userId: string) {
-    const userAlreadyDeleted = await this.userRepository.findUserById(userId)
+    const existingUser = await this.userRepository.findUserById(userId)
 
-    if (!userAlreadyDeleted) {
-      throw new ClientError('This user has been deleted.')
+    if (!existingUser) {
+      throw new ClientError('User not found.', 404)
     }
 
     const user = await this.userRepository.deleteUser(userId)
@@ -93,7 +88,7 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const gamesAmount = await this.userRepository.countUserGames(userId)
@@ -114,22 +109,22 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const game = await this.gameRepository.findById(gameId)
 
     if (!game) {
-      throw new ClientError('Game not found.')
+      throw new ClientError('Game not found.', 404)
     }
 
-    const userGameStatuses = await this.userRepository.findUserGameStatus(
+    const userGameStatus = await this.userRepository.findUserGameStatus(
       gameId,
       userId
     )
 
     return {
-      userGameStatuses: userGameStatuses?.UserGamesStatus || null
+      userGameStatus: userGameStatus?.UserGamesStatus || null
     }
   }
 
@@ -154,46 +149,57 @@ export class UserService {
   async findManyUserGames(
     userId: string,
     pageIndex: number,
-    filter: number | undefined,
+    filter: Status | undefined,
     query: string | undefined
   ) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
-    const rawUserGames = await this.userRepository.findManyGamesOfUser(
-      userId,
-      filter,
-      {
-        pageIndex,
-        query,
-        limit: this.ITEMS_PER_PAGE
-      }
-    )
+    const rawUserGames = await this.userRepository.findManyGamesOfUser(userId, {
+      pageIndex,
+      query,
+      limit: this.ITEMS_PER_PAGE,
+      filter
+    })
 
-    const userGames = rawUserGames.map(game => ({
-      id: game.game?.id,
-      gameName: game.game?.gameName,
-      gameBanner: game.game?.gameBanner,
-      isDlc: game.game?.isDlc,
-      statuses: game.UserGamesStatus.status
-    }))
+    const userGames: Record<string, Game[]> = {
+      PLAYED: [],
+      PLAYING: [],
+      PAUSED: [],
+      BACKLOG: [],
+      WISHLIST: []
+    }
+
+    for (const entry of rawUserGames) {
+      const status = entry.UserGamesStatus.status
+
+      if (!entry.game) {
+        continue
+      }
+
+      const gameObj = {
+        ...entry.game,
+        status
+      } as Game
+
+      userGames[status].push(gameObj)
+    }
 
     const totalPerStatus = await this.userRepository.findGamesCountByStatus(
       userId
     )
 
     const formattedTotalPerStatus = totalPerStatus.map(item => ({
-      status: item.status, // Extraindo o statusId
-      totalGames: item._count.userGames // Contando os jogos por status
+      status: item.status,
+      totalGames: item._count.userGames
     }))
 
     return {
       userGames,
-      totalPerStatus: formattedTotalPerStatus,
-      totalGames: userGames.length
+      totalPerStatus: formattedTotalPerStatus
     }
   }
 
@@ -201,20 +207,20 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const existingGame = await this.gameRepository.findById(gameId)
 
     if (!existingGame) {
-      throw new ClientError('Game not found. Game not exists with this ID')
+      throw new ClientError('Game not found.', 404)
     }
 
     const gameHasBeenAlreadyRemovedtoUserLibrary =
       await this.userRepository.findUserGame(gameId, userId)
 
     if (!gameHasBeenAlreadyRemovedtoUserLibrary) {
-      throw new ClientError('This game is removed from your library')
+      throw new ClientError('This game is removed from your library', 409)
     }
 
     const { game } = await this.userRepository.removeGame(gameId, userId)
@@ -231,45 +237,78 @@ export class UserService {
     return { game }
   }
 
-  async updateGame(gameId: string, userId: string, statusIds: number) {
+  async updateGame(gameId: string, userId: string, statusId: number) {
+    if (!statusId) {
+      throw new ClientError('You need to pass your status', 400)
+    }
+
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const existingGame = this.gameRepository.findById(gameId)
 
     if (!existingGame) {
-      throw new ClientError('Game not found. Game not DLC exists with this ID')
+      throw new ClientError('Game not found.', 404)
     }
 
     const userGame = await this.userRepository.findUserGame(gameId, userId)
 
     if (!userGame?.game) {
-      throw new ClientError(
-        'This game is not in your library, you cant update.'
-      )
+      throw new ClientError('Game not found in your library.', 404)
     }
 
-    const userGamePlayedCountUpdated =
-      await this.userRepository.updateUserGamePlayedCount(
+    // sempre que mudar de played para qualquer outro status, precisam perder contagem de played, e quando voltar para played adicionar
+
+    const currentStatus = userGame.UserGamesStatus.id
+    const PLAYED_STATUS = 1
+
+    if (currentStatus === PLAYED_STATUS && statusId !== PLAYED_STATUS) {
+      await this.userRepository.removeUserGameStats(userId, gameId)
+
+      const { game, UserGamesStatus } =
+        await this.userRepository.updateGameStatus(gameId, userId, statusId)
+
+      return {
+        game,
+        userGameStatus: UserGamesStatus,
+        playedCountUpdated: 0
+      }
+    }
+
+    if (currentStatus !== PLAYED_STATUS && statusId === PLAYED_STATUS) {
+      const playedCountUpdated = await this.userRepository.createUserGameStats(
         userId,
-        userGame.game.id,
-        1
+        userGame.game.id
       )
 
-    const { game, UserGamesStatus } =
-      await this.userRepository.updateGameStatus(gameId, userId, statusIds)
+      const { game, UserGamesStatus } =
+        await this.userRepository.updateGameStatus(gameId, userId, statusId)
 
-    return { game, statuses: UserGamesStatus, userGamePlayedCountUpdated }
+      return {
+        game,
+        userGameStatus: UserGamesStatus,
+        playedCountUpdated: playedCountUpdated?.completions
+      }
+    }
+
+    const { game, UserGamesStatus } =
+      await this.userRepository.updateGameStatus(gameId, userId, statusId)
+
+    return {
+      game,
+      userGameStatus: UserGamesStatus,
+      playedCountUpdated: 0
+    }
   }
 
   async update(userId: string, data: UpdateUserDTO) {
     const userAlreadyExist = await this.userRepository.findUserById(userId)
 
     if (!userAlreadyExist) {
-      throw new ClientError('This user has not found.')
+      throw new ClientError('User not found.', 404)
     }
 
     const user = await this.userRepository.updateUser(userId, {
@@ -285,21 +324,21 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
     const game = await this.gameRepository.findById(gameId)
 
     if (!game) {
-      throw new ClientError('Game not found. Game not exists with this ID')
+      throw new ClientError('Game not found.', 404)
     }
 
-    const userGameStats = await this.userRepository.findUserGameStats(
+    const { stats } = await this.userRepository.findUserGameStats(
       gameId,
       userId
     )
 
     return {
-      userGameStats: userGameStats || { completions: 0 }
+      playedCount: stats?.completions || { completions: 0 }
     }
   }
 
@@ -311,13 +350,13 @@ export class UserService {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
-      throw new ClientError('User not found')
+      throw new ClientError('User not found.', 404)
     }
 
     const existingGame = await this.gameRepository.findById(gameId)
 
     if (!existingGame) {
-      throw new ClientError('Game not found. Game not exists with this ID')
+      throw new ClientError('Game not found.', 404)
     }
 
     const userGameStats = await this.userRepository.updateUserGamePlayedCount(
@@ -326,6 +365,53 @@ export class UserService {
       incrementValue
     )
 
-    return { userGameStats }
+    return { playedCount: userGameStats.completions }
+  }
+
+  async findGamesToDisplay(userId: string) {
+    const user = await this.userRepository.findUserById(userId)
+
+    if (!user) {
+      throw new ClientError('User not found.', 404)
+    }
+
+    const [userGames, games] = await Promise.all([
+      this.userRepository.findManyGamesOfUser(userId),
+      this.gameRepository.findGamesToDisplay()
+    ])
+
+    const gamesWithOutUserId = games.filter(g =>
+      g.userGames.every(id => id.userId !== userId)
+    )
+
+    const playingGames = userGames.filter(
+      ug => ug.UserGamesStatus.status === Status.PLAYING
+    )
+    const backlogGames = userGames.filter(
+      ug => ug.UserGamesStatus.status === Status.BACKLOG
+    )
+
+    if (playingGames.length > 0) {
+      const gameIndex = randomInt(playingGames.length)
+      return {
+        game: playingGames[gameIndex].game,
+        message: 'Por que não terminar o que já começou?'
+      }
+    } else if (backlogGames.length > 0) {
+      const gameIndex = randomInt(backlogGames.length)
+      return {
+        game: backlogGames[gameIndex].game,
+        message: 'Tire a poeira desses jogos esquecidos.'
+      }
+    } else if (gamesWithOutUserId.length > 0) {
+      const gameIndex = randomInt(gamesWithOutUserId.length)
+      console.log('oi')
+      return {
+        game: gamesWithOutUserId[gameIndex],
+        message: 'Que tal adicionar um novo jogo a sua biblioteca?'
+      }
+    } else {
+      return { message: 'Parabéns! Você jogou todos.' }
+    }
   }
 }

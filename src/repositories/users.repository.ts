@@ -1,3 +1,4 @@
+import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 
@@ -24,27 +25,31 @@ export class UserRepository {
   async createUserGameStats(
     userId: string,
     gameId: string,
-    completions: number = 0
+    completions: number = 1
   ) {
-    const userGame = await prisma.userGame.upsert({
+    const userGame = await prisma.userGame.findUnique({
       where: {
         userId_gameId: {
           userId,
           gameId
         }
       },
-      update: {},
-      create: {
-        userId,
-        gameId,
-        userGamesStatusId: 1
+      select: {
+        id: true
       }
     })
 
-    return prisma.userGameStats.create({
-      data: {
+    if (!userGame) return null
+
+    return prisma.userGameStats.upsert({
+      where: { userGameId: userGame.id },
+      update: { completions },
+      create: {
         userGameId: userGame.id,
-        completions: completions
+        completions
+      },
+      select: {
+        completions: true
       }
     })
   }
@@ -150,8 +155,17 @@ export class UserRepository {
 
   async findManyGamesOfUser(
     userId: string,
-    filter: number | undefined,
-    { pageIndex = 0, limit = 18, query = '' } = {}
+    {
+      pageIndex = 0,
+      limit = 18,
+      query = '',
+      filter
+    }: {
+      pageIndex?: number
+      limit?: number
+      query?: string
+      filter?: Status | undefined
+    } = {}
   ) {
     return prisma.userGame.findMany({
       where: {
@@ -167,7 +181,7 @@ export class UserRepository {
           : undefined,
         UserGamesStatus: filter
           ? {
-              id: filter
+              status: filter
             }
           : undefined
       },
@@ -290,7 +304,7 @@ export class UserRepository {
     })
   }
 
-  async updateGameStatus(gameId: string, userId: string, statusIds: number) {
+  async updateGameStatus(gameId: string, userId: string, statusId: number) {
     return prisma.userGame.update({
       where: {
         userId_gameId: {
@@ -299,7 +313,7 @@ export class UserRepository {
         }
       },
       data: {
-        userGamesStatusId: statusIds,
+        userGamesStatusId: statusId,
         updatedAt: new Date()
       },
       select: {
@@ -360,7 +374,7 @@ export class UserRepository {
         completions: true
       }
     })
-    return stats
+    return { stats }
   }
 
   async updateUserGamePlayedCount(

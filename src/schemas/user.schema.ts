@@ -1,3 +1,4 @@
+import { Status } from '@prisma/client'
 import z from 'zod'
 
 export const CreateUserResponseSchema = z.object({
@@ -35,7 +36,9 @@ export const GetUserResponseSchema = z.object({
 
 export const QueryStringSchema = z.object({
   query: z.string().optional(),
-  filter: z.coerce.number().optional(),
+  filter: z
+    .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
+    .optional(),
   pageIndex: z.coerce.number().default(0)
 })
 
@@ -52,8 +55,7 @@ export const GetAllUsersResponseSchema = z.object({
 })
 
 export const UserGameParamsSchema = z.object({
-  gameId: z.string().uuid(),
-  userId: z.string().uuid()
+  gameId: z.string().uuid()
 })
 
 export const UserGamePlayedCountUpdateParamsSchema = z.object({
@@ -62,7 +64,7 @@ export const UserGamePlayedCountUpdateParamsSchema = z.object({
 })
 
 export const UserGameBodySchema = z.object({
-  statusIds: z.number()
+  statusId: z.number()
 })
 
 export const UserGamePlayedCountUpdateBodySchema = z.object({
@@ -121,8 +123,12 @@ export const UpdateUserResponseSchema = z.object({
   })
 })
 
+export const UpdateUserGameStatusBody = z.object({
+  statusIds: z.number()
+})
+
 export const GetUserGameStatusResponse = z.object({
-  userGameStatuses: z
+  userGameStatus: z
     .object({
       id: z.number(),
       status: z.string()
@@ -131,22 +137,59 @@ export const GetUserGameStatusResponse = z.object({
 })
 
 export const GetAllUserGamesResponseSchema = z.object({
-  userGames: z.array(
-    z.object({
-      id: z.string().uuid(),
-      gameName: z.string(),
-      gameBanner: z.string().url(),
-      isDlc: z.boolean(),
-      statuses: z.array(z.string())
-    })
-  ),
+  userGames: z.object({
+    PLAYED: z.array(
+      z.object({
+        id: z.string().uuid(),
+        gameName: z.string(),
+        gameBanner: z.string().url(),
+        isDlc: z.boolean(),
+        status: z.string()
+      })
+    ),
+    PLAYING: z.array(
+      z.object({
+        id: z.string().uuid(),
+        gameName: z.string(),
+        gameBanner: z.string().url(),
+        isDlc: z.boolean(),
+        status: z.string()
+      })
+    ),
+    PAUSED: z.array(
+      z.object({
+        id: z.string().uuid(),
+        gameName: z.string(),
+        gameBanner: z.string().url(),
+        isDlc: z.boolean(),
+        status: z.string()
+      })
+    ),
+    BACKLOG: z.array(
+      z.object({
+        id: z.string().uuid(),
+        gameName: z.string(),
+        gameBanner: z.string().url(),
+        isDlc: z.boolean(),
+        status: z.string()
+      })
+    ),
+    WISHLIST: z.array(
+      z.object({
+        id: z.string().uuid(),
+        gameName: z.string(),
+        gameBanner: z.string().url(),
+        isDlc: z.boolean(),
+        status: z.string()
+      })
+    )
+  }),
   totalPerStatus: z.array(
     z.object({
       status: z.string(),
       totalGames: z.number()
     })
-  ),
-  totalGames: z.number()
+  )
 })
 
 export const UpdateUserBodySchema = z
@@ -163,12 +206,11 @@ export const UpdateUserGameStatusResponseSchema = z.object({
     gameBanner: z.string(),
     gameName: z.string()
   }),
-  statuses: z.array(
-    z.object({
-      id: z.number(),
-      status: z.string()
-    })
-  )
+  userGameStatus: z.object({
+    id: z.number(),
+    status: z.string()
+  }),
+  playedCountUpdated: z.number()
 })
 
 export const UserBodySchema = z.object({
@@ -177,7 +219,33 @@ export const UserBodySchema = z.object({
 })
 
 export const GetUserGameStatsResponse = z.object({
-  userGameStats: z.object({
-    completions: z.number()
-  })
+  playedCount: z.number()
+})
+
+export const GetGamesToDisplayResponseSchema = z.object({
+  game: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        gameBanner: z.string().url(),
+        gameName: z.string(),
+        isDlc: z.boolean()
+      }),
+      z.object({
+        id: z.string().uuid(),
+        gameBanner: z.string().url(),
+        gameName: z.string(),
+        userGames: z.array(
+          z.object({
+            userId: z.string().uuid(),
+            UserGamesStatus: z.object({
+              status: z.nativeEnum(Status)
+            })
+          })
+        )
+      })
+    ])
+    .nullable()
+    .optional(),
+  message: z.string()
 })

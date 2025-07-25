@@ -7,27 +7,27 @@ export class UserController {
   constructor(private userService: UserService) {}
 
   async addGameToUserLibrary(request: FastifyRequest, reply: FastifyReply) {
-    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
 
-    const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
+    const userId = request.user.userId
+
+    const { statusId } = UserSchema.UserGameBodySchema.parse(request.body)
 
     const { game } = await this.userService.addGameToUserLibrary(
       gameId,
       userId,
-      statusIds
+      statusId
     )
 
-    return reply.send({ game })
+    return reply.status(201).send({ game })
   }
 
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
-    const { userId } = UserSchema.UserParamsSchema.parse(request.params)
+    const userId = request.user.userId
 
     const { user } = await this.userService.delete(userId)
 
-    return reply.send({ user })
+    return reply.status(200).send({ user })
   }
 
   async getAllUserGames(request: FastifyRequest, reply: FastifyReply) {
@@ -35,12 +35,12 @@ export class UserController {
       request.query
     )
 
-    const { userId } = UserSchema.UserParamsSchema.parse(request.params)
+    const userId = request.user.userId
 
-    const { totalPerStatus, totalGames, userGames } =
+    const { totalPerStatus, userGames } =
       await this.userService.findManyUserGames(userId, pageIndex, filter, query)
 
-    return reply.send({ userGames, totalPerStatus, totalGames })
+    return reply.status(200).send({ userGames, totalPerStatus })
   }
 
   async getMe(request: FastifyRequest, reply: FastifyReply) {
@@ -60,7 +60,7 @@ export class UserController {
 
     const { user } = await this.userService.findById(userId)
 
-    return reply.send({ user })
+    return reply.status(200).send({ user })
   }
 
   async getUsers(request: FastifyRequest, reply: FastifyReply) {
@@ -70,53 +70,48 @@ export class UserController {
 
     const { users } = await this.userService.findManyUsers(pageIndex, query)
 
-    return reply.send({ users })
+    return reply.status(200).send({ users })
   }
 
   async getUserGameStatus(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
 
-    const { userGameStatuses } = await this.userService.findUserGameStatus(
+    const userId = request.user.userId
+
+    const { userGameStatus } = await this.userService.findUserGameStatus(
       gameId,
       userId
     )
 
-    return reply.send({ userGameStatuses })
+    return reply.status(200).send({ userGameStatus })
   }
 
   async removeGame(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
-
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
     const { game } = await this.userService.removeGame(gameId, userId)
 
-    return reply.send({ game })
+    return reply.status(200).send({ game })
   }
 
   async updateGame(request: FastifyRequest, reply: FastifyReply) {
-    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
 
-    const { statusIds } = UserSchema.UserGameBodySchema.parse(request.body)
+    const userId = request.user.userId
 
-    const { game, statuses } = await this.userService.updateGame(
-      gameId,
-      userId,
-      statusIds
-    )
+    const { statusId } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    return reply.send({ game, statuses })
+    const { game, userGameStatus, playedCountUpdated } =
+      await this.userService.updateGame(gameId, userId, statusId)
+
+    return reply.status(200).send({ game, userGameStatus, playedCountUpdated })
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
     const { profilePicture, userBanner, userName } =
       UserSchema.UpdateUserBodySchema.parse(request.body)
 
-    const { userId } = UserSchema.UserParamsSchema.parse(request.params)
+    const userId = request.user.userId
 
     const { user } = await this.userService.update(userId, {
       profilePicture,
@@ -124,39 +119,47 @@ export class UserController {
       userName
     })
 
-    return reply.send({ user })
+    return reply.status(200).send({ user })
   }
 
   async getUserGameStats(request: FastifyRequest, reply: FastifyReply) {
-    const { userId, gameId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
 
-    const { userGameStats } = await this.userService.findUserGameStats(
+    const userId = request.user.userId
+
+    const { playedCount } = await this.userService.findUserGameStats(
       gameId,
       userId
     )
 
-    return reply.send({ userGameStats })
+    return reply.status(200).send({ playedCount })
   }
 
   async updateUserGamePlayedCount(
     request: FastifyRequest,
     reply: FastifyReply
   ) {
-    const { gameId, userId } = UserSchema.UserGameParamsSchema.parse(
-      request.params
-    )
+    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
+
+    const userId = request.user.userId
 
     const { incrementValue } =
       UserSchema.UserGamePlayedCountUpdateBodySchema.parse(request.body)
 
-    const { userGameStats } = await this.userService.updateUserGamePlayedCount(
+    const { playedCount } = await this.userService.updateUserGamePlayedCount(
       userId,
       gameId,
       incrementValue
     )
 
-    return reply.send({ userGameStats })
+    return reply.status(200).send({ playedCount })
+  }
+
+  async getGamesToDisplay(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user.userId
+
+    const { game, message } = await this.userService.findGamesToDisplay(userId)
+
+    return reply.status(200).send({ game, message })
   }
 }
