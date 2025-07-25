@@ -83,7 +83,8 @@ export class AuthRepository {
       select: {
         id: true,
         email: true,
-        password: true
+        password: true,
+        userName: true
       }
     })
   }
