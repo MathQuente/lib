@@ -66,10 +66,10 @@ export class RatingController {
     return reply.send({ ratings })
   }
 
-  async getManyRatingByGame(request: FastifyRequest, reply: FastifyReply) {
+  async getCountByGame(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = RatingSchema.RatingParamsSchema.parse(request.params)
 
-    const { ratings } = await this.ratingService.findManyByGame(gameId)
+    const { ratings } = await this.ratingService.countRatingByName(gameId)
 
     return reply.send({ ratings })
   }

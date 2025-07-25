@@ -69,7 +69,7 @@ export class RatingRepository {
     })
   }
 
-  async findManyByGame(gameId: string) {
+  async countRatingByName(gameId: string) {
     return prisma.rating.count({
       where: {
         gameId

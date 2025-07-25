@@ -111,8 +111,7 @@ export async function ratingRoutes(app: FastifyInstance) {
         }
       }
     },
-    async (request, reply) =>
-      ratingController.getManyRatingByGame(request, reply)
+    async (request, reply) => ratingController.getCountByGame(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(

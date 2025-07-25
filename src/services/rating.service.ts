@@ -156,8 +156,8 @@ export class RatingService {
     }
   }
 
-  async findManyByGame(gameId: string) {
-    const rating = await this.ratingRepository.findManyByGame(gameId)
+  async countRatingByName(gameId: string) {
+    const rating = await this.ratingRepository.countRatingByName(gameId)
 
     return {
       ratings: rating.value
