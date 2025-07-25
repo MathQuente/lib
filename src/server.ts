@@ -11,6 +11,8 @@ import { gameStudioRoutes } from './routes/gameStudios'
 import { ratingRoutes } from './routes/rating'
 import { platformsRoutes } from './routes/platforms'
 import { errorHandler } from './error-handler'
+import { gameLaunchersRoutes } from './routes/gameLaunchers'
+import { userGameStatusRoutes } from './routes/userGameStatus'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -52,6 +54,8 @@ export class Server {
     this.app.register(gameStudioRoutes, { prefix: '/gameStudio' })
     this.app.register(ratingRoutes, { prefix: '/rating' })
     this.app.register(platformsRoutes, { prefix: '/platform' })
+    this.app.register(gameLaunchersRoutes, { prefix: 'gameLauncher' })
+    this.app.register(userGameStatusRoutes, { prefix: '/status' })
   }
 
   private static initErrrHandler() {
