@@ -1,5 +1,4 @@
 import { JWT } from '@fastify/jwt'
-import { FastifyReply } from 'fastify'
 import { AuthRepository } from '../repositories/auth.repository'
 import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
@@ -139,7 +138,8 @@ export class AuthService {
 
     return {
       user: {
-        id: user.id
+        id: user.id,
+        userName: user.userName
       }
     }
   }
