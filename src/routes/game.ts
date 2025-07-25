@@ -4,11 +4,13 @@ import { GameRepository } from '../repositories/games.repository'
 import { GameService } from '../services/games.service'
 import { GameController } from '../controllers/games.controller'
 import * as GameSchema from '../schemas/game.schema'
-import { PlatformRepository } from '../repositories/platforms.repository'
+import { RatingRepository } from '../repositories/rating.repository'
+import { ErrorSchemas } from '../schemas/error.schema'
 
 const gameRepository = new GameRepository()
-const platformRepository = new PlatformRepository()
-const gameService = new GameService(gameRepository, platformRepository)
+const ratingRepository = new RatingRepository()
+
+const gameService = new GameService(gameRepository, ratingRepository)
 const gameController = new GameController(gameService)
 
 export async function gameRoutes(app: FastifyInstance, opts: any) {
@@ -18,7 +20,8 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
-          200: GameSchema.GetGameResponseSchema
+          200: GameSchema.GetGameResponseSchema,
+          404: ErrorSchemas.NotFound
         }
       }
     },
@@ -31,7 +34,8 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {
-          // 200: GameSchema.GetGamesResponseSchema
+          200: GameSchema.GetGamesResponseSchema,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -44,26 +48,13 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         body: GameSchema.GameBodySchema,
         response: {
-          201: GameSchema.CreateGameResponseSchema
+          201: GameSchema.CreateGameResponseSchema,
+          409: ErrorSchemas.BadRequest,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
     async (request, reply) => gameController.createGame(request, reply)
-  )
-
-  app.withTypeProvider<ZodTypeProvider>().post(
-    '/:gameId/dateRelease',
-    {
-      schema: {
-        params: GameSchema.GameParamsSchema,
-        body: GameSchema.CreateGameDateReleaseBodySchema,
-        response: {
-          201: GameSchema.CreateGameDateReleaseResponseSchema
-        }
-      }
-    },
-    async (request, reply) =>
-      gameController.createGameDateRelease(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
@@ -73,7 +64,9 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
         params: GameSchema.GameParamsSchema,
         body: GameSchema.UpdateGameBodySchema,
         response: {
-          200: GameSchema.UpdateGameResponseSchema
+          200: GameSchema.UpdateGameResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
@@ -86,23 +79,13 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
-          200: GameSchema.DeleteGameResponseSchema
+          200: GameSchema.DeleteGameResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },
     async (request, reply) => gameController.deleteGame(request, reply)
-  )
-
-  app.withTypeProvider<ZodTypeProvider>().get(
-    '/status',
-    {
-      schema: {
-        response: {
-          200: GameSchema.GetGameStatusResponseSchema
-        }
-      }
-    },
-    async (request, reply) => gameController.getAllGameStatus(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
@@ -111,7 +94,8 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
-          200: GameSchema.GetSimilarGamesResponseSchema
+          200: GameSchema.GetSimilarGamesResponseSchema,
+          404: ErrorSchemas.NotFound
         }
       }
     },
@@ -119,15 +103,15 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/test',
+    '/featured',
     {
-      // schema: {
-      //   querystring: GameSchema.GameQueryStringSchema,
-      //   response: {
-      //     200: GameSchema.GetGamesResponseSchema
-      //   }
-      // }
+      schema: {
+        response: {
+          200: GameSchema.GetFeaturedGamesResponseSchema,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
     },
-    async (request, reply) => gameController.test(request, reply)
+    async (request, reply) => gameController.getFeaturedGames(request, reply)
   )
 }

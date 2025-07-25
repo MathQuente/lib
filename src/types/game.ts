@@ -1,12 +1,7 @@
-import { Prisma } from '@prisma/client';
-
-export type Game = Prisma.GameGetPayload<{
-  include: {
-    categories: true;
-    dlcs: true;
-    gameStudios: true;
-    gameLaunchers: { include: { platforms: true } };
-    platforms: true;
-    publishers: true;
-  };
-}>;
+export type Game = {
+  id: string
+  gameBanner: string
+  gameName: string
+  isDlc: boolean
+  status: string
+}

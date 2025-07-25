@@ -1,7 +1,6 @@
 import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
-import { boolean } from 'zod'
 
 export class GameRepository {
   async create(data: CreateGameDTO) {
@@ -51,29 +50,6 @@ export class GameRepository {
       select: {
         id: true,
         gameName: true
-      }
-    })
-  }
-
-  async createGameDateRelease(
-    gameId: string,
-    dateRelease: Date,
-    platformId: string
-  ) {
-    return await prisma.gameLauncher.create({
-      data: {
-        dateRelease,
-        gameId,
-        platformId
-      },
-      select: {
-        dateRelease: true,
-        platforms: {
-          select: {
-            id: true,
-            platformName: true
-          }
-        }
       }
     })
   }
@@ -245,71 +221,9 @@ export class GameRepository {
   private getSelectFields() {
     return {
       id: true,
-      categories: {
-        orderBy: [{ categoryName: 'asc' as const }],
-        select: {
-          id: true,
-          categoryName: true
-        }
-      },
       gameBanner: true,
-      gameLaunchers: {
-        orderBy: [
-          {
-            platforms: {
-              platformName: 'asc' as const
-            }
-          }
-        ],
-        select: {
-          dateRelease: true,
-          releasePeriod: true,
-          platforms: {
-            select: {
-              id: true,
-              platformName: true
-            }
-          }
-        }
-      },
       gameName: true,
-      gameStudios: {
-        orderBy: [{ studioName: 'asc' as const }],
-        select: {
-          id: true,
-          studioName: true
-        }
-      },
-      platforms: {
-        orderBy: [{ platformName: 'asc' as const }],
-        select: {
-          id: true,
-          platformName: true
-        }
-      },
-      publishers: {
-        orderBy: [{ publisherName: 'asc' as const }],
-        select: {
-          id: true,
-          publisherName: true
-        }
-      },
-      summary: true,
-      isDlc: true,
-      parentGame: {
-        select: {
-          id: true,
-          gameBanner: true,
-          gameName: true
-        }
-      },
-      dlcs: {
-        select: {
-          id: true,
-          gameBanner: true,
-          gameName: true
-        }
-      }
+      isDlc: true
     }
   }
 
@@ -455,22 +369,16 @@ export class GameRepository {
   }
 
   async countGames(query: string | null) {
-    return prisma.game.count({
-      where: {
-        gameName: query
-          ? {
-              contains: query
-            }
-          : undefined
-      }
-    })
-  }
+    if (!query) {
+      return await prisma.game.count()
+    }
 
-  async findManyGameStatus() {
-    return prisma.userGamesStatus.findMany({
-      select: {
-        id: true,
-        status: true
+    return await prisma.game.count({
+      where: {
+        gameName: {
+          contains: query,
+          mode: 'insensitive'
+        }
       }
     })
   }
@@ -482,7 +390,8 @@ export class GameRepository {
       },
       select: {
         id: true,
-        gameName: true
+        gameName: true,
+        gameBanner: true
       }
     })
   }
@@ -564,28 +473,61 @@ export class GameRepository {
             gameBanner: true,
             gameName: true
           }
+        },
+        Rating: {
+          select: {
+            value: true
+          }
+        },
+        userGames: {
+          select: {
+            userId: true,
+            UserGamesStatus: {
+              select: {
+                status: true
+              }
+            }
+          }
         }
       }
     })
   }
 
-  async findCategoriesOfGameById(gameId: string) {
-    return prisma.game.findUnique({
+  async findCategoriesOfGameById(
+    gameId: string,
+    samestudio: { id: string }[],
+    categoryIds: number[]
+  ) {
+    return prisma.game.findMany({
       where: {
-        id: gameId
+        id: { notIn: [gameId, ...samestudio.map(g => g.id)] },
+        categories: { some: { id: { in: categoryIds } } }
       },
       select: {
-        categories: {
-          select: {
-            id: true
-          },
-          orderBy: [
-            {
-              categoryName: 'asc'
-            }
-          ]
-        }
-      }
+        id: true,
+        gameName: true,
+        gameBanner: true
+      },
+      orderBy: {
+        gameName: 'asc'
+      },
+      take: 8 - samestudio.length
+    })
+  }
+
+  async findGamesFromSameStudio(gameId: string, studioIds: string[]) {
+    return prisma.game.findMany({
+      where: {
+        id: { not: gameId },
+        gameStudios: { some: { id: { in: studioIds } } }
+      },
+      select: {
+        id: true,
+        gameBanner: true,
+        gameName: true
+      },
+      orderBy: { gameName: 'asc' },
+      take: 8
     })
   }
 
@@ -597,17 +539,6 @@ export class GameRepository {
     })
   }
 
-  async findDateRelease(gameId: string, platformId: string) {
-    return prisma.gameLauncher.findUnique({
-      where: {
-        platformId_gameId: {
-          gameId,
-          platformId
-        }
-      }
-    })
-  }
-
   async findSimilarGames(categories: { id: number }[], gameId?: string) {
     const categoryId = categories?.map(category => category.id)
 
@@ -615,12 +546,12 @@ export class GameRepository {
       where: {
         AND: [
           {
-            id: gameId ? { not: gameId } : undefined
+            id: { not: gameId }
           },
           {
             categories: {
               some: {
-                id: categoryId.length > 0 ? { in: categoryId } : undefined
+                id: { in: categoryId }
               }
             }
           }
@@ -641,96 +572,77 @@ export class GameRepository {
   }
 
   async update(gameId: string, data: UpdateGameDTO) {
-    let updateData: Partial<UpdateGameDTO> = {}
-
-    if (data.gameBanner) {
-      updateData.gameBanner = data.gameBanner
-    }
-
-    if (data.gameStudios) {
-      updateData.gameStudios = data.gameStudios
-    }
-
-    if (data.gameName) {
-      updateData.gameName = data.gameName
-    }
-
-    if (data.categories) {
-      updateData.categories = data.categories
-    }
-
-    if (data.platforms) {
-      updateData.platforms = data.platforms
-    }
-
-    if (data.publishers) {
-      updateData.publishers = data.publishers
-    }
-
-    if (data.summary) {
-      updateData.summary = data.summary
-    }
-
-    if (data.isDlc) {
-      updateData.isDlc = data.isDlc
-    }
-
-    if (data.parentGameId) {
-      updateData.parentGameId = data.parentGameId
-    }
-
     return prisma.game.update({
       where: {
         id: gameId
       },
       data: {
-        categories: {
-          connectOrCreate: updateData.categories?.map(category => ({
-            create: {
-              categoryName: category.categoryName
-            },
-            where: {
-              categoryName: category.categoryName
+        // Para relacionamentos many-to-many, você precisa desconectar os antigos primeiro
+        categories: data.categories
+          ? {
+              set: [], // Remove todas as conexões existentes
+              connectOrCreate: data.categories.map(category => ({
+                create: {
+                  categoryName: category.categoryName
+                },
+                where: {
+                  categoryName: category.categoryName
+                }
+              }))
             }
-          }))
-        },
-        gameBanner: updateData.gameBanner,
-        gameName: updateData.gameName,
-        gameStudios: {
-          connectOrCreate: updateData.gameStudios?.map(gameStudio => ({
-            create: {
-              studioName: gameStudio.studioName
-            },
-            where: {
-              studioName: gameStudio.studioName
+          : undefined,
+
+        gameStudios: data.gameStudios
+          ? {
+              set: [], // Remove todas as conexões existentes
+              connectOrCreate: data.gameStudios.map(gameStudio => ({
+                create: {
+                  studioName: gameStudio.studioName
+                },
+                where: {
+                  studioName: gameStudio.studioName
+                }
+              }))
             }
-          }))
-        },
-        platforms: {
-          connectOrCreate: updateData.platforms?.map(platform => ({
-            create: {
-              platformName: platform.platformName
-            },
-            where: {
-              platformName: platform.platformName
+          : undefined,
+
+        platforms: data.platforms
+          ? {
+              set: [], // Remove todas as conexões existentes
+              connectOrCreate: data.platforms.map(platform => ({
+                create: {
+                  platformName: platform.platformName
+                },
+                where: {
+                  platformName: platform.platformName
+                }
+              }))
             }
-          }))
-        },
-        publishers: {
-          connectOrCreate: updateData.publishers?.map(publisher => ({
-            create: {
-              publisherName: publisher.publisherName
-            },
-            where: {
-              publisherName: publisher.publisherName
+          : undefined,
+
+        publishers: data.publishers
+          ? {
+              set: [], // Remove todas as conexões existentes
+              connectOrCreate: data.publishers.map(publisher => ({
+                create: {
+                  publisherName: publisher.publisherName
+                },
+                where: {
+                  publisherName: publisher.publisherName
+                }
+              }))
             }
-          }))
-        },
-        summary: updateData.summary,
+          : undefined,
+
+        // Campos simples
+        gameBanner: data.gameBanner,
+        gameName: data.gameName,
+        summary: data.summary,
         isDlc: data.isDlc,
         parentGameId: data.parentGameId
       },
       select: {
+        id: true,
         categories: {
           select: {
             categoryName: true
@@ -753,7 +665,29 @@ export class GameRepository {
             publisherName: true
           }
         },
-        summary: true
+        summary: true,
+        isDlc: true,
+        parentGameId: true
+      }
+    })
+  }
+
+  async findGamesToDisplay() {
+    return prisma.game.findMany({
+      select: {
+        id: true,
+        gameBanner: true,
+        gameName: true,
+        userGames: {
+          select: {
+            userId: true,
+            UserGamesStatus: {
+              select: {
+                status: true
+              }
+            }
+          }
+        }
       }
     })
   }

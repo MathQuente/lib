@@ -1,20 +1,5 @@
 import { z } from 'zod'
 
-export const CreateGameDateReleaseBodySchema = z.object({
-  dateRelease: z.coerce.date(),
-  platformId: z.string().uuid()
-})
-
-export const CreateGameDateReleaseResponseSchema = z.object({
-  gameDateRelease: z.object({
-    dateRelease: z.coerce.date(),
-    platforms: z.object({
-      id: z.string().uuid(),
-      platformName: z.string()
-    })
-  })
-})
-
 export const CreateGameResponseSchema = z.object({
   game: z.object({
     id: z.string().uuid(),
@@ -100,7 +85,7 @@ export const GetGameResponseSchema = z.object({
     ),
     gameLaunchers: z.array(
       z.object({
-        dateRelease: z.date(),
+        dateRelease: z.coerce.date(),
         platform: z.object({
           id: z.string().uuid(),
           platformName: z.string()
@@ -128,6 +113,21 @@ export const GetGameResponseSchema = z.object({
         gameBanner: z.string()
       })
     ),
+    ratingAvg: z.number().nullable(),
+    ratings: z.array(
+      z.object({
+        rating: z.number(),
+        count: z.number()
+      })
+    ),
+    amountOfRatings: z.number(),
+    userGames: z.object({
+      PLAYED: z.number(),
+      PLAYING: z.number(),
+      PAUSED: z.number(),
+      BACKLOG: z.number(),
+      WISHLIST: z.number()
+    }),
     parentGame: z
       .object({
         id: z.string(),
@@ -144,67 +144,10 @@ export const GetGamesResponseSchema = z.object({
       id: z.string().uuid(),
       gameName: z.string(),
       gameBanner: z.string(),
-      categories: z.array(
-        z.object({
-          id: z.number(),
-          categoryName: z.string()
-        })
-      ),
-      gameStudios: z.array(
-        z.object({
-          id: z.string().uuid(),
-          studioName: z.string()
-        })
-      ),
-      gameLaunchers: z.array(
-        z.object({
-          dateRelease: z.date(),
-          platform: z.object({
-            id: z.string().uuid(),
-            platformName: z.string()
-          })
-        })
-      ),
-      platforms: z.array(
-        z.object({
-          id: z.string().uuid(),
-          platformName: z.string()
-        })
-      ),
-      publishers: z.array(
-        z.object({
-          id: z.string().uuid(),
-          publisherName: z.string()
-        })
-      ),
-      summary: z.string(),
-      isDlc: z.boolean(),
-      dlcs: z.array(
-        z.object({
-          id: z.string().uuid(),
-          gameName: z.string(),
-          gameBanner: z.string()
-        })
-      ),
-      parentGame: z
-        .object({
-          id: z.string(),
-          gameName: z.string(),
-          gameBanner: z.string()
-        })
-        .nullable()
+      isDlc: z.boolean()
     })
   ),
   total: z.number()
-})
-
-export const GetGameStatusResponseSchema = z.object({
-  status: z.array(
-    z.object({
-      id: z.number(),
-      status: z.string()
-    })
-  )
 })
 
 export const GetSimilarGamesResponseSchema = z.object({
@@ -218,42 +161,6 @@ export const GetSimilarGamesResponseSchema = z.object({
 })
 
 export const UpdateGameBodySchema = z.object({
-  categories: z
-    .array(
-      z.object({
-        categoryName: z.string()
-      })
-    )
-    .optional(),
-  gameBanner: z.string().optional(),
-  gameName: z.string().optional(),
-  gameStudios: z
-    .array(
-      z.object({
-        studioName: z.string()
-      })
-    )
-    .optional(),
-  platforms: z
-    .array(
-      z.object({
-        platformName: z.string()
-      })
-    )
-    .optional(),
-  publishers: z
-    .array(
-      z.object({
-        publisherName: z.string()
-      })
-    )
-    .optional(),
-  summary: z.string().optional(),
-  isDlc: z.boolean(),
-  parentGameId: z.string().uuid()
-})
-
-export const UpdateGameResponseSchema = z.object({
   game: z.object({
     categories: z
       .array(
@@ -285,6 +192,75 @@ export const UpdateGameResponseSchema = z.object({
         })
       )
       .optional(),
-    summary: z.string().optional()
+    summary: z.string().optional(),
+    isDlc: z.boolean(),
+    parentGameId: z.string().uuid().nullable().optional()
   })
+})
+
+export const UpdateGameResponseSchema = z.object({
+  game: z.object({
+    id: z.string().uuid(),
+    categories: z.array(
+      z.object({
+        categoryName: z.string()
+      })
+    ),
+    gameBanner: z.string(),
+    gameName: z.string(),
+    gameStudios: z.array(
+      z.object({
+        studioName: z.string()
+      })
+    ),
+    platforms: z.array(
+      z.object({
+        platformName: z.string()
+      })
+    ),
+    publishers: z.array(
+      z.object({
+        publisherName: z.string()
+      })
+    ),
+    summary: z.string().nullable(),
+    isDlc: z.boolean(),
+    parentGameId: z.string().uuid().nullable()
+  })
+})
+
+export const GetFeaturedGamesResponseSchema = z.object({
+  mostBeatedsGames: z.array(
+    z.object({
+      id: z.string().uuid(),
+      gameBanner: z.string(),
+      gameName: z.string(),
+      isDlc: z.boolean()
+    })
+  ),
+  trendingGames: z.array(
+    z.object({
+      id: z.string().uuid(),
+      gameBanner: z.string(),
+      gameName: z.string(),
+      isDlc: z.boolean()
+    })
+  ),
+
+  recentGames: z.array(
+    z.object({
+      id: z.string().uuid(),
+      gameBanner: z.string(),
+      gameName: z.string(),
+      isDlc: z.boolean()
+    })
+  ),
+  futureGames: z.array(
+    z.object({
+      id: z.string().uuid(),
+      gameBanner: z.string(),
+      gameName: z.string(),
+      isDlc: z.boolean()
+    })
+  )
 })

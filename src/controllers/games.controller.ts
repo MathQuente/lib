@@ -10,7 +10,7 @@ export class GameController {
 
     const { game } = await this.gameService.createGame(data)
 
-    return reply.send({ game })
+    return reply.status(201).send({ game })
   }
 
   async getGame(request: FastifyRequest, reply: FastifyReply) {
@@ -18,7 +18,7 @@ export class GameController {
 
     const { game } = await this.gameService.findGameById(gameId)
 
-    return reply.send({ game })
+    return reply.status(200).send({ game })
   }
 
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
@@ -32,59 +32,30 @@ export class GameController {
       sortOrder
     )
 
-    return reply.send({ games, total })
+    return reply.status(200).send({ games, total })
   }
 
-  async test(request: FastifyRequest, reply: FastifyReply) {
-    const { mostBeateds, gamesTrending, recentGames, futureGames } =
-      await this.gameService.findMostBeated()
+  async getFeaturedGames(request: FastifyRequest, reply: FastifyReply) {
+    const { mostBeatedsGames, trendingGames, recentGames, futureGames } =
+      await this.gameService.findFeaturedGames()
 
-    return reply.send({ mostBeateds, gamesTrending, recentGames, futureGames })
-  }
-
-  async createGameDateRelease(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
-
-    const { dateRelease, platformId } =
-      GameSchema.CreateGameDateReleaseBodySchema.parse(request.body)
-
-    const { gameDateRelease } = await this.gameService.createGameDateRelease(
-      gameId,
-      dateRelease,
-      platformId
-    )
-
-    return reply.send({ gameDateRelease })
+    return reply.send({
+      mostBeatedsGames,
+      trendingGames,
+      recentGames,
+      futureGames
+    })
   }
 
   async updateGame(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
+    const { game: updateData } = GameSchema.UpdateGameBodySchema.parse(
+      request.body
+    )
 
-    const {
-      categories,
-      gameBanner,
-      gameName,
-      gameStudios,
-      platforms,
-      publishers,
-      summary,
-      isDlc,
-      parentGameId
-    } = GameSchema.UpdateGameBodySchema.parse(request.body)
+    const updated = await this.gameService.updateGame(gameId, updateData)
 
-    const { game } = await this.gameService.updateGame(gameId, {
-      categories,
-      gameBanner,
-      gameName,
-      gameStudios,
-      platforms,
-      publishers,
-      summary,
-      isDlc,
-      parentGameId
-    })
-
-    return reply.send({ game })
+    return reply.status(200).send({ game: updated })
   }
 
   async deleteGame(request: FastifyRequest, reply: FastifyReply) {
@@ -95,16 +66,10 @@ export class GameController {
     return reply.send({ game })
   }
 
-  async getAllGameStatus(request: FastifyRequest, reply: FastifyReply) {
-    const { status } = await this.gameService.findAllGameStatus()
-
-    return reply.send({ status })
-  }
-
   async getSimilarGames(request: FastifyRequest, reply: FastifyReply) {
     const { gameId } = GameSchema.GameParamsSchema.parse(request.params)
 
-    const { similarGames } = await this.gameService.findSimilarGames(gameId)
+    const similarGames = await this.gameService.findSimilarGames(gameId)
 
     return reply.send({ similarGames })
   }
