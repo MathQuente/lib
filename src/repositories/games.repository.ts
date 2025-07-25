@@ -370,12 +370,12 @@ export class GameRepository {
 
   async countGames(query: string | null) {
     if (!query) {
-      return await prisma.game.count()
+      return prisma.game.count()
     }
 
-    return await prisma.game.count({
+    return prisma.game.count({
       where: {
-        gameName: {
+        gameName: { 
           contains: query,
           mode: 'insensitive'
         }
