@@ -235,7 +235,17 @@ export const GetFeaturedGamesResponseSchema = z.object({
       id: z.string().uuid(),
       gameBanner: z.string(),
       gameName: z.string(),
-      isDlc: z.boolean()
+      isDlc: z.boolean(),
+      gameLaunchers: z.array(
+        z.object({
+          dateRelease: z.coerce.date(),
+          platformId: z.string().uuid(),
+          platforms: z.object({
+            id: z.string().uuid(),
+            platformName: z.string()
+          })
+        })
+      )
     })
   ),
   trendingGames: z.array(
@@ -243,16 +253,35 @@ export const GetFeaturedGamesResponseSchema = z.object({
       id: z.string().uuid(),
       gameBanner: z.string(),
       gameName: z.string(),
-      isDlc: z.boolean()
+      isDlc: z.boolean(),
+      gameLaunchers: z.array(
+        z.object({
+          dateRelease: z.coerce.date(),
+          platformId: z.string().uuid(),
+          platforms: z.object({
+            id: z.string().uuid(),
+            platformName: z.string()
+          })
+        })
+      )
     })
   ),
-
   recentGames: z.array(
     z.object({
       id: z.string().uuid(),
       gameBanner: z.string(),
       gameName: z.string(),
-      isDlc: z.boolean()
+      isDlc: z.boolean(),
+      gameLaunchers: z.array(
+        z.object({
+          dateRelease: z.coerce.date(),
+          platformId: z.string().uuid(),
+          platforms: z.object({
+            id: z.string().uuid(),
+            platformName: z.string()
+          })
+        })
+      )
     })
   ),
   futureGames: z.array(
@@ -260,7 +289,17 @@ export const GetFeaturedGamesResponseSchema = z.object({
       id: z.string().uuid(),
       gameBanner: z.string(),
       gameName: z.string(),
-      isDlc: z.boolean()
+      isDlc: z.boolean(),
+      gameLaunchers: z.array(
+        z.object({
+          dateRelease: z.coerce.date(),
+          platformId: z.string().uuid(),
+          platforms: z.object({
+            id: z.string().uuid(),
+            platformName: z.string()
+          })
+        })
+      )
     })
   )
 })

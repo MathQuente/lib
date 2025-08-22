@@ -223,7 +223,14 @@ export class GameRepository {
       id: true,
       gameBanner: true,
       gameName: true,
-      isDlc: true
+      isDlc: true,
+      gameLaunchers: {
+        select: {
+          dateRelease: true,
+          platformId: true,
+          platforms: true
+        }
+      }
     }
   }
 
@@ -375,7 +382,7 @@ export class GameRepository {
 
     return prisma.game.count({
       where: {
-        gameName: { 
+        gameName: {
           contains: query,
           mode: 'insensitive'
         }
