@@ -3,6 +3,24 @@ import { prisma } from '../database/db'
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
 
 export class GameRepository {
+  private async executeGameQuery(query: string) {
+    const gameIds = await prisma.$queryRawUnsafe<Array<{ id: string }>>(query)
+
+    if (gameIds.length === 0) {
+      return []
+    }
+
+    const games = await prisma.game.findMany({
+      where: {
+        id: { in: gameIds.map(g => g.id) }
+      },
+      select: this.getSelectFields()
+    })
+
+    const gameMap = new Map(games.map(game => [game.id, game]))
+    return gameIds.map(({ id }) => gameMap.get(id)).filter(Boolean)
+  }
+
   async create(data: CreateGameDTO) {
     const {
       categories,
@@ -234,80 +252,37 @@ export class GameRepository {
     }
   }
 
-  async findManyGamesByMostBeated() {
-    const gameIdsQuery = `
-    SELECT
-    g.id,
-    COUNT(DISTINCT ug.id) as beated_count
-    FROM "games" g
-    INNER JOIN "user_games" ug ON g.id = ug."game_id"
-    INNER JOIN "users_games_status" ugs ON ug."user_games_status_id" = ugs.id
-    WHERE ugs.status = 'PLAYED'
-    GROUP BY g.id
-    ORDER BY beated_count DESC
-    LIMIT 6
+  async findManyGamesByMostRating() {
+    const query = `
+      SELECT g.id
+      FROM games g
+      INNER JOIN ratings r ON g.id = r.game_id
+      GROUP BY g.id
+      HAVING COUNT(r.rating_id) > 0
+      ORDER BY AVG(r.value) DESC, COUNT(r.rating_id) DESC
+      LIMIT 6
     `
 
-    const gameIds = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      gameIdsQuery
-    )
-
-    if (gameIds.length === 0) {
-      return []
-    }
-
-    const games = await prisma.game.findMany({
-      where: {
-        id: {
-          in: gameIds.map(g => g.id)
-        }
-      },
-      select: this.getSelectFields()
-    })
-
-    return gameIds
-      .map(({ id }) => games.find(game => game.id === id))
-      .filter(Boolean)
+    return this.executeGameQuery(query)
   }
 
   async findManyGamesByTrending() {
-    const gameIdsQuery = `
-    SELECT
-    g.id,
-    COUNT(DISTINCT ug.id) as playing_count
-    FROM "games" g
-    INNER JOIN "user_games" ug ON g.id = ug."game_id"
-    INNER JOIN "users_games_status" ugs ON ug."user_games_status_id" = ugs.id
-    WHERE ugs.status = 'PLAYING'
-    GROUP BY g.id
-    ORDER BY playing_count DESC
-    LIMIT 6
+    const query = `
+     SELECT g.id
+      FROM games g
+      INNER JOIN user_games ug ON g.id = ug.game_id
+      INNER JOIN users_games_status ugs ON ug.user_games_status_id = ugs.id
+      WHERE ugs.status = 'PLAYING'
+      GROUP BY g.id
+      ORDER BY COUNT(DISTINCT ug.id) DESC
+      LIMIT 6
     `
 
-    const gameIds = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      gameIdsQuery
-    )
-
-    if (gameIds.length === 0) {
-      return []
-    }
-
-    const games = await prisma.game.findMany({
-      where: {
-        id: {
-          in: gameIds.map(g => g.id)
-        }
-      },
-      select: this.getSelectFields()
-    })
-
-    return gameIds
-      .map(({ id }) => games.find(game => game.id === id))
-      .filter(Boolean)
+    return this.executeGameQuery(query)
   }
 
   async findManyGamesByRecentDate() {
-    const gameIdsQuery = `
+    const query = `
     SELECT g.id
     FROM "games" g
     LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
@@ -318,32 +293,11 @@ export class GameRepository {
     LIMIT 6
       `
 
-    const gameIds = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      gameIdsQuery
-    )
-
-    if (gameIds.length === 0) {
-      return []
-    }
-
-    const games = await prisma.game.findMany({
-      where: {
-        id: {
-          in: gameIds.map(g => g.id)
-        }
-      },
-      select: this.getSelectFields()
-    })
-
-    return gameIds
-      .map(({ id }) => {
-        return games.find(game => game.id === id)
-      })
-      .filter(Boolean)
+    return this.executeGameQuery(query)
   }
 
   async findManyGamesByFutureRelease() {
-    const gameIdsQuery = `
+    const query = `
     SELECT g.id
     FROM "games" g
     LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
@@ -353,26 +307,7 @@ export class GameRepository {
     LIMIT 6
       `
 
-    const gameIds = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      gameIdsQuery
-    )
-
-    if (gameIds.length === 0) {
-      return []
-    }
-
-    const games = await prisma.game.findMany({
-      where: {
-        id: {
-          in: gameIds.map(g => g.id)
-        }
-      },
-      select: this.getSelectFields()
-    })
-
-    return gameIds
-      .map(({ id }) => games.find(game => game.id === id))
-      .filter(Boolean)
+    return this.executeGameQuery(query)
   }
 
   async countGames(query: string | null) {

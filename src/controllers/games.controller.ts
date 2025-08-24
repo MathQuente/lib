@@ -36,11 +36,11 @@ export class GameController {
   }
 
   async getFeaturedGames(request: FastifyRequest, reply: FastifyReply) {
-    const { mostBeatedsGames, trendingGames, recentGames, futureGames } =
+    const { mostRatedGames, trendingGames, recentGames, futureGames } =
       await this.gameService.findFeaturedGames()
 
     return reply.send({
-      mostBeatedsGames,
+      mostRatedGames,
       trendingGames,
       recentGames,
       futureGames

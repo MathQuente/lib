@@ -107,7 +107,7 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
     {
       schema: {
         response: {
-          200: GameSchema.GetFeaturedGamesResponseSchema,
+          // 200: GameSchema.GetFeaturedGamesResponseSchema,
           500: ErrorSchemas.InternalServerError
         }
       }

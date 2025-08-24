@@ -1,4 +1,3 @@
-import { prisma } from '../database/db'
 import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
 import { ClientError } from '../errors/client-error'
 import { GameRepository } from '../repositories/games.repository'
@@ -77,13 +76,29 @@ export class GameService {
   }
 
   async findFeaturedGames() {
-    const mostBeatedsGames =
-      await this.gameRepository.findManyGamesByMostBeated()
+    const mostRatedGames = await this.gameRepository.findManyGamesByMostRating()
     const trendingGames = await this.gameRepository.findManyGamesByTrending()
     const recentGames = await this.gameRepository.findManyGamesByRecentDate()
     const futureGames = await this.gameRepository.findManyGamesByFutureRelease()
 
-    return { mostBeatedsGames, trendingGames, recentGames, futureGames }
+    const mostRatedGamesWithAvg = await Promise.all(
+      mostRatedGames.map(async game => {
+        const avgRatingOfGame =
+          await this.ratingRepository.findAverageRatingOfGame(game!.id)
+        console.log(avgRatingOfGame)
+        return {
+          ...game,
+          ratingAvg: avgRatingOfGame._avg.value
+        }
+      })
+    )
+
+    return {
+      mostRatedGames: mostRatedGamesWithAvg,
+      trendingGames,
+      recentGames,
+      futureGames
+    }
   }
 
   async findGameById(gameId: string) {
