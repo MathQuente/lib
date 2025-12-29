@@ -31,16 +31,21 @@ export class UserController {
   }
 
   async getAllUserGames(request: FastifyRequest, reply: FastifyReply) {
-    const { pageIndex, query, filter } = UserSchema.QueryStringSchema.parse(
-      request.query
-    )
+    const { pageIndex, query, filter, sortBy, sortOrder } =
+      UserSchema.QueryStringSchema.parse(request.query)
 
     const userId = request.user.userId
 
-    const { totalPerStatus, userGames } =
-      await this.userService.findManyUserGames(userId, pageIndex, filter, query)
+    const { totalPerStatus, games } = await this.userService.findManyUserGames(
+      userId,
+      pageIndex,
+      filter,
+      query,
+      sortBy,
+      sortOrder
+    )
 
-    return reply.status(200).send({ userGames, totalPerStatus })
+    return reply.status(200).send({ games, totalPerStatus })
   }
 
   async getMe(request: FastifyRequest, reply: FastifyReply) {

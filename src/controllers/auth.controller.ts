@@ -8,23 +8,24 @@ export class AuthController {
 
   async createUser(request: FastifyRequest, reply: FastifyReply) {
     const data = UserSchema.UserBodySchema.parse(request.body)
+
     const { accessToken, refreshToken, user } =
       await this.authService.createUser(data)
 
     reply
       .setCookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'none',
+        httpOnly: false,
+        secure: true,
+        sameSite: 'lax',
         path: '/',
-        expires: new Date(Date.now() + 60 * 60 * 1000)
+        maxAge: 60 * 15
       })
       .setCookie('refreshToken', refreshToken, {
         httpOnly: true,
-        secure: false,
-        sameSite: 'none',
+        secure: true,
+        sameSite: 'lax',
         path: '/',
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dias
+        maxAge: 60 * 60 * 24 * 7
       })
       .send({ user })
   }
@@ -101,36 +102,63 @@ export class AuthController {
     await this.authService.logout(refreshToken)
 
     reply
-      .clearCookie('accessToken', {
-        httpOnly: true,
-        secure: true,
-        signed: false,
-        sameSite: 'none',
-        path: '/',
-        expires: new Date(Date.now() + 30 * 1000)
-      })
-      .clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: true,
-        signed: false,
-        sameSite: 'none',
-        path: '/',
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60)
-      })
+      .clearCookie('accessToken')
+      .clearCookie('refreshToken')
       .send({ message: 'Logged out successfully' })
   }
 
   async googleCallback(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const oauth2 = (request.server as any).googleOAuth2
-      const tokenResponse =
-        await oauth2.getAccessTokenFromAuthorizationCodeFlow(request)
-      const accessTokenGoogle = tokenResponse.token.access_token
+      const { code } = request.query as { code: string; state: string }
 
+      if (!code) {
+        throw new Error('Authorization code missing')
+      }
+
+      const oauth2 = (request.server as any).googleOAuth2
+
+      // ✅ Troca o code por token diretamente (sem validação de state interna)
+      const tokenResponse = await oauth2
+        .getNewAccessTokenUsingRefreshToken(oauth2.accessToken, {
+          code,
+          redirect_uri: 'http://localhost:3333/auth/google/callback',
+          grant_type: 'authorization_code'
+        })
+        .catch(async () => {
+          // Fallback: usar fetch diretamente
+          const params = new URLSearchParams({
+            code,
+            client_id: process.env.GOOGLE_CLIENT_ID!,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+            redirect_uri: 'http://localhost:3333/auth/google/callback',
+            grant_type: 'authorization_code'
+          })
+
+          const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+          })
+
+          if (!response.ok) {
+            const error = await response.text()
+            throw new Error(`Token exchange failed: ${error}`)
+          }
+
+          return await response.json()
+        })
+
+      const accessTokenGoogle = tokenResponse.access_token
+
+      // Busca informações do usuário
       const res = await fetch(
         'https://openidconnect.googleapis.com/v1/userinfo',
         { headers: { Authorization: `Bearer ${accessTokenGoogle}` } }
       )
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch user info')
+      }
 
       const profile = (await res.json()) as {
         sub: string
@@ -157,7 +185,7 @@ export class AuthController {
           path: '/',
           maxAge: 60 * 60 * 24 * 7
         })
-        .redirect(process.env.FRONTEND_URL + '/')
+        .redirect(process.env.FRONTEND_URL || 'http://localhost:5173' + '/')
     } catch (error) {
       console.error('Google OAuth Error:', error)
       reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')

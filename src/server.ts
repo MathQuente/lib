@@ -1,4 +1,4 @@
-import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import fastify, { FastifyInstance } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler
@@ -13,6 +13,7 @@ import { platformsRoutes } from './routes/platforms'
 import { errorHandler } from './error-handler'
 import { gameLaunchersRoutes } from './routes/gameLaunchers'
 import { userGameStatusRoutes } from './routes/userGameStatus'
+import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -31,20 +32,39 @@ export class Server {
   public static async start() {
     this.setupZodTypeProvider()
     this.initErrrHandler()
+
     Jwt.initSetup(this.app)
+
+    await this.initOAuth2()
     this.initRoutes()
 
     await this.app.listen({
       port: Server.port,
       host: Server.host
     })
-
     console.log(`🚀 Server running on http://${Server.host}:${Server.port}`)
   }
 
   private static setupZodTypeProvider() {
     this.app.setValidatorCompiler(validatorCompiler)
     this.app.setSerializerCompiler(serializerCompiler)
+  }
+
+  private static async initOAuth2() {
+    const oauth2Options: FastifyOAuth2Options = {
+      name: 'googleOAuth2',
+      credentials: {
+        client: {
+          id: process.env.GOOGLE_CLIENT_ID!,
+          secret: process.env.GOOGLE_CLIENT_SECRET!
+        },
+        auth: fastifyOauth2.GOOGLE_CONFIGURATION
+      },
+      callbackUri: 'http://localhost:3333/auth/google/callback',
+      scope: ['openid', 'email', 'profile']
+    }
+
+    await this.app.register(fastifyOauth2, oauth2Options)
   }
 
   private static initRoutes() {

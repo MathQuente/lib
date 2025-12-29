@@ -87,7 +87,7 @@ export class GameRepository {
   async findManyGames(
     pageIndex: number,
     itemsPerPage: number,
-    query: string | null,
+    query: string | undefined,
     sortBy: 'gameName' | 'dateRelease' | 'rating',
     sortOrder: 'asc' | 'desc' = 'asc'
   ) {
@@ -109,7 +109,7 @@ export class GameRepository {
   private async findManyGamesByName(
     pageIndex: number,
     itemsPerPage: number,
-    query: string | null,
+    query: string | undefined,
     sortOrder: 'asc' | 'desc'
   ) {
     return prisma.game.findMany({
@@ -126,7 +126,7 @@ export class GameRepository {
   private async findManyGamesByDate(
     pageIndex: number,
     itemsPerPage: number,
-    query: string | null,
+    query: string | undefined,
     sortOrder: 'asc' | 'desc'
   ) {
     const gameIdsQuery = `
@@ -175,7 +175,7 @@ export class GameRepository {
   private async findManyGamesByRating(
     pageIndex: number,
     itemsPerPage: number,
-    query: string | null,
+    query: string | undefined,
     sortOrder: 'asc' | 'desc'
   ) {
     let gameIdsQuery: string
@@ -248,7 +248,14 @@ export class GameRepository {
           platformId: true,
           platforms: true
         }
-      }
+      },
+      platforms: {
+        select: {
+          id: true,
+          platformName: true
+        }
+      },
+      summary: true
     }
   }
 
@@ -296,21 +303,91 @@ export class GameRepository {
     return this.executeGameQuery(query)
   }
 
-  async findManyGamesByFutureRelease() {
-    const query = `
-    SELECT g.id
-    FROM "games" g
-    LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
-    WHERE gl."date_release" > NOW()
-    GROUP BY g.id, g."game_name"
-    ORDER BY MIN(gl."date_release") ASC
-    LIMIT 6
-      `
+  async findManyGamesByFutureRelease(
+    pageIndex: number = 0,
+    itemsPerPage: number = 10,
+    query?: string | null,
+    sortBy: 'gameName' | 'dateRelease' | 'rating' = 'gameName',
+    sortOrder: 'asc' | 'desc' = 'asc'
+  ) {
+    const getSortClause = (sortBy: string, sortOrder: string): string => {
+      switch (sortBy) {
+        case 'gameName':
+          return `g."game_name" ${sortOrder.toUpperCase()}`
+        case 'dateRelease':
+          return `next_release_date ${sortOrder.toUpperCase()}, g."game_name" ASC`
+        case 'rating':
+          return `avg_rating ${sortOrder.toUpperCase()}, g."game_name" ASC`
+        default:
+          return `g."game_name" ${sortOrder.toUpperCase()}`
+      }
+    }
 
-    return this.executeGameQuery(query)
+    let gameIdsQuery: string
+    let params: any[]
+
+    if (query) {
+      gameIdsQuery = `
+      SELECT
+        g.id,
+        MIN(gl."date_release") as next_release_date,
+        COALESCE(AVG(r.value), 0) as avg_rating
+      FROM "games" g
+      LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+      LEFT JOIN "ratings" r ON g.id = r."game_id"
+      WHERE gl."date_release" > NOW()
+        AND g."game_name" ILIKE $3
+      GROUP BY g.id, g."game_name"
+      ORDER BY ${getSortClause(sortBy, sortOrder)}
+      OFFSET $1 LIMIT $2
+    `
+      params = [pageIndex * itemsPerPage, itemsPerPage, `%${query}%`]
+    } else {
+      gameIdsQuery = `
+      SELECT
+        g.id,
+        MIN(gl."date_release") as next_release_date,
+        COALESCE(AVG(r.value), 0) as avg_rating
+      FROM "games" g
+      LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+      LEFT JOIN "ratings" r ON g.id = r."game_id"
+      WHERE gl."date_release" > NOW()
+      GROUP BY g.id, g."game_name"
+      ORDER BY ${getSortClause(sortBy, sortOrder)}
+      OFFSET $1 LIMIT $2
+    `
+      params = [pageIndex * itemsPerPage, itemsPerPage]
+    }
+
+    const gameIds = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string
+        next_release_date: Date
+        avg_rating: number
+      }>
+    >(gameIdsQuery, ...params)
+
+    if (gameIds.length === 0) {
+      return []
+    }
+
+    const games = await prisma.game.findMany({
+      where: {
+        id: {
+          in: gameIds.map(g => g.id)
+        }
+      },
+      select: this.getSelectFields()
+    })
+
+    return gameIds
+      .map(({ id }) => {
+        return games.find(game => game.id === id)
+      })
+      .filter(Boolean)
   }
 
-  async countGames(query: string | null) {
+  async countGames(query: string | undefined) {
     if (!query) {
       return prisma.game.count()
     }
@@ -632,5 +709,36 @@ export class GameRepository {
         }
       }
     })
+  }
+
+  async countComingSoonGames(query?: string | null) {
+    let countQuery: string
+    let params: any[]
+
+    if (query) {
+      countQuery = `
+      SELECT COUNT(DISTINCT g.id)::int as count
+      FROM "games" g
+      LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+      WHERE gl."date_release" > NOW()
+        AND g."game_name" ILIKE $1
+    `
+      params = [`%${query}%`]
+    } else {
+      countQuery = `
+      SELECT COUNT(DISTINCT g.id)::int as count
+      FROM "games" g
+      LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+      WHERE gl."date_release" > NOW()
+    `
+      params = []
+    }
+
+    const result = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+      countQuery,
+      ...params
+    )
+
+    return result[0]?.count || 0
   }
 }

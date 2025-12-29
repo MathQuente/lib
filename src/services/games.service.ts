@@ -4,7 +4,7 @@ import { GameRepository } from '../repositories/games.repository'
 import { RatingRepository } from '../repositories/rating.repository'
 
 export class GameService {
-  private readonly itemsPerPage = 36
+  private itemsPerPage = 36
 
   constructor(
     private gameRepository: GameRepository,
@@ -49,10 +49,13 @@ export class GameService {
 
   async findAllGames(
     pageIndex: number,
-    query: string | null,
+    query: string | undefined,
     sortBy: 'gameName' | 'dateRelease' | 'rating',
-    sortOrder: 'asc' | 'desc' = 'asc'
+    sortOrder: 'asc' | 'desc' = 'asc',
+    limit?: number
   ) {
+    this.itemsPerPage = limit || this.itemsPerPage
+
     const [games, total] = await Promise.all([
       this.gameRepository.findManyGames(
         pageIndex,
@@ -69,6 +72,19 @@ export class GameService {
         id: game?.id,
         gameName: game?.gameName,
         gameBanner: game?.gameBanner,
+        gameLaunchers: game?.gameLaunchers.map(launcher => ({
+          dateRelease: launcher.dateRelease,
+          platformId: launcher.platformId,
+          platforms: {
+            id: launcher.platforms.id,
+            platformName: launcher.platforms.platformName
+          }
+        })),
+        platforms: game?.platforms.map(platform => ({
+          id: platform.id,
+          platformName: platform.platformName
+        })),
+        summary: game?.summary,
         isDlc: game?.isDlc
       })),
       total
@@ -85,7 +101,6 @@ export class GameService {
       mostRatedGames.map(async game => {
         const avgRatingOfGame =
           await this.ratingRepository.findAverageRatingOfGame(game!.id)
-        console.log(avgRatingOfGame)
         return {
           ...game,
           ratingAvg: avgRatingOfGame._avg.value
@@ -99,6 +114,25 @@ export class GameService {
       recentGames,
       futureGames
     }
+  }
+
+  async findComingSoonGames(
+    pageIndex: number,
+    query: string | undefined,
+    sortBy: 'gameName' | 'dateRelease' | 'rating',
+    sortOrder: 'asc' | 'desc' = 'asc'
+  ) {
+    const games = await this.gameRepository.findManyGamesByFutureRelease(
+      pageIndex,
+      this.itemsPerPage,
+      query,
+      sortBy,
+      sortOrder
+    )
+
+    const total = await this.gameRepository.countComingSoonGames(query)
+
+    return { games, total }
   }
 
   async findGameById(gameId: string) {

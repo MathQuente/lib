@@ -153,61 +153,166 @@ export class UserRepository {
     })
   }
 
+  private getSelectFields() {
+    return {
+      id: true,
+      gameBanner: true,
+      gameName: true,
+      isDlc: true,
+      gameLaunchers: {
+        select: {
+          dateRelease: true,
+          platformId: true,
+          platforms: true
+        }
+      },
+      platforms: {
+        select: {
+          id: true,
+          platformName: true
+        }
+      },
+      summary: true
+    }
+  }
+
   async findManyGamesOfUser(
     userId: string,
-    {
-      pageIndex = 0,
-      limit = 18,
-      query = '',
-      filter
-    }: {
-      pageIndex?: number
-      limit?: number
-      query?: string
-      filter?: Status | undefined
-    } = {}
+    pageIndex: number = 0,
+    itemsPerPage: number = 10,
+    sortBy: 'gameName' | 'dateRelease' | 'rating' = 'gameName',
+    sortOrder: 'asc' | 'desc' = 'asc',
+    query?: string | null,
+    filterStatus?: Status | string
   ) {
-    return prisma.userGame.findMany({
-      where: {
-        userId,
-        OR: query
-          ? [
-              {
-                game: {
-                  gameName: { contains: query }
-                }
-              }
-            ]
-          : undefined,
-        UserGamesStatus: filter
-          ? {
-              status: filter
-            }
-          : undefined
-      },
-      skip: pageIndex * limit,
-      take: limit,
-      orderBy: [
-        {
-          updatedAt: 'desc'
-        }
-      ],
-      select: {
-        game: {
-          select: {
-            id: true,
-            gameBanner: true,
-            gameName: true,
-            isDlc: true
+    const getSortClause = (sortBy: string, sortOrder: string): string => {
+      switch (sortBy) {
+        case 'gameName':
+          return `g."game_name" ${sortOrder.toUpperCase()}`
+        case 'dateRelease':
+          return `next_release_date ${sortOrder.toUpperCase()}, g."game_name" ASC`
+        case 'rating':
+          return `avg_rating ${sortOrder.toUpperCase()}, g."game_name" ASC`
+        default:
+          return `g."game_name" ${sortOrder.toUpperCase()}`
+      }
+    }
+
+    let gameIdsQuery: string
+    const params: any[] = [pageIndex * itemsPerPage, itemsPerPage, userId] // $1, $2, $3
+
+    // vamos calcular índices dos parâmetros dinamicamente para manter a estrutura exatamente igual
+    let nextParamIndex = 3
+    let statusClause = ''
+    if (filterStatus) {
+      nextParamIndex++
+      statusClause = ` AND ugs."status" = $${nextParamIndex}::"Status"` // Adicione o cast
+      params.push(filterStatus)
+    }
+
+    if (query) {
+      nextParamIndex++
+      const nameParamPlaceholder = `$${nextParamIndex}`
+      gameIdsQuery = `
+    SELECT
+      g.id,
+      MAX(gl."date_release") as next_release_date,
+      COALESCE(AVG(r.value), 0) as avg_rating
+    FROM "user_games" ug
+    INNER JOIN "games" g ON ug."game_id" = g.id
+    LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+    LEFT JOIN "ratings" r ON g.id = r."game_id"
+    LEFT JOIN "user_games_status" ugs ON ug.id = ugs."user_game_id"
+    WHERE ug."user_id" = $3
+    ${statusClause}
+    AND g."game_name" ILIKE ${nameParamPlaceholder}
+    GROUP BY g.id, g."game_name"
+    ORDER BY ${getSortClause(sortBy, sortOrder)}
+    OFFSET $1 LIMIT $2
+  `
+      params.push(`%${query}%`)
+    } else {
+      gameIdsQuery = `
+    SELECT
+      g.id,
+      MAX(gl."date_release") as next_release_date,
+      COALESCE(AVG(r.value), 0) as avg_rating
+    FROM "user_games" ug
+    INNER JOIN "games" g ON ug."game_id" = g.id
+    LEFT JOIN "game_launchers" gl ON g.id = gl."game_id"
+    LEFT JOIN "ratings" r ON g.id = r."game_id"
+    LEFT JOIN "users_games_status" ugs ON ug."user_games_status_id" = ugs."id"
+    WHERE ug."user_id" = $3
+    ${statusClause}
+    GROUP BY g.id, g."game_name"
+    ORDER BY ${getSortClause(sortBy, sortOrder)}
+    OFFSET $1 LIMIT $2
+  `
+    }
+
+    try {
+      const gameIds = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string
+          next_release_date: Date | null
+          avg_rating: number
+        }>
+      >(gameIdsQuery, ...params)
+
+      if (gameIds.length === 0) {
+        return []
+      }
+
+      // busca os userGames correspondentes (mantendo a estrutura de buscar depois dos ids)
+      const userGames = await prisma.userGame.findMany({
+        where: {
+          userId,
+          gameId: {
+            in: gameIds.map(g => g.id)
           }
         },
-        UserGamesStatus: {
-          select: {
-            status: true
-          }
+        select: {
+          id: true,
+          gameId: true,
+          // mantenha this.getSelectFields() se for seu método; caso contrário adapte o select abaixo
+          game: {
+            select: this.getSelectFields
+              ? this.getSelectFields()
+              : {
+                  id: true,
+                  gameName: true,
+                  gameBanner: true,
+                  gameLaunchers: {
+                    select: {
+                      dateRelease: true,
+                      platformId: true,
+                      platforms: {
+                        select: {
+                          id: true,
+                          platformName: true
+                        }
+                      }
+                    }
+                  },
+                  isDlc: true
+                }
+          },
+          // ajuste se o status estiver em outra relação
+          UserGamesStatus: true,
+          updatedAt: true
         }
-      }
-    })
+      })
+
+      // remonta a ordem com base em gameIds (igual ao seu exemplo)
+      return gameIds
+        .map(({ id }) => {
+          return userGames.find(ug => ug.gameId === id)
+        })
+        .filter(Boolean)
+    } catch (error) {
+      console.error('Erro na query:', error)
+      throw error
+    }
   }
 
   async findGamesCountByStatus(userId: string) {

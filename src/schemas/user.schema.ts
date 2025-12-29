@@ -35,11 +35,16 @@ export const GetUserResponseSchema = z.object({
 })
 
 export const QueryStringSchema = z.object({
+  pageIndex: z.coerce.number().default(0),
   query: z.string().optional(),
   filter: z
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional(),
-  pageIndex: z.coerce.number().default(0)
+  sortBy: z
+    .enum(['gameName', 'dateRelease', 'rating'])
+    .optional()
+    .default('gameName'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('asc')
 })
 
 export const GetAllUsersResponseSchema = z.object({
@@ -137,12 +142,22 @@ export const GetUserGameStatusResponse = z.object({
 })
 
 export const GetAllUserGamesResponseSchema = z.object({
-  userGames: z.object({
+  games: z.object({
     PLAYED: z.array(
       z.object({
         id: z.string().uuid(),
         gameName: z.string(),
         gameBanner: z.string().url(),
+        gameLaunchers: z.array(
+          z.object({
+            dateRelease: z.coerce.date(),
+            platformId: z.string().uuid(),
+            platforms: z.object({
+              id: z.string().uuid(),
+              platformName: z.string()
+            })
+          })
+        ),
         isDlc: z.boolean(),
         status: z.string()
       })
@@ -152,6 +167,16 @@ export const GetAllUserGamesResponseSchema = z.object({
         id: z.string().uuid(),
         gameName: z.string(),
         gameBanner: z.string().url(),
+        gameLaunchers: z.array(
+          z.object({
+            dateRelease: z.coerce.date(),
+            platformId: z.string().uuid(),
+            platforms: z.object({
+              id: z.string().uuid(),
+              platformName: z.string()
+            })
+          })
+        ),
         isDlc: z.boolean(),
         status: z.string()
       })
@@ -161,6 +186,16 @@ export const GetAllUserGamesResponseSchema = z.object({
         id: z.string().uuid(),
         gameName: z.string(),
         gameBanner: z.string().url(),
+        gameLaunchers: z.array(
+          z.object({
+            dateRelease: z.coerce.date(),
+            platformId: z.string().uuid(),
+            platforms: z.object({
+              id: z.string().uuid(),
+              platformName: z.string()
+            })
+          })
+        ),
         isDlc: z.boolean(),
         status: z.string()
       })
@@ -170,6 +205,16 @@ export const GetAllUserGamesResponseSchema = z.object({
         id: z.string().uuid(),
         gameName: z.string(),
         gameBanner: z.string().url(),
+        gameLaunchers: z.array(
+          z.object({
+            dateRelease: z.coerce.date(),
+            platformId: z.string().uuid(),
+            platforms: z.object({
+              id: z.string().uuid(),
+              platformName: z.string()
+            })
+          })
+        ),
         isDlc: z.boolean(),
         status: z.string()
       })
@@ -179,6 +224,16 @@ export const GetAllUserGamesResponseSchema = z.object({
         id: z.string().uuid(),
         gameName: z.string(),
         gameBanner: z.string().url(),
+        gameLaunchers: z.array(
+          z.object({
+            dateRelease: z.coerce.date(),
+            platformId: z.string().uuid(),
+            platforms: z.object({
+              id: z.string().uuid(),
+              platformName: z.string()
+            })
+          })
+        ),
         isDlc: z.boolean(),
         status: z.string()
       })

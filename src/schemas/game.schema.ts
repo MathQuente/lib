@@ -57,8 +57,9 @@ export const GameParamsSchema = z.object({
 })
 
 export const GameQueryStringSchema = z.object({
-  query: z.string().nullable(),
+  query: z.string().optional(),
   pageIndex: z.coerce.number().default(0),
+  limit: z.coerce.number().default(36),
   sortBy: z
     .enum(['gameName', 'dateRelease', 'rating'])
     .optional()
@@ -144,6 +145,23 @@ export const GetGamesResponseSchema = z.object({
       id: z.string().uuid(),
       gameName: z.string(),
       gameBanner: z.string(),
+      gameLaunchers: z.array(
+        z.object({
+          dateRelease: z.coerce.date(),
+          platformId: z.string().uuid(),
+          platforms: z.object({
+            id: z.string().uuid(),
+            platformName: z.string()
+          })
+        })
+      ),
+      platforms: z.array(
+        z.object({
+          id: z.string().uuid(),
+          platformName: z.string()
+        })
+      ),
+      summary: z.string(),
       isDlc: z.boolean()
     })
   ),

@@ -114,4 +114,17 @@ export async function gameRoutes(app: FastifyInstance, opts: any) {
     },
     async (request, reply) => gameController.getFeaturedGames(request, reply)
   )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/comingSoon',
+    {
+      schema: {
+        // response: {
+        //   200: GameSchema.GetGamesResponseSchema,
+        //   500: ErrorSchemas.InternalServerError
+        // }
+      }
+    },
+    async (request, reply) => gameController.getComingSoonGames(request, reply)
+  )
 }

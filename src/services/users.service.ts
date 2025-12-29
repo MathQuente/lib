@@ -150,7 +150,9 @@ export class UserService {
     userId: string,
     pageIndex: number,
     filter: Status | undefined,
-    query: string | undefined
+    query: string | undefined,
+    sortBy: 'gameName' | 'dateRelease' | 'rating',
+    sortOrder: 'asc' | 'desc' = 'asc'
   ) {
     const user = await this.userRepository.findUserById(userId)
 
@@ -158,14 +160,17 @@ export class UserService {
       throw new ClientError('User not found.', 404)
     }
 
-    const rawUserGames = await this.userRepository.findManyGamesOfUser(userId, {
+    const rawUserGames = await this.userRepository.findManyGamesOfUser(
+      userId,
       pageIndex,
+      this.ITEMS_PER_PAGE,
+      sortBy,
+      sortOrder,
       query,
-      limit: this.ITEMS_PER_PAGE,
       filter
-    })
+    )
 
-    const userGames: Record<string, Game[]> = {
+    const games: Record<string, Game[]> = {
       PLAYED: [],
       PLAYING: [],
       PAUSED: [],
@@ -174,18 +179,35 @@ export class UserService {
     }
 
     for (const entry of rawUserGames) {
-      const status = entry.UserGamesStatus.status
+      // garante que acessamos a propriedade com optional chaining
+      const status = entry?.UserGamesStatus?.status as
+        | keyof typeof games
+        | undefined
 
-      if (!entry.game) {
+      if (!entry?.game) {
+        continue
+      }
+
+      // Se status for undefined (ou não for uma das chaves de `games`), pula
+      if (!status) {
         continue
       }
 
       const gameObj = {
         ...entry.game,
+        gameLaunchers: entry?.game.gameLaunchers.map(launcher => ({
+          dateRelease: launcher.dateRelease,
+          platformId: launcher.platformId,
+          platforms: {
+            id: launcher.platforms.id,
+            platformName: launcher.platforms.platformName
+          }
+        })),
         status
       } as Game
 
-      userGames[status].push(gameObj)
+      // agora `status` tem o tipo `keyof typeof games`, o TypeScript aceita o index
+      games[status].push(gameObj)
     }
 
     const totalPerStatus = await this.userRepository.findGamesCountByStatus(
@@ -198,7 +220,7 @@ export class UserService {
     }))
 
     return {
-      userGames,
+      games,
       totalPerStatus: formattedTotalPerStatus
     }
   }
@@ -338,7 +360,7 @@ export class UserService {
     )
 
     return {
-      playedCount: stats?.completions || { completions: 0 }
+      playedCount: stats?.completions || 0
     }
   }
 
@@ -370,7 +392,6 @@ export class UserService {
 
   async findGamesToDisplay(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-
     if (!user) {
       throw new ClientError('User not found.', 404)
     }
@@ -384,11 +405,21 @@ export class UserService {
       g.userGames.every(id => id.userId !== userId)
     )
 
+    // Type guard para garantir que são valores válidos
     const playingGames = userGames.filter(
-      ug => ug.UserGamesStatus.status === Status.PLAYING
+      (ug): ug is NonNullable<typeof ug> =>
+        ug !== null &&
+        ug !== undefined &&
+        ug.game !== null &&
+        ug.UserGamesStatus.status === Status.PLAYING
     )
+
     const backlogGames = userGames.filter(
-      ug => ug.UserGamesStatus.status === Status.BACKLOG
+      (ug): ug is NonNullable<typeof ug> =>
+        ug !== null &&
+        ug !== undefined &&
+        ug.game !== null &&
+        ug.UserGamesStatus.status === Status.BACKLOG
     )
 
     if (playingGames.length > 0) {
@@ -405,7 +436,6 @@ export class UserService {
       }
     } else if (gamesWithOutUserId.length > 0) {
       const gameIndex = randomInt(gamesWithOutUserId.length)
-      console.log('oi')
       return {
         game: gamesWithOutUserId[gameIndex],
         message: 'Que tal adicionar um novo jogo a sua biblioteca?'

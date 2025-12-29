@@ -1,8 +1,10 @@
 version: '3.8'
+
 services:
   postgres:
-    image: postgres:latest
-    container_name: my_postgres
+    image: postgres:17 # Mudou de 15 para 17
+    container_name: lib_db_postgres
+    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -14,3 +16,4 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
