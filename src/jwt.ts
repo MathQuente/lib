@@ -107,31 +107,4 @@ export class Jwt {
       }
     })
   }
-
-  // public static registerOAuth2 = async (fastify: FastifyInstance) => {
-  //   // ✅ ADICIONE ESTES LOGS
-  //   console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID)
-  //   console.log(
-  //     'GOOGLE_CLIENT_SECRET:',
-  //     process.env.GOOGLE_CLIENT_SECRET ? '***definido***' : 'UNDEFINED'
-  //   )
-
-  //   const oauth2Options: FastifyOAuth2Options = {
-  //     name: 'googleOAuth2',
-  //     credentials: {
-  //       client: {
-  //         id: process.env.GOOGLE_CLIENT_ID!,
-  //         secret: process.env.GOOGLE_CLIENT_SECRET!
-  //       },
-  //       auth: fastifyOauth2.GOOGLE_CONFIGURATION
-  //     },
-  //     startRedirectPath: '/auth/google',
-  //     callbackUri: 'http://localhost:3333/auth/google/callback',
-  //     scope: ['openid', 'email', 'profile']
-  //   }
-
-  //   console.log('OAuth2 Options:', oauth2Options) // ✅ ADICIONE ESTE LOG
-
-  //   await fastify.register(fastifyOauth2, oauth2Options)
-  // }
 }

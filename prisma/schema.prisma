@@ -117,7 +117,8 @@ model User {
   password       String
   profilePicture String?         @map("profile_picture")
   userBanner     String?         @map("user_banner")
-  googleId       String?         @unique
+  googleId       String?         @unique @map("google_id")
+  discordId      String?         @unique @map("discord_id")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @default(now()) @map("updated_at")
   userGames      UserGame[]

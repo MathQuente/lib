@@ -127,6 +127,26 @@ export class AuthService {
     return { user, accessToken, refreshToken, expiresAt }
   }
 
+  async loginWithDiscord(discordUser: { id: string; email: string }) {
+    let user = await this.authRepository.findByDiscordId(discordUser.id)
+
+    if (!user) {
+      user = await this.authRepository.findByEmail(discordUser.email)
+
+      if (user) {
+        user = await this.authRepository.linkDiscord(user.id, discordUser.id)
+      } else {
+        user = await this.authRepository.createWithDiscord({
+          email: discordUser.email,
+          discordId: discordUser.id,
+          password: crypto.randomUUID()
+        })
+      }
+    }
+
+    return this.generateTokens(user.id)
+  }
+
   async validateUser(email: string, password: string) {
     const user = await this.authRepository.findUserByEmail(email)
 

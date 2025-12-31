@@ -28,6 +28,13 @@ export class AuthRepository {
     })
   }
 
+  async findUserByDiscordId(discordId: string) {
+    return prisma.user.findUnique({
+      where: { discordId },
+      select: { id: true, email: true, userName: true, profilePicture: true }
+    })
+  }
+
   async createUser(data: CreateUserDTO) {
     return prisma.user.create({
       data: {
@@ -57,6 +64,33 @@ export class AuthRepository {
         password: data.password
       },
       select: { id: true }
+    })
+  }
+
+  async findByEmail(email: string) {
+    return prisma.user.findUnique({
+      where: { email }
+    })
+  }
+
+  async findByDiscordId(discordId: string) {
+    return prisma.user.findUnique({
+      where: { discordId }
+    })
+  }
+
+  async createWithDiscord(data: {
+    email: string
+    discordId: string
+    password: string
+  }) {
+    return prisma.user.create({ data })
+  }
+
+  async linkDiscord(userId: string, discordId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { discordId }
     })
   }
 

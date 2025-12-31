@@ -141,4 +141,74 @@ export async function authRoutes(app: FastifyInstance) {
 
     return authController.googleCallback(request, reply)
   })
+
+  app.get('/discord', async (request, reply) => {
+    try {
+      const oauth2 = (app as any).discordOAuth2
+
+      if (!oauth2) {
+        console.error('❌ OAuth2 plugin não encontrado!')
+        return reply.status(500).send({ error: 'OAuth2 not configured' })
+      }
+
+      const state = crypto.randomBytes(16).toString('hex')
+      stateStore.set(state, Date.now())
+
+      const baseUrl = 'https://discord.com/api/oauth2/authorize'
+      const params = new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID!,
+        redirect_uri: 'http://localhost:3333/auth/discord/callback',
+        response_type: 'code',
+        scope: 'identify email',
+        state: state,
+        prompt: 'consent'
+      })
+
+      const authUrl = `${baseUrl}?${params.toString()}`
+      console.log(`🔗 Redirecionando para:`, authUrl)
+
+      return reply.redirect(authUrl)
+    } catch (error) {
+      console.error('Erro ao iniciar OAuth:', error)
+      return reply.status(500).send({ error: 'Failed to start OAuth flow' })
+    }
+  })
+
+  app.get('/discord/callback', async (request, reply) => {
+    console.log('=== DISCORD CALLBACK RECEBIDO ===')
+    console.log('URL:', request.url)
+    console.log('Query params:', request.query)
+
+    const query = request.query as {
+      state?: string
+      code?: string
+      error?: string
+    }
+    const stateFromQuery = query.state
+    const code = query.code
+
+    if (query.error) {
+      console.error('❌ Erro do Discord:', query.error)
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=' + query.error
+      )
+    }
+
+    if (!stateFromQuery || !stateStore.has(stateFromQuery)) {
+      console.error('❌ State inválido')
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=invalid_state'
+      )
+    }
+
+    if (!code) {
+      console.error('❌ Code ausente')
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=missing_code'
+      )
+    }
+
+    stateStore.delete(stateFromQuery)
+    return authController.discordCallback(request, reply)
+  })
 }

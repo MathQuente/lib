@@ -51,7 +51,7 @@ export class Server {
   }
 
   private static async initOAuth2() {
-    const oauth2Options: FastifyOAuth2Options = {
+    const googleOAuth2Options: FastifyOAuth2Options = {
       name: 'googleOAuth2',
       credentials: {
         client: {
@@ -64,7 +64,27 @@ export class Server {
       scope: ['openid', 'email', 'profile']
     }
 
-    await this.app.register(fastifyOauth2, oauth2Options)
+    await this.app.register(fastifyOauth2, googleOAuth2Options)
+
+    const discord0Auth2Options: FastifyOAuth2Options = {
+      name: 'discordOAuth2',
+      credentials: {
+        client: {
+          id: process.env.DISCORD_CLIENT_ID!,
+          secret: process.env.DISCORD_CLIENT_SECRET!
+        },
+        auth: {
+          authorizeHost: 'https://discord.com',
+          authorizePath: '/api/oauth2/authorize',
+          tokenHost: 'https://discord.com',
+          tokenPath: '/api/oauth2/token'
+        }
+      },
+      callbackUri: 'http://localhost:3333/auth/discord/callback',
+      scope: ['identify', 'email']
+    }
+
+    await this.app.register(fastifyOauth2, discord0Auth2Options)
   }
 
   private static initRoutes() {

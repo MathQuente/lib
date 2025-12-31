@@ -117,7 +117,6 @@ export class AuthController {
 
       const oauth2 = (request.server as any).googleOAuth2
 
-      // ✅ Troca o code por token diretamente (sem validação de state interna)
       const tokenResponse = await oauth2
         .getNewAccessTokenUsingRefreshToken(oauth2.accessToken, {
           code,
@@ -125,7 +124,6 @@ export class AuthController {
           grant_type: 'authorization_code'
         })
         .catch(async () => {
-          // Fallback: usar fetch diretamente
           const params = new URLSearchParams({
             code,
             client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -150,7 +148,6 @@ export class AuthController {
 
       const accessTokenGoogle = tokenResponse.access_token
 
-      // Busca informações do usuário
       const res = await fetch(
         'https://openidconnect.googleapis.com/v1/userinfo',
         { headers: { Authorization: `Bearer ${accessTokenGoogle}` } }
@@ -188,6 +185,83 @@ export class AuthController {
         .redirect(process.env.FRONTEND_URL || 'http://localhost:5173' + '/')
     } catch (error) {
       console.error('Google OAuth Error:', error)
+      reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
+    }
+  }
+
+  async discordCallback(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { code } = request.query as { code: string }
+
+      if (!code) {
+        throw new Error('Authorization code missing')
+      }
+
+      const oauth2 = (request.server as any).discordOAuth2
+
+      const tokenResponse = await oauth2
+        .getAccessTokenFromAuthorizationCodeFlow(request)
+        .catch(async () => {
+          const params = new URLSearchParams({
+            code,
+            client_id: process.env.DISCORD_CLIENT_ID!,
+            client_secret: process.env.DISCORD_CLIENT_SECRET!,
+            redirect_uri: 'http://localhost:3333/auth/discord/callback',
+            grant_type: 'authorization_code'
+          })
+
+          const response = await fetch('https://discord.com/api/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+          })
+
+          if (!response.ok) {
+            const error = await response.text()
+            throw new Error(`Token exchange failed: ${error}`)
+          }
+
+          return await response.json()
+        })
+
+      const accessTokenDiscord = tokenResponse.access_token
+
+      const res = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${accessTokenDiscord}` }
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch user info')
+      }
+
+      const profile = (await res.json()) as {
+        id: string
+        email: string
+        username: string
+        avatar: string
+      }
+
+      const { accessToken, refreshToken } =
+        await this.authService.loginWithDiscord(profile)
+
+      reply
+        .setCookie('accessToken', accessToken, {
+          httpOnly: false,
+          secure: true,
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 15
+        })
+        .setCookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7
+        })
+        .redirect(process.env.FRONTEND_URL || 'http://localhost:5173' + '/')
+    } catch (error) {
+      console.error('Discord OAuth Error:', error)
       reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
     }
   }
