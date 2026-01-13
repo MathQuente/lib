@@ -69,28 +69,62 @@ export class AuthRepository {
 
   async findByEmail(email: string) {
     return prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        userName: true,
+        profilePicture: true,
+        password: true,
+        googleId: true,
+        discordId: true
+      }
     })
   }
 
   async findByDiscordId(discordId: string) {
     return prisma.user.findUnique({
-      where: { discordId }
+      where: { discordId },
+      select: {
+        id: true,
+        email: true,
+        userName: true,
+        profilePicture: true,
+        googleId: true,
+        discordId: true
+      }
     })
   }
 
   async createWithDiscord(data: {
     email: string
+    userName: string
     discordId: string
     password: string
+    profilePicture: string | null
   }) {
     return prisma.user.create({ data })
+  }
+
+  async linkGoogle(userId: string, googleId: string, picture?: string) {
+    return await prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleId,
+        ...(picture && { profilePicture: picture })
+      }
+    })
   }
 
   async linkDiscord(userId: string, discordId: string) {
     return prisma.user.update({
       where: { id: userId },
-      data: { discordId }
+      data: {
+        discordId,
+        ...({
+          profilePicture: `https://cdn.discordapp.com/avatars/${discordId}/avatar.png`
+        } as any)
+      }
     })
   }
 

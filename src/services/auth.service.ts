@@ -94,32 +94,45 @@ export class AuthService {
     name: string
     picture: string
   }) {
+    // Primeiro tenta encontrar por googleId
     let user = await this.authRepository.findUserByGoogleId(profile.sub)
 
     if (!user) {
-      const array = new Uint8Array(32)
-      crypto.getRandomValues(array)
-      const randomPassword = Array.from(array, byte =>
-        byte.toString(16).padStart(2, '0')
-      ).join('')
-      const hashedPassword = await bcrypt.hash(randomPassword, 10)
+      // Se não encontrou por googleId, busca por email
+      user = await this.authRepository.findByEmail(profile.email)
 
-      const created = await this.authRepository.createUserWithGoogle({
-        email: profile.email,
-        name: profile.name,
-        picture: profile.picture,
-        googleId: profile.sub,
-        password: hashedPassword
-      })
-      user = {
-        id: created.id,
-        email: profile.email,
-        userName: profile.name,
-        profilePicture: profile.picture
+      if (user) {
+        // Usuário existe com esse email, vincula o Google ID
+        user = await this.authRepository.linkGoogle(
+          user.id,
+          profile.sub,
+          profile.picture
+        )
+      } else {
+        const array = new Uint8Array(32)
+        crypto.getRandomValues(array)
+        const randomPassword = Array.from(array, byte =>
+          byte.toString(16).padStart(2, '0')
+        ).join('')
+        const hashedPassword = await bcrypt.hash(randomPassword, 10)
+
+        const created = await this.authRepository.createUserWithGoogle({
+          email: profile.email,
+          name: profile.name,
+          picture: profile.picture,
+          googleId: profile.sub,
+          password: hashedPassword
+        })
+
+        user = {
+          id: created.id,
+          email: profile.email,
+          userName: profile.name,
+          profilePicture: profile.picture
+        }
       }
     }
 
-    // Depois de ter o user.id, gere seus tokens (reaproveitando generateTokens)
     const { accessToken, refreshToken, expiresAt } = await this.generateTokens(
       user.id
     )
@@ -127,8 +140,17 @@ export class AuthService {
     return { user, accessToken, refreshToken, expiresAt }
   }
 
-  async loginWithDiscord(discordUser: { id: string; email: string }) {
+  async loginWithDiscord(discordUser: {
+    id: string
+    email: string
+    username: string
+    avatar: string | null
+  }) {
     let user = await this.authRepository.findByDiscordId(discordUser.id)
+
+    const profilePicture = discordUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+      : null
 
     if (!user) {
       user = await this.authRepository.findByEmail(discordUser.email)
@@ -138,8 +160,10 @@ export class AuthService {
       } else {
         user = await this.authRepository.createWithDiscord({
           email: discordUser.email,
+          userName: `${discordUser.username}`,
           discordId: discordUser.id,
-          password: crypto.randomUUID()
+          password: crypto.randomUUID(),
+          profilePicture
         })
       }
     }
