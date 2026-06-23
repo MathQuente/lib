@@ -1,4 +1,3 @@
-import { Status } from '@prisma/client'
 import z from 'zod'
 
 export const CreateUserResponseSchema = z.object({
@@ -39,12 +38,12 @@ export const QueryStringSchema = z.object({
   query: z.string().optional(),
   filter: z
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
-    .optional(),
+    .optional()
+    .catch(undefined),
   sortBy: z
     .enum(['gameName', 'dateRelease', 'rating'])
-    .optional()
-    .default('gameName'),
-  sortOrder: z.enum(['asc', 'desc']).optional().default('asc')
+    .catch('gameName'),
+  sortOrder: z.enum(['asc', 'desc']).catch('asc')
 })
 
 export const GetAllUsersResponseSchema = z.object({
@@ -60,12 +59,12 @@ export const GetAllUsersResponseSchema = z.object({
 })
 
 export const UserGameParamsSchema = z.object({
-  gameId: z.string().uuid()
+  igdbId: z.coerce.number().int()
 })
 
 export const UserGamePlayedCountUpdateParamsSchema = z.object({
   userId: z.string().uuid(),
-  gameId: z.string().uuid()
+  igdbId: z.coerce.number().int()
 })
 
 export const UserGameBodySchema = z.object({
@@ -82,37 +81,11 @@ export const RemoveGameParamsSchema = z.object({
 })
 
 export const AddGameResponseSchema = z.object({
-  game: z
-    .object({
-      id: z.string().uuid(),
-      gameBanner: z.string(),
-      gameName: z.string()
-    })
-    .optional(),
-  dlc: z
-    .object({
-      id: z.string().uuid(),
-      dlcBanner: z.string(),
-      dlcName: z.string()
-    })
-    .optional()
+  igdbId: z.number()
 })
 
 export const RemoveGameResponseSchema = z.object({
-  game: z
-    .object({
-      id: z.string().uuid(),
-      gameBanner: z.string(),
-      gameName: z.string()
-    })
-    .optional(),
-  dlc: z
-    .object({
-      id: z.string().uuid(),
-      dlcBanner: z.string(),
-      dlcName: z.string()
-    })
-    .optional()
+  igdbId: z.number()
 })
 
 export const GetUserGameStatusParamsSchema = z.object({
@@ -141,110 +114,31 @@ export const GetUserGameStatusResponse = z.object({
     .nullable()
 })
 
+const UserGameEntrySchema = z.object({
+  igdbId: z.number(),
+  name: z.string(),
+  coverUrl: z.string().nullable(),
+  platforms: z.array(z.string()).optional(),
+  releaseDate: z.number().optional(),
+  siteRating: z.number().nullable(),
+  status: z.string()
+})
+
 export const GetAllUserGamesResponseSchema = z.object({
   games: z.object({
-    PLAYED: z.array(
-      z.object({
-        id: z.string().uuid(),
-        gameName: z.string(),
-        gameBanner: z.string().url(),
-        gameLaunchers: z.array(
-          z.object({
-            dateRelease: z.coerce.date(),
-            platformId: z.string().uuid(),
-            platforms: z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          })
-        ),
-        isDlc: z.boolean(),
-        status: z.string()
-      })
-    ),
-    PLAYING: z.array(
-      z.object({
-        id: z.string().uuid(),
-        gameName: z.string(),
-        gameBanner: z.string().url(),
-        gameLaunchers: z.array(
-          z.object({
-            dateRelease: z.coerce.date(),
-            platformId: z.string().uuid(),
-            platforms: z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          })
-        ),
-        isDlc: z.boolean(),
-        status: z.string()
-      })
-    ),
-    PAUSED: z.array(
-      z.object({
-        id: z.string().uuid(),
-        gameName: z.string(),
-        gameBanner: z.string().url(),
-        gameLaunchers: z.array(
-          z.object({
-            dateRelease: z.coerce.date(),
-            platformId: z.string().uuid(),
-            platforms: z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          })
-        ),
-        isDlc: z.boolean(),
-        status: z.string()
-      })
-    ),
-    BACKLOG: z.array(
-      z.object({
-        id: z.string().uuid(),
-        gameName: z.string(),
-        gameBanner: z.string().url(),
-        gameLaunchers: z.array(
-          z.object({
-            dateRelease: z.coerce.date(),
-            platformId: z.string().uuid(),
-            platforms: z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          })
-        ),
-        isDlc: z.boolean(),
-        status: z.string()
-      })
-    ),
-    WISHLIST: z.array(
-      z.object({
-        id: z.string().uuid(),
-        gameName: z.string(),
-        gameBanner: z.string().url(),
-        gameLaunchers: z.array(
-          z.object({
-            dateRelease: z.coerce.date(),
-            platformId: z.string().uuid(),
-            platforms: z.object({
-              id: z.string().uuid(),
-              platformName: z.string()
-            })
-          })
-        ),
-        isDlc: z.boolean(),
-        status: z.string()
-      })
-    )
+    PLAYED: z.array(UserGameEntrySchema),
+    PLAYING: z.array(UserGameEntrySchema),
+    PAUSED: z.array(UserGameEntrySchema),
+    BACKLOG: z.array(UserGameEntrySchema),
+    WISHLIST: z.array(UserGameEntrySchema)
   }),
   totalPerStatus: z.array(
     z.object({
       status: z.string(),
       totalGames: z.number()
     })
-  )
+  ),
+  total: z.number()
 })
 
 export const UpdateUserBodySchema = z
@@ -256,11 +150,7 @@ export const UpdateUserBodySchema = z
   .partial()
 
 export const UpdateUserGameStatusResponseSchema = z.object({
-  game: z.object({
-    id: z.string().uuid(),
-    gameBanner: z.string(),
-    gameName: z.string()
-  }),
+  igdbId: z.number(),
   userGameStatus: z.object({
     id: z.number(),
     status: z.string()
@@ -279,27 +169,11 @@ export const GetUserGameStatsResponse = z.object({
 
 export const GetGamesToDisplayResponseSchema = z.object({
   game: z
-    .union([
-      z.object({
-        id: z.string().uuid(),
-        gameBanner: z.string().url(),
-        gameName: z.string(),
-        isDlc: z.boolean()
-      }),
-      z.object({
-        id: z.string().uuid(),
-        gameBanner: z.string().url(),
-        gameName: z.string(),
-        userGames: z.array(
-          z.object({
-            userId: z.string().uuid(),
-            UserGamesStatus: z.object({
-              status: z.nativeEnum(Status)
-            })
-          })
-        )
-      })
-    ])
+    .object({
+      igdbId: z.number(),
+      name: z.string(),
+      coverUrl: z.string().nullable()
+    })
     .nullable()
     .optional(),
   message: z.string()

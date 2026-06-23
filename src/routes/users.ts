@@ -5,30 +5,20 @@ import * as UserSchema from '../schemas/user.schema'
 import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
-import { GameRepository } from '../repositories/games.repository'
 import { RatingRepository } from '../repositories/rating.repository'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
-  const gameRepository = new GameRepository()
   const ratingRepository = new RatingRepository()
-  const userService = new UserService(
-    userRepository,
-    gameRepository,
-    ratingRepository
-  )
+  const userService = new UserService(userRepository, ratingRepository)
   const userController = new UserController(userService)
 
   app.withTypeProvider<ZodTypeProvider>().get(
     '/me',
     {
       preHandler: [app.authenticate],
-      schema: {
-        response: {
-          // 200: UserSchema.GetUserResponseSchema
-        }
-      }
+      schema: {}
     },
     async (request, reply) => userController.getMe(request, reply)
   )
@@ -65,7 +55,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/games/:gameId',
+    '/games/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -83,7 +73,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/games/:gameId',
+    '/games/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -100,7 +90,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/gameStatus/:gameId',
+    '/gameStatus/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -117,7 +107,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/gameStatus/:gameId',
+    '/gameStatus/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -180,7 +170,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/playedCount/:gameId',
+    '/playedCount/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -196,7 +186,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/playedCount/:gameId',
+    '/playedCount/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {

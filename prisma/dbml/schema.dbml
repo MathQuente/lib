@@ -12,78 +12,17 @@ Table refresh_token {
   user users [not null]
 }
 
-Table games {
-  id String [pk]
-  createdAt DateTime [default: `now()`, not null]
-  gameBanner String [not null]
-  gameName String [unique, not null]
-  summary String [not null]
-  isDlc Boolean [not null, default: false]
-  parentGameId String
-  updatedAt DateTime [default: `now()`, not null]
-  parentGame games
-  dlcs games [not null]
-  gameStudios game_studios [not null]
-  publishers publishers [not null]
-  categories game_categories [not null]
-  platforms platforms [not null]
-  gameLaunchers game_launchers [not null]
-  userGames user_games [not null]
-  UserGameStats user_game_stats [not null]
-  Rating ratings [not null]
-}
-
-Table game_categories {
-  id Int [pk, increment]
-  categoryName String [unique, not null]
-  games games [not null]
-}
-
-Table game_launchers {
-  id String [not null]
-  dateRelease DateTime
-  releasePeriod String
-  gameId String [not null]
-  platformId String [not null]
-  platforms platforms [not null]
-  game games [not null]
-
-  indexes {
-    (platformId, gameId) [pk]
-  }
-}
-
-Table game_studios {
-  id String [pk]
-  studioName String [unique, not null]
-  games games [not null]
-}
-
-Table platforms {
-  id String [pk]
-  platformName String [unique, not null]
-  gameLaunchers game_launchers [not null]
-  games games [not null]
-}
-
-Table publishers {
-  id String [pk]
-  publisherName String [unique, not null]
-  games games [not null]
-}
-
 Table ratings {
   id String [pk]
   user users [not null]
   userId String [not null]
-  game games [not null]
-  gameId String [not null]
+  igdbId Int [not null]
   value Float [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 
   indexes {
-    (userId, gameId) [unique]
+    (userId, igdbId) [unique]
   }
 }
 
@@ -100,26 +39,22 @@ Table users {
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]
   refreshToken refresh_token [not null]
-  UserGameStats user_game_stats [not null]
   Rating ratings [not null]
 }
 
 Table user_games {
   id String [pk]
-  gameId String
+  igdbId Int [not null]
   userId String [not null]
-  dlcId String
   userGamesStatusId Int [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   user users [not null]
-  game games
   UserGameStats user_game_stats
   UserGamesStatus users_games_status [not null]
 
   indexes {
-    (userId, gameId) [unique]
-    (userId, dlcId) [unique]
+    (userId, igdbId) [unique]
   }
 }
 
@@ -129,35 +64,22 @@ Table users_games_status {
   userGames user_games [not null]
 }
 
+Table games_cache {
+  igdbId Int [pk]
+  name String [not null]
+  coverUrl String
+  summary String
+  genres String[] [not null]
+  platforms String[] [not null]
+  releaseDate Int
+  syncedAt DateTime [default: `now()`, not null]
+}
+
 Table user_game_stats {
   id String [pk]
   userGameId String [unique, not null]
   completions Int [not null, default: 0]
   userGame user_games [not null]
-  Game games
-  gameId String
-  User users
-  userId String
-}
-
-Table GameToGameStudio {
-  gamestudiosId String [ref: > game_studios.id]
-  gamesId String [ref: > games.id]
-}
-
-Table GameToPublisher {
-  publishersId String [ref: > publishers.id]
-  gamesId String [ref: > games.id]
-}
-
-Table GameToGameCategory {
-  categoriesId Int [ref: > game_categories.id]
-  gamesId String [ref: > games.id]
-}
-
-Table GameToPlatform {
-  platformsId String [ref: > platforms.id]
-  gamesId String [ref: > games.id]
 }
 
 Enum Status {
@@ -170,24 +92,10 @@ Enum Status {
 
 Ref: refresh_token.userId > users.id [delete: Cascade]
 
-Ref: games.parentGameId - games.id [delete: Set Null]
-
-Ref: game_launchers.platformId > platforms.id [delete: Cascade]
-
-Ref: game_launchers.gameId > games.id [delete: Cascade]
-
 Ref: ratings.userId > users.id [delete: Cascade]
 
-Ref: ratings.gameId > games.id [delete: Cascade]
-
 Ref: user_games.userId > users.id [delete: Cascade]
-
-Ref: user_games.gameId > games.id [delete: Cascade]
 
 Ref: user_games.userGamesStatusId > users_games_status.id
 
 Ref: user_game_stats.userGameId - user_games.id [delete: Cascade]
-
-Ref: user_game_stats.gameId > games.id
-
-Ref: user_game_stats.userId > users.id

@@ -1,107 +1,70 @@
 import { ClientError } from '../errors/client-error'
-import { GameRepository } from '../repositories/games.repository'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+
+const PLAYED_STATUS_ID = 1
 
 export class RatingService {
   constructor(
     private ratingRepository: RatingRepository,
-    private userRepository: UserRepository,
-    private gameRepository: GameRepository
+    private userRepository: UserRepository
   ) {}
 
-  async createRating(gameId: string, value: number, userId: string) {
+  async createRating(igdbId: number, value: number, userId: string) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
       throw new ClientError('User not found.', 404)
     }
 
-    const game = await this.gameRepository.findById(gameId)
+    const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
-    if (!game) {
-      throw new ClientError('Game not found.', 404)
-    }
-
-    const userGame = await this.userRepository.findUserGame(game.id, user.id)
-
-    const playedStatus = await this.gameRepository.findStatusByName('PLAYED')
-    if (!playedStatus) throw new ClientError('Status PLAYED not found', 404)
-
-    if (!userGame?.game || !userGame.UserGamesStatus) {
+    if (!userGame) {
       await this.userRepository.addGameToUserLibrary({
-        gameId,
+        igdbId,
         userId,
-        statusIds: playedStatus.id
+        statusIds: PLAYED_STATUS_ID
       })
 
-      await this.userRepository.createUserGameStats(userId, gameId, 1)
-
-      const rating = await this.ratingRepository.create(game.id, value, user.id)
-
-      return { rating: rating.value }
-    }
-
-    const hasPlayed = userGame.UserGamesStatus.id === playedStatus.id
-    if (!hasPlayed) {
+      await this.userRepository.createUserGameStats(userId, igdbId, 1)
+    } else if (userGame.UserGamesStatus.id !== PLAYED_STATUS_ID) {
       await this.userRepository.updateGameStatus(
-        gameId,
+        igdbId,
         userId,
-        playedStatus.id
+        PLAYED_STATUS_ID
       )
-
-      await this.userRepository.updateUserGamePlayedCount(
-        userId,
-        userGame.game.id,
-        1
-      )
+      await this.userRepository.updateUserGamePlayedCount(userId, igdbId, 1)
     }
 
-    const rating = await this.ratingRepository.create(game.id, value, user.id)
+    const rating = await this.ratingRepository.create(igdbId, value, userId)
 
     return { rating: rating.value }
   }
 
-  async findUniqueByUserGame(gameId: string, userId: string) {
+  async findUniqueByUserGame(igdbId: number, userId: string) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
       throw new ClientError('User not found.')
-    }
-
-    const game = await this.gameRepository.findById(gameId)
-
-    if (!game) {
-      throw new ClientError('Game not found.')
     }
 
     const rating = await this.ratingRepository.findUniqueByUserGame(
-      game.id,
-      user.id
+      igdbId,
+      userId
     )
 
-    if (!rating) {
-      return { rating: null }
-    }
-
-    return { rating: rating.value }
+    return { rating: rating?.value ?? null }
   }
 
-  async deleteRating(gameId: string, userId: string) {
+  async deleteRating(igdbId: number, userId: string) {
     const user = await this.userRepository.findUserById(userId)
 
     if (!user) {
       throw new ClientError('User not found.')
     }
 
-    const game = await this.gameRepository.findById(gameId)
-
-    if (!game) {
-      throw new ClientError('Game not found.', 404)
-    }
-
     const existingRating = await this.ratingRepository.findUniqueByUserGame(
-      gameId,
+      igdbId,
       userId
     )
 
@@ -109,25 +72,12 @@ export class RatingService {
       throw new ClientError('Rating not found.', 404)
     }
 
-    const rating = await this.ratingRepository.delete(game.id, user.id)
-
-    return {
-      rating
-    }
+    return this.ratingRepository.delete(igdbId, userId)
   }
 
-  async findAverageRating(gameId: string) {
-    const game = await this.gameRepository.findById(gameId)
-
-    if (!game) {
-      throw new ClientError('Game not found.')
-    }
-
-    const average = await this.ratingRepository.findAverageRatingOfGame(gameId)
-
-    return {
-      average: average._avg.value || 0
-    }
+  async findAverageRating(igdbId: number) {
+    const average = await this.ratingRepository.findAverageRatingOfGame(igdbId)
+    return { average: average._avg.value || 0 }
   }
 
   async findManyRating() {
@@ -145,8 +95,8 @@ export class RatingService {
     }
   }
 
-  async findRatingDistribution(gameId: string) {
-    const ratings = await this.ratingRepository.findRatingDistribution(gameId)
+  async findRatingDistribution(igdbId: number) {
+    const ratings = await this.ratingRepository.findRatingDistribution(igdbId)
 
     return {
       ratings: ratings.map(rating => ({
@@ -156,11 +106,8 @@ export class RatingService {
     }
   }
 
-  async countRatingByName(gameId: string) {
-    const rating = await this.ratingRepository.countRatingByName(gameId)
-
-    return {
-      ratings: rating.value
-    }
+  async countRatingByName(igdbId: number) {
+    const rating = await this.ratingRepository.countRatingByName(igdbId)
+    return { ratings: rating.value }
   }
 }

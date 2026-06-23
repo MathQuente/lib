@@ -1,56 +1,32 @@
 import { prisma } from '../database/db'
 
 export class RatingRepository {
-  async create(gameId: string, value: number, userId: string) {
+  async create(igdbId: number, value: number, userId: string) {
     return prisma.rating.upsert({
-      where: { userId_gameId: { userId, gameId } },
+      where: { userId_igdbId: { userId, igdbId } },
       update: { value, updatedAt: new Date() },
-      create: { userId, gameId, value },
-      select: {
-        value: true
-      }
+      create: { userId, igdbId, value },
+      select: { value: true }
     })
   }
 
-  async delete(gameId: string, userId: string) {
+  async delete(igdbId: number, userId: string) {
     return prisma.rating.delete({
-      where: { userId_gameId: { userId, gameId } }
+      where: { userId_igdbId: { userId, igdbId } }
     })
   }
 
-  async findUniqueByUserGame(gameId: string, userId: string) {
+  async findUniqueByUserGame(igdbId: number, userId: string) {
     return prisma.rating.findUnique({
-      where: {
-        userId_gameId: {
-          gameId,
-          userId
-        }
-      },
-      select: {
-        value: true
-      }
+      where: { userId_igdbId: { igdbId, userId } },
+      select: { value: true }
     })
   }
 
-  async findAverageRatingOfGame(gameId: string) {
+  async findAverageRatingOfGame(igdbId: number) {
     return prisma.rating.aggregate({
-      where: {
-        gameId
-      },
-      _avg: {
-        value: true
-      }
-    })
-  }
-
-  async findRating(gameId: string) {
-    return prisma.rating.findFirstOrThrow({
-      where: {
-        gameId
-      },
-      select: {
-        value: true
-      }
+      where: { igdbId },
+      _avg: { value: true }
     })
   }
 
@@ -69,25 +45,33 @@ export class RatingRepository {
     })
   }
 
-  async countRatingByName(gameId: string) {
+  async countRatingByName(igdbId: number) {
     return prisma.rating.count({
-      where: {
-        gameId
-      },
-      select: {
-        value: true
-      }
+      where: { igdbId },
+      select: { value: true }
     })
   }
 
-  async findRatingDistribution(gameId: string) {
+  async findRatingDistribution(igdbId: number) {
     return prisma.rating.groupBy({
       by: ['value'],
-      where: { gameId },
-      _count: {
-        value: true
-      },
+      where: { igdbId },
+      _count: { value: true },
       orderBy: { value: 'asc' }
     })
+  }
+
+  async getAverageRatingsForGames(igdbIds: number[]): Promise<Map<number, number | null>> {
+    if (igdbIds.length === 0) return new Map()
+    const results = await prisma.rating.groupBy({
+      by: ['igdbId'],
+      where: { igdbId: { in: igdbIds } },
+      _avg: { value: true }
+    })
+    const map = new Map<number, number | null>()
+    for (const r of results) {
+      map.set(r.igdbId, r._avg.value)
+    }
+    return map
   }
 }

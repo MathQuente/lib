@@ -4,30 +4,23 @@ import { RatingService } from '../services/rating.service'
 import { RatingController } from '../controllers/rating.controller'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
-import { GameRepository } from '../repositories/games.repository'
 import * as RatingSchema from '../schemas/rating.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function ratingRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const userRepository = new UserRepository()
-  const gameRepository = new GameRepository()
-  const ratingService = new RatingService(
-    ratingRepository,
-    userRepository,
-    gameRepository
-  )
+  const ratingService = new RatingService(ratingRepository, userRepository)
   const ratingController = new RatingController(ratingService)
 
   app.withTypeProvider<ZodTypeProvider>().post(
-    '/:gameId',
+    '/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           201: RatingSchema.CreateRatingResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -37,14 +30,13 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:gameId',
+    '/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           200: RatingSchema.GetRatingResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -53,13 +45,12 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/:gameId/average',
+    '/:igdbId/average',
     {
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           200: RatingSchema.GetRatingAverageResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -69,14 +60,13 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/:gameId',
+    '/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           204: RatingSchema.DeleteRatingResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -90,7 +80,6 @@ export async function ratingRoutes(app: FastifyInstance) {
       schema: {
         response: {
           200: RatingSchema.GetRatingsResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -99,14 +88,13 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/game/:gameId',
+    '/game/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           200: RatingSchema.GetManyRatingsByGameResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -115,14 +103,13 @@ export async function ratingRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
-    '/ratingDistribution/:gameId',
+    '/ratingDistribution/:igdbId',
     {
       preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
           200: RatingSchema.GetRatingDistributionResponseSchema,
-          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }

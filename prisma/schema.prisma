@@ -24,106 +24,32 @@ model RefreshToken {
   @@map("refresh_token")
 }
 
-model Game {
-  id           String   @id @default(uuid())
-  createdAt    DateTime @default(now()) @map("created_at")
-  gameBanner   String   @map("game_banner")
-  gameName     String   @unique @map("game_name")
-  summary      String
-  isDlc        Boolean  @default(false) @map("is_dlc")
-  parentGameId String?  @map("parent_game_id")
-  updatedAt    DateTime @default(now()) @map("updated_at")
-
-  parentGame Game?  @relation("GameToDLC", fields: [parentGameId], references: [id], onDelete: SetNull)
-  dlcs       Game[] @relation("GameToDLC")
-
-  gameStudios   GameStudio[]
-  publishers    Publisher[]
-  categories    GameCategory[]
-  platforms     Platform[]
-  gameLaunchers GameLauncher[]
-  userGames     UserGame[]
-
-  UserGameStats UserGameStats[]
-  Rating        Rating[]
-
-  @@map("games")
-}
-
-model GameCategory {
-  id           Int    @id @default(autoincrement())
-  categoryName String @unique @map("category_name")
-  games        Game[]
-
-  @@map("game_categories")
-}
-
-model GameLauncher {
-  id            String    @default(uuid())
-  dateRelease   DateTime? @map("date_release")
-  releasePeriod String?   @map("release_period")
-  gameId        String    @map("game_id")
-  platformId    String    @map("plataform_id")
-  platforms     Platform  @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
-
-  @@id([platformId, gameId])
-  @@map("game_launchers")
-}
-
-model GameStudio {
-  id         String @id @default(uuid())
-  studioName String @unique @map("studio_name")
-  games      Game[]
-
-  @@map("game_studios")
-}
-
-model Platform {
-  id            String         @id @default(uuid())
-  platformName  String         @unique @map("plataform_name")
-  gameLaunchers GameLauncher[]
-  games         Game[]
-
-  @@map("platforms")
-}
-
-model Publisher {
-  id            String @id @default(uuid())
-  publisherName String @unique @map("publisher_name")
-  games         Game[]
-
-  @@map("publishers")
-}
-
 model Rating {
   id        String   @id @default(uuid()) @map("rating_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String   @map("user_id")
-  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  gameId    String   @map("game_id")
+  igdbId    Int      @map("igdb_id")
   value     Float    @map("value")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([userId, gameId])
+  @@unique([userId, igdbId])
   @@map("ratings")
 }
 
 model User {
-  id             String          @id @default(uuid())
-  email          String          @unique
-  userName       String?         @map("user_name")
+  id             String         @id @default(uuid())
+  email          String         @unique
+  userName       String?        @map("user_name")
   password       String
-  profilePicture String?         @map("profile_picture")
-  userBanner     String?         @map("user_banner")
-  googleId       String?         @unique @map("google_id")
-  discordId      String?         @unique @map("discord_id")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @default(now()) @map("updated_at")
+  profilePicture String?        @map("profile_picture")
+  userBanner     String?        @map("user_banner")
+  googleId       String?        @unique @map("google_id")
+  discordId      String?        @unique @map("discord_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @default(now()) @map("updated_at")
   userGames      UserGame[]
   refreshToken   RefreshToken[]
-  UserGameStats  UserGameStats[]
   Rating         Rating[]
 
   @@map("users")
@@ -131,20 +57,17 @@ model User {
 
 model UserGame {
   id                String   @id @default(uuid())
-  gameId            String?  @map("game_id")
+  igdbId            Int      @map("igdb_id")
   userId            String   @map("user_id")
-  dlcId             String?  @map("dlc_id")
   userGamesStatusId Int      @map("user_games_status_id")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game              Game?    @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   UserGameStats   UserGameStats?
   UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
 
-  @@unique([userId, gameId])
-  @@unique([userId, dlcId])
+  @@unique([userId, igdbId])
   @@map("user_games")
 }
 
@@ -164,17 +87,27 @@ enum Status {
   WISHLIST
 }
 
+model GameCache {
+  igdbId      Int      @id @map("igdb_id")
+  name        String
+  coverUrl    String?  @map("cover_url")
+  summary     String?
+  genres      String[]
+  platforms   String[]
+  releaseDate Int?     @map("release_date")
+  syncedAt    DateTime @default(now()) @updatedAt @map("synced_at")
+
+  @@index([name])
+  @@index([releaseDate])
+  @@map("games_cache")
+}
+
 model UserGameStats {
   id          String @id @default(uuid())
   userGameId  String @map("user_game_id")
   completions Int    @default(0)
 
   userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
-
-  Game   Game?   @relation(fields: [gameId], references: [id])
-  gameId String?
-  User   User?   @relation(fields: [userId], references: [id])
-  userId String?
 
   @@unique([userGameId])
   @@map("user_game_stats")

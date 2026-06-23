@@ -7,33 +7,28 @@ export class UserController {
   constructor(private userService: UserService) {}
 
   async addGameToUserLibrary(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
-
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-
     const { statusId } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    const { game } = await this.userService.addGameToUserLibrary(
-      gameId,
+    const { igdbId: addedId } = await this.userService.addGameToUserLibrary(
+      igdbId,
       userId,
       statusId
     )
 
-    return reply.status(201).send({ game })
+    return reply.status(201).send({ igdbId: addedId })
   }
 
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
-
     const { user } = await this.userService.delete(userId)
-
     return reply.status(200).send({ user })
   }
 
   async getAllUserGames(request: FastifyRequest, reply: FastifyReply) {
     const { pageIndex, query, filter, sortBy, sortOrder } =
       UserSchema.QueryStringSchema.parse(request.query)
-
     const userId = request.user.userId
 
     const { totalPerStatus, games } = await this.userService.findManyUserGames(
@@ -51,9 +46,7 @@ export class UserController {
   async getMe(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
 
-    if (!userId) {
-      throw new ClientError('User ID not found in token')
-    }
+    if (!userId) throw new ClientError('User ID not found in token')
 
     const { user } = await this.userService.findMe(userId)
 
@@ -62,29 +55,22 @@ export class UserController {
 
   async getUser(request: FastifyRequest, reply: FastifyReply) {
     const { userId } = UserSchema.UserParamsSchema.parse(request.params)
-
     const { user } = await this.userService.findById(userId)
-
     return reply.status(200).send({ user })
   }
 
   async getUsers(request: FastifyRequest, reply: FastifyReply) {
-    const { pageIndex, query } = UserSchema.QueryStringSchema.parse(
-      request.query
-    )
-
+    const { pageIndex, query } = UserSchema.QueryStringSchema.parse(request.query)
     const { users } = await this.userService.findManyUsers(pageIndex, query)
-
     return reply.status(200).send({ users })
   }
 
   async getUserGameStatus(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
-
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
 
     const { userGameStatus } = await this.userService.findUserGameStatus(
-      gameId,
+      igdbId,
       userId
     )
 
@@ -92,30 +78,26 @@ export class UserController {
   }
 
   async removeGame(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-    const { game } = await this.userService.removeGame(gameId, userId)
-
-    return reply.status(200).send({ game })
+    const { igdbId: removedId } = await this.userService.removeGame(igdbId, userId)
+    return reply.status(200).send({ igdbId: removedId })
   }
 
   async updateGame(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
-
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-
     const { statusId } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    const { game, userGameStatus, playedCountUpdated } =
-      await this.userService.updateGame(gameId, userId, statusId)
+    const { igdbId: updatedId, userGameStatus, playedCountUpdated } =
+      await this.userService.updateGame(igdbId, userId, statusId)
 
-    return reply.status(200).send({ game, userGameStatus, playedCountUpdated })
+    return reply.status(200).send({ igdbId: updatedId, userGameStatus, playedCountUpdated })
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
     const { profilePicture, userBanner, userName } =
       UserSchema.UpdateUserBodySchema.parse(request.body)
-
     const userId = request.user.userId
 
     const { user } = await this.userService.update(userId, {
@@ -128,14 +110,10 @@ export class UserController {
   }
 
   async getUserGameStats(request: FastifyRequest, reply: FastifyReply) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
-
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
 
-    const { playedCount } = await this.userService.findUserGameStats(
-      gameId,
-      userId
-    )
+    const { playedCount } = await this.userService.findUserGameStats(igdbId, userId)
 
     return reply.status(200).send({ playedCount })
   }
@@ -144,16 +122,14 @@ export class UserController {
     request: FastifyRequest,
     reply: FastifyReply
   ) {
-    const { gameId } = UserSchema.UserGameParamsSchema.parse(request.params)
-
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-
     const { incrementValue } =
       UserSchema.UserGamePlayedCountUpdateBodySchema.parse(request.body)
 
     const { playedCount } = await this.userService.updateUserGamePlayedCount(
       userId,
-      gameId,
+      igdbId,
       incrementValue
     )
 
@@ -162,9 +138,7 @@ export class UserController {
 
   async getGamesToDisplay(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
-
     const { game, message } = await this.userService.findGamesToDisplay(userId)
-
     return reply.status(200).send({ game, message })
   }
 }

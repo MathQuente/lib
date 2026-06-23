@@ -5,7 +5,7 @@ export interface CreateUserDTO {
 }
 
 export interface AddGameDTO {
-  gameId: string
+  igdbId: number
   userId: string
   statusIds: number
 }

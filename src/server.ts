@@ -7,11 +7,8 @@ import { Jwt } from './jwt'
 import { authRoutes } from './routes/auth'
 import { userRoutes } from './routes/users'
 import { gameRoutes } from './routes/game'
-import { gameStudioRoutes } from './routes/gameStudios'
 import { ratingRoutes } from './routes/rating'
-import { platformsRoutes } from './routes/platforms'
 import { errorHandler } from './error-handler'
-import { gameLaunchersRoutes } from './routes/gameLaunchers'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
 
@@ -91,10 +88,7 @@ export class Server {
     this.app.register(authRoutes, { prefix: '/auth' })
     this.app.register(userRoutes, { prefix: '/users' })
     this.app.register(gameRoutes, { prefix: '/games' })
-    this.app.register(gameStudioRoutes, { prefix: '/gameStudio' })
     this.app.register(ratingRoutes, { prefix: '/rating' })
-    this.app.register(platformsRoutes, { prefix: '/platform' })
-    this.app.register(gameLaunchersRoutes, { prefix: 'gameLauncher' })
     this.app.register(userGameStatusRoutes, { prefix: '/status' })
   }
 

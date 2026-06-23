@@ -6,7 +6,10 @@ import { CreateUserDTO } from '../dtos/user.dto'
 import { generateFromEmail } from 'unique-username-generator'
 
 export class AuthService {
-  constructor(private authRepository: AuthRepository, private jwt: JWT) {}
+  constructor(
+    private authRepository: AuthRepository,
+    private jwt: JWT
+  ) {}
 
   async generateTokens(userId: string) {
     const accessToken = this.jwt.sign({ userId }, { expiresIn: '15m' })
@@ -156,13 +159,18 @@ export class AuthService {
       user = await this.authRepository.findByEmail(discordUser.email)
 
       if (user) {
-        user = await this.authRepository.linkDiscord(user.id, discordUser.id)
+        user = await this.authRepository.linkDiscord(
+          user.id,
+          discordUser.id,
+          profilePicture
+        )
       } else {
+        const hashedPassword = await bcrypt.hash(crypto.randomUUID(), 10)
         user = await this.authRepository.createWithDiscord({
           email: discordUser.email,
           userName: `${discordUser.username}`,
           discordId: discordUser.id,
-          password: crypto.randomUUID(),
+          password: hashedPassword,
           profilePicture
         })
       }

@@ -1,7 +1,7 @@
 import z from 'zod'
 
 export const RatingParamsSchema = z.object({
-  gameId: z.string().uuid()
+  igdbId: z.coerce.number().int()
 })
 
 export const RatingBodySchema = z.object({

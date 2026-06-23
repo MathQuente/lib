@@ -1,267 +1,117 @@
-import { CreateGameDTO, UpdateGameDTO } from '../dtos/game.dto'
 import { ClientError } from '../errors/client-error'
-import { GameRepository } from '../repositories/games.repository'
+import { IGDBGame } from '../types/igdb'
+import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { RatingRepository } from '../repositories/rating.repository'
+import { IGDBService } from './igdb.service'
 
 export class GameService {
-  private itemsPerPage = 36
-
   constructor(
-    private gameRepository: GameRepository,
-    private ratingRepository: RatingRepository
+    private ratingRepository: RatingRepository,
+    private gameCacheRepository: GameCacheRepository
   ) {}
 
-  async createGame(data: CreateGameDTO) {
-    const isGameNameAlreadyUsed = await this.gameRepository.findByName(
-      data.gameName
-    )
-
-    if (isGameNameAlreadyUsed) {
-      throw new ClientError('This game name is already used.', 409)
-    }
-
-    const game = await this.gameRepository.create(data)
+  private formatGame(game: IGDBGame, siteRating: number | null = null) {
+    const developers = game.involved_companies
+      ?.filter(c => c.developer)
+      .map(c => c.company.name)
+    const publishers = game.involved_companies
+      ?.filter(c => c.publisher)
+      .map(c => c.company.name)
 
     return {
-      game: {
-        id: game.id,
-        gameName: game.gameName
-      }
+      igdbId: game.id,
+      name: game.name,
+      coverUrl: IGDBService.formatCoverUrl(game.cover?.url),
+      summary: game.summary,
+      genres: game.genres?.map(g => g.name),
+      platforms: game.platforms?.map(p => p.name),
+      releaseDate: game.first_release_date,
+      siteRating,
+      developers: developers && developers.length > 0 ? developers : undefined,
+      publishers: publishers && publishers.length > 0 ? publishers : undefined
     }
   }
 
-  async deleteGame(gameId: string) {
-    const gameHasBeenRemoved = await this.gameRepository.findById(gameId)
-
-    if (!gameHasBeenRemoved) {
-      throw new ClientError('This game has been already removed.', 404)
-    }
-
-    const game = await this.gameRepository.delete(gameId)
-
-    return {
-      game: {
-        id: game.id,
-        gameName: game.gameName
-      }
-    }
+  private async enrichWithSiteRatings(games: IGDBGame[]) {
+    const igdbIds = games.map(g => g.id)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+    return games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
   }
 
   async findAllGames(
-    pageIndex: number,
     query: string | undefined,
-    sortBy: 'gameName' | 'dateRelease' | 'rating',
-    sortOrder: 'asc' | 'desc' = 'asc',
-    limit?: number
-  ) {
-    this.itemsPerPage = limit || this.itemsPerPage
-
-    const [games, total] = await Promise.all([
-      this.gameRepository.findManyGames(
-        pageIndex,
-        this.itemsPerPage,
-        query,
-        sortBy,
-        sortOrder
-      ),
-      this.gameRepository.countGames(query)
-    ])
-
-    return {
-      games: games.map(game => ({
-        id: game?.id,
-        gameName: game?.gameName,
-        gameBanner: game?.gameBanner,
-        gameLaunchers: game?.gameLaunchers.map(launcher => ({
-          dateRelease: launcher.dateRelease,
-          platformId: launcher.platformId,
-          platforms: {
-            id: launcher.platforms.id,
-            platformName: launcher.platforms.platformName
-          }
-        })),
-        platforms: game?.platforms.map(platform => ({
-          id: platform.id,
-          platformName: platform.platformName
-        })),
-        summary: game?.summary,
-        isDlc: game?.isDlc
-      })),
-      total
-    }
-  }
-
-  async findFeaturedGames() {
-    const mostRatedGames = await this.gameRepository.findManyGamesByMostRating()
-    const trendingGames = await this.gameRepository.findManyGamesByTrending()
-    const recentGames = await this.gameRepository.findManyGamesByRecentDate()
-    const futureGames = await this.gameRepository.findManyGamesByFutureRelease()
-
-    const mostRatedGamesWithAvg = await Promise.all(
-      mostRatedGames.map(async game => {
-        const avgRatingOfGame =
-          await this.ratingRepository.findAverageRatingOfGame(game!.id)
-        return {
-          ...game,
-          ratingAvg: avgRatingOfGame._avg.value
-        }
-      })
-    )
-
-    return {
-      mostRatedGames: mostRatedGamesWithAvg,
-      trendingGames,
-      recentGames,
-      futureGames
-    }
-  }
-
-  async findComingSoonGames(
+    limit: number,
     pageIndex: number,
-    query: string | undefined,
-    sortBy: 'gameName' | 'dateRelease' | 'rating',
-    sortOrder: 'asc' | 'desc' = 'asc'
+    sortBy: 'name' | 'release_date' | 'rating',
+    sortOrder: 'asc' | 'desc'
   ) {
-    const games = await this.gameRepository.findManyGamesByFutureRelease(
+    const { games: cached, total } = await this.gameCacheRepository.findMany({
+      limit,
       pageIndex,
-      this.itemsPerPage,
-      query,
       sortBy,
-      sortOrder
-    )
+      sortOrder,
+      query
+    })
 
-    const total = await this.gameRepository.countComingSoonGames(query)
+    const igdbIds = cached.map(g => g.igdbId)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+
+    const games = cached.map(g => ({
+      igdbId: g.igdbId,
+      name: g.name,
+      coverUrl: g.coverUrl ?? null,
+      summary: g.summary ?? undefined,
+      genres: g.genres.length > 0 ? g.genres : undefined,
+      platforms: g.platforms.length > 0 ? g.platforms : undefined,
+      releaseDate: g.releaseDate ?? undefined,
+      siteRating: ratingsMap.get(g.igdbId) ?? null
+    }))
 
     return { games, total }
   }
 
-  async findGameById(gameId: string) {
-    const game = await this.gameRepository.findById(gameId)
+  async findGameById(igdbId: number) {
+    const game = await IGDBService.getGameById(igdbId)
 
-    if (!game || !game.userGames) {
+    if (!game) {
       throw new ClientError('Game not found.', 404)
     }
 
-    const ratings = await this.ratingRepository.findRatingDistribution(gameId)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames([igdbId])
+    return { game: this.formatGame(game, ratingsMap.get(igdbId) ?? null) }
+  }
 
-    const amountOfRatings = await this.ratingRepository.countRatingByName(
-      gameId
+  async findFeaturedGames() {
+    const { mostRated, trending, recent, future } =
+      await IGDBService.getFeaturedGames()
+
+    const allGames = [...mostRated, ...trending, ...recent, ...future]
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
+      allGames.map(g => g.id)
     )
-
-    const avgRatingOfGame = await this.ratingRepository.findAverageRatingOfGame(
-      gameId
-    )
-
-    const statusCounts = {
-      PLAYED: 0,
-      PLAYING: 0,
-      PAUSED: 0,
-      BACKLOG: 0,
-      WISHLIST: 0
-    }
-
-    for (const entry of game.userGames) {
-      const status = entry.UserGamesStatus.status
-      if (statusCounts[status] !== undefined) {
-        statusCounts[status]++
-      }
-    }
 
     return {
-      game: {
-        id: game.id,
-        gameName: game.gameName,
-        gameBanner: game.gameBanner,
-        gameStudios: game.gameStudios.map(studio => ({
-          id: studio.id,
-          studioName: studio.studioName
-        })),
-        categories: game.categories.map(category => ({
-          id: category.id,
-          categoryName: category.categoryName
-        })),
-        publishers: game.publishers.map(publisher => ({
-          id: publisher.id,
-          publisherName: publisher.publisherName
-        })),
-        platforms: game.platforms.map(platform => ({
-          id: platform.id,
-          platformName: platform.platformName
-        })),
-        summary: game.summary,
-        gameLaunchers: game.gameLaunchers.map(launcher => ({
-          dateRelease: launcher.dateRelease,
-          platform: {
-            id: launcher.platforms.id,
-            platformName: launcher.platforms.platformName
-          }
-        })),
-        isDlc: game.isDlc,
-        dlcs: game.dlcs.map(dlc => ({
-          id: dlc.id,
-          gameBanner: dlc.gameBanner,
-          gameName: dlc.gameName
-        })),
-        ratingAvg: avgRatingOfGame._avg.value,
-        ratings: ratings.map(rating => ({
-          rating: rating.value,
-          count: rating._count.value
-        })),
-        amountOfRatings: amountOfRatings.value,
-        userGames: statusCounts,
-        parentGame: game.parentGame
-          ? {
-              id: game.parentGame.id,
-              gameName: game.parentGame.gameName,
-              gameBanner: game.parentGame.gameBanner
-            }
-          : null
-      }
+      mostRatedGames: mostRated.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
+      trendingGames: trending.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
+      recentGames: recent.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
+      futureGames: future.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
     }
   }
 
-  async findSimilarGames(gameId: string) {
-    const original = this.findGameById(gameId)
-
-    if (!original) return []
-
-    const categoryIds = (await original).game.categories.map(c => c.id)
-
-    const studioIds = (await original).game.gameStudios.map(s => s.id)
-
-    const samestudio = await this.gameRepository.findGamesFromSameStudio(
-      gameId,
-      studioIds
+  async findComingSoonGames(limit = 20) {
+    const games = await IGDBService.getComingSoonGames(limit)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
+      games.map(g => g.id)
     )
-
-    const remaining = await this.gameRepository.findCategoriesOfGameById(
-      gameId,
-      samestudio,
-      categoryIds
-    )
-
-    return [...samestudio, ...remaining]
+    const formatted = games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+    return { games: formatted, total: formatted.length }
   }
 
-  async updateGame(gameId: string, data: UpdateGameDTO) {
-    const gameAlreadyExist = await this.gameRepository.findById(gameId)
-
-    if (!gameAlreadyExist) {
-      throw new ClientError('Game not found.', 404)
-    }
-
-    if (data.gameName && data.gameName !== gameAlreadyExist.gameName) {
-      const isGameNameAlreadyUsed = await this.gameRepository.findByName(
-        data.gameName
-      )
-
-      if (isGameNameAlreadyUsed) {
-        throw new ClientError('Game name is already used', 409)
-      }
-    }
-
-    const game = await this.gameRepository.update(gameId, data)
-
-    return game
+  async findSimilarGames(igdbId: number) {
+    const games = await IGDBService.getSimilarGames(igdbId)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
+      games.map(g => g.id)
+    )
+    return games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
   }
 }
