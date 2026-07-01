@@ -10,7 +10,13 @@ export const IGDBGameSchema = z.object({
   releaseDate: z.number().optional(),
   siteRating: z.number().nullable(),
   developers: z.array(z.string()).optional(),
-  publishers: z.array(z.string()).optional()
+  publishers: z.array(z.string()).optional(),
+  // IGDB category id (0=main_game, 1=dlc_addon, 2=expansion, 8=remake, 9=remaster, ...),
+  // or -1 when IGDB has no category for this entry (common even for real DLCs/remasters).
+  category: z.number(),
+  // Presence of parentGameId is the reliable "this is DLC/related content" signal,
+  // since category is often missing even when this isn't.
+  parentGameId: z.number().nullable()
 })
 
 export const GameParamsSchema = z.object({
@@ -25,8 +31,14 @@ export const GameQueryStringSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).catch('desc')
 })
 
+export const ComingSoonQueryStringSchema = z.object({
+  limit: z.coerce.number().default(36),
+  pageIndex: z.coerce.number().default(0)
+})
+
 export const GetGameResponseSchema = z.object({
-  game: IGDBGameSchema
+  game: IGDBGameSchema,
+  relatedGames: z.array(IGDBGameSchema)
 })
 
 export const GetGamesResponseSchema = z.object({

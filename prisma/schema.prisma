@@ -94,11 +94,17 @@ model GameCache {
   summary     String?
   genres      String[]
   platforms   String[]
-  releaseDate Int?     @map("release_date")
-  syncedAt    DateTime @default(now()) @updatedAt @map("synced_at")
+  releaseDate      Int?     @map("release_date")
+  hypes            Int?     @map("hypes")
+  totalRatingCount Int?     @map("total_rating_count")
+  category         Int?     @map("category")
+  parentGameId     Int?     @map("parent_game_id")
+  syncedAt         DateTime @default(now()) @updatedAt @map("synced_at")
 
   @@index([name])
   @@index([releaseDate])
+  @@index([hypes])
+  @@index([totalRatingCount])
   @@map("games_cache")
 }
 

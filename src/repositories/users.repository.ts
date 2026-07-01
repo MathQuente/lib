@@ -85,6 +85,20 @@ export class UserRepository {
     })
   }
 
+  async findTrendingIgdbIds(limit: number, since: Date): Promise<{ igdbId: number; playingCount: number }[]> {
+    const results = await prisma.userGame.groupBy({
+      by: ['igdbId'],
+      where: {
+        updatedAt: { gte: since },
+        UserGamesStatus: { status: 'PLAYING' }
+      },
+      _count: { igdbId: true },
+      orderBy: { _count: { igdbId: 'desc' } },
+      take: limit
+    })
+    return results.map(r => ({ igdbId: r.igdbId, playingCount: r._count.igdbId }))
+  }
+
   async findManyGamesOfUser(userId: string, filterStatus?: Status | string) {
     return prisma.userGame.findMany({
       where: {

@@ -8,9 +8,9 @@ export class GameController {
   async getGame(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = GameSchema.GameParamsSchema.parse(request.params)
 
-    const { game } = await this.gameService.findGameById(igdbId)
+    const { game, relatedGames } = await this.gameService.findGameById(igdbId)
 
-    return reply.status(200).send({ game })
+    return reply.status(200).send({ game, relatedGames })
   }
 
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
@@ -39,9 +39,9 @@ export class GameController {
   }
 
   async getComingSoonGames(request: FastifyRequest, reply: FastifyReply) {
-    const { limit } = GameSchema.GameQueryStringSchema.parse(request.query)
+    const { limit, pageIndex } = GameSchema.ComingSoonQueryStringSchema.parse(request.query)
 
-    const { games, total } = await this.gameService.findComingSoonGames(limit)
+    const { games, total } = await this.gameService.findComingSoonGames(limit, pageIndex)
 
     return reply.send({ games, total })
   }

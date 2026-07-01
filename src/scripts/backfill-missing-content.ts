@@ -12,24 +12,21 @@ function sleep(ms: number) {
 
 async function main() {
   const repo = new GameCacheRepository()
+  const maxId = await repo.getMaxIgdbId()
 
-  const lastId = await repo.getMaxIgdbId()
-  const existingCount = await repo.count()
-
-  console.log(`Games already cached: ${existingCount}`)
-  console.log(`Starting from IGDB id > ${lastId}`)
+  console.log(`Backfilling DLCs/expansions/remasters skipped by earlier syncs (id <= ${maxId})...`)
   console.log('Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n')
 
   let totalSynced = 0
-  let currentLastId = lastId
+  let currentLastId = 0
   let batch = 0
 
   while (true) {
     batch++
-    const games = await IGDBService.fetchForSync(currentLastId, BATCH_SIZE)
+    const games = await IGDBService.fetchMissingReleasedContent(currentLastId, maxId, BATCH_SIZE)
 
     if (games.length === 0) {
-      console.log('\nSync complete — no more games.')
+      console.log('\nBackfill complete — no more missing content.')
       break
     }
 
@@ -38,14 +35,12 @@ async function main() {
     currentLastId = games[games.length - 1].id
     totalSynced += games.length
 
-    process.stdout.write(
-      `\rBatch ${batch} | +${games.length} games | Total: ${existingCount + totalSynced} | Last ID: ${currentLastId}`
-    )
+    process.stdout.write(`\rBatch ${batch} | +${games.length} games | Total added: ${totalSynced} | Last ID: ${currentLastId}`)
 
     await sleep(DELAY_MS)
   }
 
-  console.log(`\nDone. Total synced this run: ${totalSynced}`)
+  console.log(`\nDone. Total added this run: ${totalSynced}`)
   await prisma.$disconnect()
 }
 

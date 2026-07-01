@@ -4,13 +4,15 @@ import { GameService } from '../services/games.service'
 import { GameController } from '../controllers/games.controller'
 import { RatingRepository } from '../repositories/rating.repository'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
+import { UserRepository } from '../repositories/users.repository'
 import * as GameSchema from '../schemas/game.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function gameRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const gameCacheRepository = new GameCacheRepository()
-  const gameService = new GameService(ratingRepository, gameCacheRepository)
+  const userRepository = new UserRepository()
+  const gameService = new GameService(ratingRepository, gameCacheRepository, userRepository)
   const gameController = new GameController(gameService)
   app.withTypeProvider<ZodTypeProvider>().get(
     '/featured',
@@ -29,7 +31,7 @@ export async function gameRoutes(app: FastifyInstance) {
     '/comingSoon',
     {
       schema: {
-        querystring: GameSchema.GameQueryStringSchema,
+        querystring: GameSchema.ComingSoonQueryStringSchema,
         response: {
           200: GameSchema.GetGamesResponseSchema,
           500: ErrorSchemas.InternalServerError

@@ -2,12 +2,16 @@ import { ClientError } from '../errors/client-error'
 import { IGDBGame } from '../types/igdb'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { RatingRepository } from '../repositories/rating.repository'
+import { UserRepository } from '../repositories/users.repository'
 import { IGDBService } from './igdb.service'
+
+const TRENDING_WINDOW_DAYS = 30
 
 export class GameService {
   constructor(
     private ratingRepository: RatingRepository,
-    private gameCacheRepository: GameCacheRepository
+    private gameCacheRepository: GameCacheRepository,
+    private userRepository: UserRepository
   ) {}
 
   private formatGame(game: IGDBGame, siteRating: number | null = null) {
@@ -28,7 +32,9 @@ export class GameService {
       releaseDate: game.first_release_date,
       siteRating,
       developers: developers && developers.length > 0 ? developers : undefined,
-      publishers: publishers && publishers.length > 0 ? publishers : undefined
+      publishers: publishers && publishers.length > 0 ? publishers : undefined,
+      category: game.category ?? -1,
+      parentGameId: game.parent_game ?? null
     }
   }
 
@@ -64,7 +70,9 @@ export class GameService {
       genres: g.genres.length > 0 ? g.genres : undefined,
       platforms: g.platforms.length > 0 ? g.platforms : undefined,
       releaseDate: g.releaseDate ?? undefined,
-      siteRating: ratingsMap.get(g.igdbId) ?? null
+      siteRating: ratingsMap.get(g.igdbId) ?? null,
+      category: g.category ?? -1,
+      parentGameId: g.parentGameId ?? null
     }))
 
     return { games, total }
@@ -77,34 +85,86 @@ export class GameService {
       throw new ClientError('Game not found.', 404)
     }
 
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames([igdbId])
-    return { game: this.formatGame(game, ratingsMap.get(igdbId) ?? null) }
-  }
-
-  async findFeaturedGames() {
-    const { mostRated, trending, recent, future } =
-      await IGDBService.getFeaturedGames()
-
-    const allGames = [...mostRated, ...trending, ...recent, ...future]
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
-      allGames.map(g => g.id)
-    )
+    const relatedGames = await IGDBService.getRelatedGames(igdbId)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames([
+      igdbId,
+      ...relatedGames.map(g => g.id)
+    ])
 
     return {
-      mostRatedGames: mostRated.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
-      trendingGames: trending.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
-      recentGames: recent.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
-      futureGames: future.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+      game: this.formatGame(game, ratingsMap.get(igdbId) ?? null),
+      relatedGames: relatedGames.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
     }
   }
 
-  async findComingSoonGames(limit = 20) {
-    const games = await IGDBService.getComingSoonGames(limit)
+  async findFeaturedGames() {
+    const [trending, mostRated, recent, future] = await Promise.all([
+      this.findTrendingGames(6),
+      this.findMostRatedGames(6),
+      IGDBService.getRecentlyReleasedGames(6),
+      IGDBService.getComingSoonGames(6)
+    ])
+
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
+      [...recent, ...future.games].map(g => g.id)
+    )
+
+    return {
+      mostRatedGames: mostRated.games,
+      trendingGames: trending.games,
+      recentGames: recent.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
+      futureGames: future.games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+    }
+  }
+
+  async findComingSoonGames(limit = 20, pageIndex = 0) {
+    const { games, total } = await IGDBService.getComingSoonGames(limit, pageIndex)
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
       games.map(g => g.id)
     )
     const formatted = games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
-    return { games: formatted, total: formatted.length }
+    return { games: formatted, total }
+  }
+
+  private async findReleasedGamesByRankedIds(
+    rankedIds: number[],
+    siteRatings: Map<number, number | null>
+  ) {
+    const cutoff = IGDBService.getReleaseCutoffEpoch()
+    const games = await IGDBService.getGamesByIds(rankedIds)
+    const gamesById = new Map(games.map(g => [g.id, g]))
+
+    const ordered = rankedIds
+      .map(id => gamesById.get(id))
+      .filter(
+        (g): g is IGDBGame =>
+          !!g && g.first_release_date != null && g.first_release_date < cutoff
+      )
+
+    return ordered.map(g => this.formatGame(g, siteRatings.get(g.id) ?? null))
+  }
+
+  async findTrendingGames(limit = 20) {
+    const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    const trending = await this.userRepository.findTrendingIgdbIds(limit, since)
+    if (trending.length === 0) return { games: [], total: 0 }
+
+    const igdbIds = trending.map(t => t.igdbId)
+    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+    const games = await this.findReleasedGamesByRankedIds(igdbIds, ratingsMap)
+
+    return { games, total: games.length }
+  }
+
+  async findMostRatedGames(limit = 20) {
+    const topRated = await this.ratingRepository.findTopRatedIgdbIds(limit)
+    if (topRated.length === 0) return { games: [], total: 0 }
+
+    const igdbIds = topRated.map(r => r.igdbId)
+    const ratingsMap = new Map<number, number | null>(topRated.map(r => [r.igdbId, r.avgRating]))
+    const games = await this.findReleasedGamesByRankedIds(igdbIds, ratingsMap)
+
+    return { games, total: games.length }
   }
 
   async findSimilarGames(igdbId: number) {

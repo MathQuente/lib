@@ -72,6 +72,10 @@ Table games_cache {
   genres String[] [not null]
   platforms String[] [not null]
   releaseDate Int
+  hypes Int
+  totalRatingCount Int
+  category Int
+  parentGameId Int
   syncedAt DateTime [default: `now()`, not null]
 }
 
