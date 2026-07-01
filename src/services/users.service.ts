@@ -146,7 +146,8 @@ export class UserService {
         totalPerStatus: totalPerStatus.map(item => ({
           status: item.status,
           totalGames: item._count.userGames
-        }))
+        })),
+        total: 0
       }
     }
 
@@ -391,8 +392,8 @@ export class UserService {
       }
     }
 
-    const { trending } = await IGDBService.getFeaturedGames()
-    const notOwned = trending.filter(g => !ownedIds.has(g.id))
+    const recent = await IGDBService.getRecentlyReleasedGames()
+    const notOwned = recent.filter(g => !ownedIds.has(g.id))
 
     if (notOwned.length > 0) {
       const picked = notOwned[randomInt(notOwned.length)]
