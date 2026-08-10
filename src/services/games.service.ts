@@ -4,14 +4,17 @@ import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { IGDBService } from './igdb.service'
+import { CacheRepository } from '../repositories/cache.repository'
 
 const TRENDING_WINDOW_DAYS = 30
+const GAME_CACHE_TTL_SECONDS = 60 * 60
 
 export class GameService {
   constructor(
     private ratingRepository: RatingRepository,
     private gameCacheRepository: GameCacheRepository,
-    private userRepository: UserRepository
+    private userRepository: UserRepository,
+    private cacheRepository: CacheRepository
   ) {}
 
   private formatGame(game: IGDBGame, siteRating: number | null = null) {
@@ -79,13 +82,29 @@ export class GameService {
   }
 
   async findGameById(igdbId: number) {
-    const game = await IGDBService.getGameById(igdbId)
+    const key = `game:${igdbId}`
 
-    if (!game) {
-      throw new ClientError('Game not found.', 404)
+    const cached = await this.cacheRepository.get(key)
+
+    let game: IGDBGame | null
+    let relatedGames: IGDBGame[]
+
+    if (cached !== null) {
+      const parsed = cached as { game: IGDBGame; relatedGames: IGDBGame[] }
+      game = parsed.game
+      relatedGames = parsed.relatedGames
+    } else {
+      game = await IGDBService.getGameById(igdbId)
+
+      if (!game) {
+        throw new ClientError('Game not found.', 404)
+      }
+
+      relatedGames = await IGDBService.getRelatedGames(igdbId)
+
+      await this.cacheRepository.set(key, {game, relatedGames }, GAME_CACHE_TTL_SECONDS)
     }
 
-    const relatedGames = await IGDBService.getRelatedGames(igdbId)
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames([
       igdbId,
       ...relatedGames.map(g => g.id)
@@ -102,23 +121,40 @@ export class GameService {
       this.findTrendingGames(6),
       this.findMostRatedGames(6),
       IGDBService.getRecentlyReleasedGames(6),
-      IGDBService.getComingSoonGames(6)
+      this.findComingSoonGames(6)
     ])
 
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
-      [...recent, ...future.games].map(g => g.id)
+      [...recent].map(g => g.id)
     )
 
     return {
       mostRatedGames: mostRated.games,
       trendingGames: trending.games,
       recentGames: recent.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
-      futureGames: future.games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+      futureGames: future.games
     }
   }
 
   async findComingSoonGames(limit = 20, pageIndex = 0) {
-    const { games, total } = await IGDBService.getComingSoonGames(limit, pageIndex)
+    const key = `games:comingSoon:${limit}:${pageIndex}`
+    let games: IGDBGame[]
+    let total: number
+    const cached = await this.cacheRepository.get(key)
+
+    if (cached !== null) {
+      const parsed = cached as { games: IGDBGame[]; total: number }
+      games = parsed.games
+      total = parsed.total
+    } else {
+      const results = await IGDBService.getComingSoonGames(limit, pageIndex)
+
+      games = results.games
+      total = results.total
+
+      await this.cacheRepository.set(key, {games, total }, GAME_CACHE_TTL_SECONDS)
+    }
+
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
       games.map(g => g.id)
     )
@@ -131,7 +167,32 @@ export class GameService {
     siteRatings: Map<number, number | null>
   ) {
     const cutoff = IGDBService.getReleaseCutoffEpoch()
-    const games = await IGDBService.getGamesByIds(rankedIds)
+    const keys = rankedIds.map(id => `game:meta:${id}`)
+    const cachedResults = await Promise.all(
+      keys.map(key => this.cacheRepository.get(key))
+    )
+
+    const cachedGames: IGDBGame[] = []
+    const missingIds: number[] = []
+
+    rankedIds.forEach((id, i) => {
+      const cached = cachedResults[i]
+      if (cached !== null) {
+        cachedGames.push(cached as IGDBGame)
+      } else {
+        missingIds.push(id)
+      }
+    })
+
+    const fetched = await IGDBService.getGamesByIds(missingIds)
+
+     await Promise.all(
+       fetched.map(g =>
+         this.cacheRepository.set(`game:meta:${g.id}`, g, GAME_CACHE_TTL_SECONDS)
+       )
+     )
+
+    const games = [...cachedGames, ...fetched]
     const gamesById = new Map(games.map(g => [g.id, g]))
 
     const ordered = rankedIds
@@ -168,7 +229,22 @@ export class GameService {
   }
 
   async findSimilarGames(igdbId: number) {
-    const games = await IGDBService.getSimilarGames(igdbId)
+    const key = `game:similar:${igdbId}`
+
+    const cached = await this.cacheRepository.get(key)
+
+    let games: IGDBGame[]
+
+    if (cached !== null) {
+      const parsed = cached as { games: IGDBGame[] }
+
+      games = parsed.games
+    } else {
+      games = await IGDBService.getSimilarGames(igdbId)
+
+      await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
+    }
+
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
       games.map(g => g.id)
     )

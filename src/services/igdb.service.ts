@@ -1,3 +1,4 @@
+import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBGame } from '../types/igdb'
 
 export class IGDBService {
@@ -25,7 +26,10 @@ export class IGDBService {
     return this.accessToken
   }
 
-  private static async countRequest(endpoint: string, body: string): Promise<number> {
+  private static async countRequest(
+    endpoint: string,
+    body: string
+  ): Promise<number> {
     const token = await this.getAccessToken()
     const response = await fetch(`https://api.igdb.com/v4/${endpoint}/count`, {
       method: 'POST',
@@ -36,7 +40,7 @@ export class IGDBService {
       },
       body
     })
-    const data = await response.json() as { count?: number }
+    const data = (await response.json()) as { count?: number }
     return data.count ?? 0
   }
 
@@ -54,14 +58,18 @@ export class IGDBService {
     })
 
     const data = await response.json()
-    if (!Array.isArray(data)) {
-      console.error('[IGDB] unexpected response', { status: response.status, data })
-      return [] as T
+    if (
+      !response.ok ||
+      !Array.isArray(data) ||
+      (data.length > 0 && 'title' in data[0])
+    ) {
+      console.error('[IGDB] request failed', {
+        status: response.status,
+        data
+      })
+      throw new IGDBRequestError('[IGDB] request failed', data)
     }
-    if (data.length > 0 && 'title' in data[0]) {
-      console.error('[IGDB] API error', { error: data[0] })
-      return [] as T
-    }
+
     return data as T
   }
 
@@ -119,11 +127,22 @@ export class IGDBService {
       .toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' })
       .split('-')
       .map(Number)
-    const tomorrowUTC = Date.UTC(year, month - 1, day + 1, this.RELEASE_CUTOFF_UTC_OFFSET_HOURS, 0, 0)
+    const tomorrowUTC = Date.UTC(
+      year,
+      month - 1,
+      day + 1,
+      this.RELEASE_CUTOFF_UTC_OFFSET_HOURS,
+      0,
+      0
+    )
     return Math.floor(tomorrowUTC / 1000)
   }
 
-  static async searchGames(query: string, limit = 10, pageIndex = 0): Promise<{ games: IGDBGame[]; total: number }> {
+  static async searchGames(
+    query: string,
+    limit = 10,
+    pageIndex = 0
+  ): Promise<{ games: IGDBGame[]; total: number }> {
     const where = `search "${query}"`
     const [games, rawTotal] = await Promise.all([
       this.request<IGDBGame[]>(
@@ -194,7 +213,10 @@ export class IGDBService {
     return { games, total: Math.min(rawTotal, 10000) }
   }
 
-  static async fetchForSync(lastId: number, limit: number): Promise<IGDBGame[]> {
+  static async fetchForSync(
+    lastId: number,
+    limit: number
+  ): Promise<IGDBGame[]> {
     return this.request(
       'games',
       `fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
@@ -207,7 +229,11 @@ export class IGDBService {
    * for that previously-skipped content so it can be added to the cache.
    * Quality is filtered downstream via total_rating_count/hypes, not here.
    */
-  static async fetchMissingReleasedContent(lastId: number, maxId: number, limit: number): Promise<IGDBGame[]> {
+  static async fetchMissingReleasedContent(
+    lastId: number,
+    maxId: number,
+    limit: number
+  ): Promise<IGDBGame[]> {
     return this.request(
       'games',
       `fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
@@ -223,9 +249,13 @@ export class IGDBService {
     return new Map(results.map(r => [r.id, r.hypes ?? 0]))
   }
 
-  static async getTotalRatingCountsByIds(ids: number[]): Promise<Map<number, number>> {
+  static async getTotalRatingCountsByIds(
+    ids: number[]
+  ): Promise<Map<number, number>> {
     if (ids.length === 0) return new Map()
-    const results = await this.request<{ id: number; total_rating_count?: number }[]>(
+    const results = await this.request<
+      { id: number; total_rating_count?: number }[]
+    >(
       'games',
       `where id = (${ids.join(',')}); fields id,total_rating_count; limit ${Math.min(ids.length, 500)};`
     )
@@ -236,12 +266,17 @@ export class IGDBService {
     ids: number[]
   ): Promise<Map<number, { category: number; parentGameId: number | null }>> {
     if (ids.length === 0) return new Map()
-    const results = await this.request<{ id: number; category?: number; parent_game?: number }[]>(
+    const results = await this.request<
+      { id: number; category?: number; parent_game?: number }[]
+    >(
       'games',
       `where id = (${ids.join(',')}); fields id,category,parent_game; limit ${Math.min(ids.length, 500)};`
     )
     return new Map(
-      results.map(r => [r.id, { category: r.category ?? -1, parentGameId: r.parent_game ?? null }])
+      results.map(r => [
+        r.id,
+        { category: r.category ?? -1, parentGameId: r.parent_game ?? null }
+      ])
     )
   }
 

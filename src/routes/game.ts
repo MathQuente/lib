@@ -7,12 +7,14 @@ import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { UserRepository } from '../repositories/users.repository'
 import * as GameSchema from '../schemas/game.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
+import { CacheRepository } from '../repositories/cache.repository'
 
 export async function gameRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const gameCacheRepository = new GameCacheRepository()
   const userRepository = new UserRepository()
-  const gameService = new GameService(ratingRepository, gameCacheRepository, userRepository)
+  const cacheRepository = new CacheRepository()
+  const gameService = new GameService(ratingRepository, gameCacheRepository, userRepository, cacheRepository)
   const gameController = new GameController(gameService)
   app.withTypeProvider<ZodTypeProvider>().get(
     '/featured',
