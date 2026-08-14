@@ -16,14 +16,18 @@ export class UserService {
     private ratingRepository: RatingRepository
   ) {}
 
+  private async requireUser(userId: string) {
+    const user = await this.userRepository.findUserById(userId)
+    if (!user) throw new ClientError('User not found.', 404)
+    return user
+  }
+
   async addGameToUserLibrary(
     igdbId: number,
     userId: string,
     statusIds: number
   ) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const existing = await this.userRepository.findUserGame(igdbId, userId)
 
@@ -42,17 +46,13 @@ export class UserService {
   }
 
   async delete(userId: string) {
-    const existingUser = await this.userRepository.findUserById(userId)
-
-    if (!existingUser) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     return { user: await this.userRepository.deleteUser(userId) }
   }
 
   async findMe(userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found')
+    const user = await this.requireUser(userId)
 
     return {
       user: {
@@ -66,9 +66,7 @@ export class UserService {
   }
 
   async findById(userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    const user = await this.requireUser(userId)
 
     const gamesAmount = await this.userRepository.countUserGames(userId)
 
@@ -85,9 +83,7 @@ export class UserService {
   }
 
   async findUserGameStatus(igdbId: number, userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const userGameStatus = await this.userRepository.findUserGameStatus(
       igdbId,
@@ -123,9 +119,7 @@ export class UserService {
     sortBy: 'gameName' | 'dateRelease' | 'rating',
     sortOrder: 'asc' | 'desc' = 'asc'
   ) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const userGames = await this.userRepository.findManyGamesOfUser(
       userId,
@@ -226,9 +220,7 @@ export class UserService {
   }
 
   async removeGame(igdbId: number, userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const existing = await this.userRepository.findUserGame(igdbId, userId)
 
@@ -252,9 +244,7 @@ export class UserService {
   async updateGame(igdbId: number, userId: string, statusId: number) {
     if (!statusId) throw new ClientError('You need to pass your status', 400)
 
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
@@ -302,9 +292,7 @@ export class UserService {
   }
 
   async update(userId: string, data: UpdateUserDTO) {
-    const userAlreadyExist = await this.userRepository.findUserById(userId)
-
-    if (!userAlreadyExist) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const user = await this.userRepository.updateUser(userId, {
       profilePicture: data.profilePicture,
@@ -316,9 +304,7 @@ export class UserService {
   }
 
   async findUserGameStats(igdbId: number, userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const { stats } = await this.userRepository.findUserGameStats(
       igdbId,
@@ -333,9 +319,7 @@ export class UserService {
     igdbId: number,
     incrementValue: number
   ) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const userGameStats = await this.userRepository.updateUserGamePlayedCount(
       userId,
@@ -347,8 +331,7 @@ export class UserService {
   }
 
   async findGamesToDisplay(userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    await this.requireUser(userId)
 
     const userGames = await this.userRepository.findManyGamesOfUser(userId)
 

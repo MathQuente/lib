@@ -26,13 +26,13 @@ export const GameParamsSchema = z.object({
 export const GameQueryStringSchema = z.object({
   query: z.string().optional(),
   pageIndex: z.coerce.number().default(0),
-  limit: z.coerce.number().default(20),
+  limit: z.coerce.number().min(1).max(100).default(20),
   sortBy: z.enum(['name', 'release_date', 'rating']).catch('release_date'),
   sortOrder: z.enum(['asc', 'desc']).catch('desc')
 })
 
 export const ComingSoonQueryStringSchema = z.object({
-  limit: z.coerce.number().default(36),
+  limit: z.coerce.number().min(1).max(100).default(36),
   pageIndex: z.coerce.number().default(0)
 })
 

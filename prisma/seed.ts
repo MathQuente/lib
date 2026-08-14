@@ -2624,9 +2624,7 @@ async function main() {
       summary:
         'A próxima entrada da série Grand Theft Auto, com Vice City como cenário principal.',
       categories: {
-        connectOrCreate: [
-          /* Action, Open World */
-        ]
+        connectOrCreate: [/* Action, Open World */]
       },
       gameStudios: {
         connectOrCreate: {
@@ -2696,9 +2694,7 @@ async function main() {
       summary:
         'O nono jogo principal de Resident Evil, retorno ao horror clássico em Raccoon City.',
       categories: {
-        connectOrCreate: [
-          /* Horror, Survival, Adventure */
-        ]
+        connectOrCreate: [/* Horror, Survival, Adventure */]
       },
       gameStudios: {
         connectOrCreate: {
@@ -2772,9 +2768,7 @@ async function main() {
       summary:
         'Remake do clássico MGS3, com gráficos modernos e novo modo multiplayer “Fox Hunt”.',
       categories: {
-        connectOrCreate: [
-          /* Action, Stealth */
-        ]
+        connectOrCreate: [/* Action, Stealth */]
       },
       gameStudios: {
         connectOrCreate: {
@@ -2847,9 +2841,7 @@ async function main() {
       summary:
         'RPG soulslike ambientado na China da Dinastia Ming, com protagonista pirateira amnésica.',
       categories: {
-        connectOrCreate: [
-          /* Action, RPG */
-        ]
+        connectOrCreate: [/* Action, RPG */]
       },
       gameStudios: {
         connectOrCreate: {

@@ -40,9 +40,7 @@ export const QueryStringSchema = z.object({
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional()
     .catch(undefined),
-  sortBy: z
-    .enum(['gameName', 'dateRelease', 'rating'])
-    .catch('gameName'),
+  sortBy: z.enum(['gameName', 'dateRelease', 'rating']).catch('gameName'),
   sortOrder: z.enum(['asc', 'desc']).catch('asc')
 })
 

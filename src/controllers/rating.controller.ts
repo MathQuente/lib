@@ -10,7 +10,11 @@ export class RatingController {
     const { value } = RatingSchema.RatingBodySchema.parse(request.body)
     const userId = request.user.userId
 
-    const { rating } = await this.ratingService.createRating(igdbId, value, userId)
+    const { rating } = await this.ratingService.createRating(
+      igdbId,
+      value,
+      userId
+    )
 
     return reply.status(201).send({ rating })
   }
@@ -19,7 +23,10 @@ export class RatingController {
     const { igdbId } = RatingSchema.RatingParamsSchema.parse(request.params)
     const userId = request.user.userId
 
-    const { rating } = await this.ratingService.findUniqueByUserGame(igdbId, userId)
+    const { rating } = await this.ratingService.findUniqueByUserGame(
+      igdbId,
+      userId
+    )
 
     return reply.send({ rating })
   }
@@ -42,7 +49,14 @@ export class RatingController {
   }
 
   async getAllRatings(request: FastifyRequest, reply: FastifyReply) {
-    const { ratings } = await this.ratingService.findManyRating()
+    const { limit, pageIndex } = RatingSchema.GetRatingsQueryStringSchema.parse(
+      request.query
+    )
+
+    const { ratings } = await this.ratingService.findManyRating(
+      pageIndex,
+      limit
+    )
 
     return reply.send({ ratings })
   }
@@ -58,7 +72,7 @@ export class RatingController {
   async getCountByGame(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = RatingSchema.RatingParamsSchema.parse(request.params)
 
-    const { ratings } = await this.ratingService.countRatingByName(igdbId)
+    const { ratings } = await this.ratingService.countRatingsByGame(igdbId)
 
     return reply.send({ ratings })
   }

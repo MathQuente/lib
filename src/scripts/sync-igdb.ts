@@ -2,13 +2,7 @@ import 'dotenv/config'
 import { prisma } from '../database/db'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
-
-const BATCH_SIZE = 500
-const DELAY_MS = 300
-
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+import { BATCH_SIZE, DELAY_MS, sleep } from './utils'
 
 async function main() {
   const repo = new GameCacheRepository()
@@ -18,7 +12,9 @@ async function main() {
 
   console.log(`Games already cached: ${existingCount}`)
   console.log(`Starting from IGDB id > ${lastId}`)
-  console.log('Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n')
+  console.log(
+    'Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n'
+  )
 
   let totalSynced = 0
   let currentLastId = lastId

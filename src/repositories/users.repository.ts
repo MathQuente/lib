@@ -1,6 +1,7 @@
 import { Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
+import { ClientError } from '../errors/client-error'
 
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
@@ -19,18 +20,20 @@ export class UserRepository {
     igdbId: number,
     completions: number = 1
   ) {
-    const userGame = await prisma.userGame.findUnique({
-      where: { userId_igdbId: { userId, igdbId } },
-      select: { id: true }
-    })
+    return prisma.$transaction(async tx => {
+      const userGame = await tx.userGame.findUnique({
+        where: { userId_igdbId: { userId, igdbId } },
+        select: { id: true }
+      })
 
-    if (!userGame) return null
+      if (!userGame) return null
 
-    return prisma.userGameStats.upsert({
-      where: { userGameId: userGame.id },
-      update: { completions },
-      create: { userGameId: userGame.id, completions },
-      select: { completions: true }
+      return tx.userGameStats.upsert({
+        where: { userGameId: userGame.id },
+        update: { completions },
+        create: { userGameId: userGame.id, completions },
+        select: { completions: true }
+      })
     })
   }
 
@@ -62,8 +65,8 @@ export class UserRepository {
     })
   }
 
-  async findManyByIds(statusIds: number) {
-    return prisma.userGamesStatus.findMany({ where: { id: statusIds } })
+  async findByStatusId(statusId: number) {
+    return prisma.userGamesStatus.findMany({ where: { id: statusId } })
   }
 
   async findUserGameStatus(igdbId: number, userId: string) {
@@ -85,7 +88,10 @@ export class UserRepository {
     })
   }
 
-  async findTrendingIgdbIds(limit: number, since: Date): Promise<{ igdbId: number; playingCount: number }[]> {
+  async findTrendingIgdbIds(
+    limit: number,
+    since: Date
+  ): Promise<{ igdbId: number; playingCount: number }[]> {
     const results = await prisma.userGame.groupBy({
       by: ['igdbId'],
       where: {
@@ -96,7 +102,10 @@ export class UserRepository {
       orderBy: { _count: { igdbId: 'desc' } },
       take: limit
     })
-    return results.map(r => ({ igdbId: r.igdbId, playingCount: r._count.igdbId }))
+    return results.map(r => ({
+      igdbId: r.igdbId,
+      playingCount: r._count.igdbId
+    }))
   }
 
   async findManyGamesOfUser(userId: string, filterStatus?: Status | string) {
@@ -151,16 +160,18 @@ export class UserRepository {
   }
 
   async removeUserGameStats(userId: string, igdbId: number) {
-    const userGame = await prisma.userGame.findUnique({
-      where: { userId_igdbId: { userId, igdbId } },
-      select: { id: true }
-    })
+    return prisma.$transaction(async tx => {
+      const userGame = await tx.userGame.findUnique({
+        where: { userId_igdbId: { userId, igdbId } },
+        select: { id: true }
+      })
 
-    if (!userGame) throw new Error('UserGame not found.')
+      if (!userGame) throw new ClientError('UserGame not found.', 404)
 
-    return prisma.userGameStats.delete({
-      where: { userGameId: userGame.id },
-      select: { completions: true }
+      return tx.userGameStats.delete({
+        where: { userGameId: userGame.id },
+        select: { completions: true }
+      })
     })
   }
 
@@ -200,17 +211,19 @@ export class UserRepository {
     igdbId: number,
     incrementValue: number
   ) {
-    const userGame = await prisma.userGame.findUnique({
-      where: { userId_igdbId: { userId, igdbId } },
-      select: { id: true }
-    })
+    return prisma.$transaction(async tx => {
+      const userGame = await tx.userGame.findUnique({
+        where: { userId_igdbId: { userId, igdbId } },
+        select: { id: true }
+      })
 
-    if (!userGame) throw new Error('UserGame not found.')
+      if (!userGame) throw new ClientError('UserGame not found.', 404)
 
-    return prisma.userGameStats.update({
-      where: { userGameId: userGame.id },
-      data: { completions: { increment: incrementValue } },
-      select: { completions: true }
+      return tx.userGameStats.update({
+        where: { userGameId: userGame.id },
+        data: { completions: { increment: incrementValue } },
+        select: { completions: true }
+      })
     })
   }
 }

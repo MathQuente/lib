@@ -1,4 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify'
+import fastifyRateLimit from '@fastify/rate-limit'
+import { redis } from './database/redis'
 import {
   serializerCompiler,
   validatorCompiler
@@ -23,16 +25,25 @@ declare module 'fastify' {
 
 export class Server {
   private static app: FastifyInstance = fastify()
-  private static port: number = 3333
+  private static port: number = Number(process.env.PORT) || 3333
   private static host: string = '0.0.0.0'
+
+  private static getRequiredEnv(name: string): string {
+    const value = process.env[name]
+    if (!value) {
+      throw new Error(`${name} environment variable is required`)
+    }
+    return value
+  }
 
   public static async start() {
     this.setupZodTypeProvider()
-    this.initErrrHandler()
+    this.initErrorHandler()
 
     Jwt.initSetup(this.app)
 
     await this.initOAuth2()
+    await this.initRateLimit()
     this.initRoutes()
 
     await this.app.listen({
@@ -52,23 +63,23 @@ export class Server {
       name: 'googleOAuth2',
       credentials: {
         client: {
-          id: process.env.GOOGLE_CLIENT_ID!,
-          secret: process.env.GOOGLE_CLIENT_SECRET!
+          id: this.getRequiredEnv('GOOGLE_CLIENT_ID'),
+          secret: this.getRequiredEnv('GOOGLE_CLIENT_SECRET')
         },
         auth: fastifyOauth2.GOOGLE_CONFIGURATION
       },
-      callbackUri: 'http://localhost:3333/auth/google/callback',
+      callbackUri: this.getRequiredEnv('GOOGLE_OAUTH_CALLBACK_URL'),
       scope: ['openid', 'email', 'profile']
     }
 
     await this.app.register(fastifyOauth2, googleOAuth2Options)
 
-    const discord0Auth2Options: FastifyOAuth2Options = {
+    const discordOAuth2Options: FastifyOAuth2Options = {
       name: 'discordOAuth2',
       credentials: {
         client: {
-          id: process.env.DISCORD_CLIENT_ID!,
-          secret: process.env.DISCORD_CLIENT_SECRET!
+          id: this.getRequiredEnv('DISCORD_CLIENT_ID'),
+          secret: this.getRequiredEnv('DISCORD_CLIENT_SECRET')
         },
         auth: {
           authorizeHost: 'https://discord.com',
@@ -77,11 +88,11 @@ export class Server {
           tokenPath: '/api/oauth2/token'
         }
       },
-      callbackUri: 'http://localhost:3333/auth/discord/callback',
+      callbackUri: this.getRequiredEnv('DISCORD_OAUTH_CALLBACK_URL'),
       scope: ['identify', 'email']
     }
 
-    await this.app.register(fastifyOauth2, discord0Auth2Options)
+    await this.app.register(fastifyOauth2, discordOAuth2Options)
   }
 
   private static initRoutes() {
@@ -92,7 +103,16 @@ export class Server {
     this.app.register(userGameStatusRoutes, { prefix: '/status' })
   }
 
-  private static initErrrHandler() {
+  private static async initRateLimit() {
+    await this.app.register(fastifyRateLimit, {
+      max: 100,
+      timeWindow: '1 minute',
+      redis,
+      nameSpace: 'rate-limit'
+    })
+  }
+
+  private static initErrorHandler() {
     this.app.setErrorHandler(errorHandler)
   }
 }

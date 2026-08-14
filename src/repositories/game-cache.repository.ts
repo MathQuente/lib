@@ -26,7 +26,10 @@ export class GameCacheRepository {
   }) {
     const offset = pageIndex * limit
     const where: Prisma.GameCacheWhereInput = {
-      OR: [{ totalRatingCount: { gte: MIN_TOTAL_RATING_COUNT } }, { hypes: { gte: MIN_HYPES } }],
+      OR: [
+        { totalRatingCount: { gte: MIN_TOTAL_RATING_COUNT } },
+        { hypes: { gte: MIN_HYPES } }
+      ],
       ...(query ? { name: { contains: query, mode: 'insensitive' } } : {})
     }
 
@@ -75,7 +78,9 @@ export class GameCacheRepository {
     query?: string
   }) {
     const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
-    const nameFilter = query ? Prisma.sql`AND gc.name ILIKE ${`%${query}%`}` : Prisma.empty
+    const nameFilter = query
+      ? Prisma.sql`AND gc.name ILIKE ${`%${query}%`}`
+      : Prisma.empty
     const where = Prisma.sql`WHERE (gc.total_rating_count >= ${MIN_TOTAL_RATING_COUNT} OR gc.hypes >= ${MIN_HYPES}) ${nameFilter}`
 
     const [games, countResult] = await Promise.all([
@@ -199,7 +204,9 @@ export class GameCacheRepository {
     return rows.map(r => r.igdbId)
   }
 
-  async updateTotalRatingCounts(updates: Array<{ igdbId: number; totalRatingCount: number }>) {
+  async updateTotalRatingCounts(
+    updates: Array<{ igdbId: number; totalRatingCount: number }>
+  ) {
     await prisma.$transaction(
       updates.map(u =>
         prisma.gameCache.update({
@@ -224,7 +231,11 @@ export class GameCacheRepository {
   }
 
   async updateCategoryAndParent(
-    updates: Array<{ igdbId: number; category: number; parentGameId: number | null }>
+    updates: Array<{
+      igdbId: number
+      category: number
+      parentGameId: number | null
+    }>
   ) {
     await prisma.$transaction(
       updates.map(u =>

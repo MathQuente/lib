@@ -3,22 +3,24 @@ import { CreateUserDTO } from '../dtos/user.dto'
 
 export class AuthRepository {
   async saveToken(token: string, userId: string, expiresAt: Date) {
-    await prisma.refreshToken.deleteMany({
-      where: {
-        userId: userId,
-        isValid: true
-      }
-    })
-
-    // Agora, cria o novo token
-    await prisma.refreshToken.create({
-      data: {
-        token: token,
-        userId: userId,
-        expiresAt: expiresAt,
-        isValid: true
-      }
-    })
+    // Remove qualquer token anterior do usuário (válido ou já invalidado).
+    // JWTs assinados no mesmo segundo pro mesmo userId são idênticos (o `iat`
+    // só tem resolução de segundo) — se um token invalidado ficasse pra trás
+    // aqui, um refresh rápido o suficiente colidiria com a constraint única
+    // de `token` ao tentar criar o novo.
+    await prisma.$transaction([
+      prisma.refreshToken.deleteMany({
+        where: { userId }
+      }),
+      prisma.refreshToken.create({
+        data: {
+          token: token,
+          userId: userId,
+          expiresAt: expiresAt,
+          isValid: true
+        }
+      })
+    ])
   }
 
   async findUserByGoogleId(googleId: string) {
@@ -60,7 +62,7 @@ export class AuthRepository {
     })
   }
 
-  async findByEmail(email: string) {
+  async findByEmail(email: string, includePassword = false) {
     return prisma.user.findUnique({
       where: { email },
       select: {
@@ -68,9 +70,9 @@ export class AuthRepository {
         email: true,
         userName: true,
         profilePicture: true,
-        password: true,
         googleId: true,
-        discordId: true
+        discordId: true,
+        ...(includePassword ? { password: true } : {})
       }
     })
   }
@@ -134,20 +136,6 @@ export class AuthRepository {
     return prisma.refreshToken.findUnique({
       where: {
         token
-      }
-    })
-  }
-
-  async findUserByEmail(email: string) {
-    return prisma.user.findUnique({
-      where: {
-        email
-      },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        userName: true
       }
     })
   }

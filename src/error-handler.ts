@@ -6,7 +6,6 @@ import { IGDBRequestError } from './errors/igdb-request-error'
 type FastifyErrorHandler = FastifyInstance['errorHandler']
 
 export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
-  console.error(error)
   if (error instanceof ZodError) {
     return reply.status(400).send({
       message: 'Invalid input',
@@ -24,6 +23,10 @@ export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
     return reply.status(502).send({
       message: 'Upstream game data provider failed'
     })
+  }
+
+  if (typeof error.statusCode === 'number') {
+    return reply.status(error.statusCode).send({ message: error.message })
   }
 
   return reply.status(500).send({ message: 'Internal server error' })

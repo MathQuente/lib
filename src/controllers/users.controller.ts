@@ -31,14 +31,15 @@ export class UserController {
       UserSchema.QueryStringSchema.parse(request.query)
     const userId = request.user.userId
 
-    const { totalPerStatus, games, total } = await this.userService.findManyUserGames(
-      userId,
-      pageIndex,
-      filter,
-      query,
-      sortBy,
-      sortOrder
-    )
+    const { totalPerStatus, games, total } =
+      await this.userService.findManyUserGames(
+        userId,
+        pageIndex,
+        filter,
+        query,
+        sortBy,
+        sortOrder
+      )
 
     return reply.status(200).send({ games, totalPerStatus, total })
   }
@@ -60,7 +61,9 @@ export class UserController {
   }
 
   async getUsers(request: FastifyRequest, reply: FastifyReply) {
-    const { pageIndex, query } = UserSchema.QueryStringSchema.parse(request.query)
+    const { pageIndex, query } = UserSchema.QueryStringSchema.parse(
+      request.query
+    )
     const { users } = await this.userService.findManyUsers(pageIndex, query)
     return reply.status(200).send({ users })
   }
@@ -80,7 +83,10 @@ export class UserController {
   async removeGame(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-    const { igdbId: removedId } = await this.userService.removeGame(igdbId, userId)
+    const { igdbId: removedId } = await this.userService.removeGame(
+      igdbId,
+      userId
+    )
     return reply.status(200).send({ igdbId: removedId })
   }
 
@@ -89,10 +95,15 @@ export class UserController {
     const userId = request.user.userId
     const { statusId } = UserSchema.UserGameBodySchema.parse(request.body)
 
-    const { igdbId: updatedId, userGameStatus, playedCountUpdated } =
-      await this.userService.updateGame(igdbId, userId, statusId)
+    const {
+      igdbId: updatedId,
+      userGameStatus,
+      playedCountUpdated
+    } = await this.userService.updateGame(igdbId, userId, statusId)
 
-    return reply.status(200).send({ igdbId: updatedId, userGameStatus, playedCountUpdated })
+    return reply
+      .status(200)
+      .send({ igdbId: updatedId, userGameStatus, playedCountUpdated })
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
@@ -113,7 +124,10 @@ export class UserController {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
 
-    const { playedCount } = await this.userService.findUserGameStats(igdbId, userId)
+    const { playedCount } = await this.userService.findUserGameStats(
+      igdbId,
+      userId
+    )
 
     return reply.status(200).send({ playedCount })
   }

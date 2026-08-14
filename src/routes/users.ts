@@ -26,7 +26,6 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:userId',
     {
-      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         params: UserSchema.UserParamsSchema,
@@ -43,6 +42,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
+      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         response: {

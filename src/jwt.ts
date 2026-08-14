@@ -2,13 +2,12 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
 import fastifyCors from '@fastify/cors'
-import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
+import { AuthRepository } from './repositories/auth.repository'
+import { AuthService } from './services/auth.service'
+import { CacheRepository } from './repositories/cache.repository'
 
-interface JwtPayload {
-  userId: string
-  iat?: number
-  exp?: number
-}
+const authRepository = new AuthRepository()
+const cacheRepository = new CacheRepository()
 
 export class Jwt {
   private static getSecret(): string {
@@ -24,7 +23,6 @@ export class Jwt {
     this.registerCookiePlugin(fastify)
     this.authenticateDecorator(fastify)
     this.registerCorsPlugin(fastify)
-    // this.registerOAuth2(fastify)
   }
 
   private static registerJwtPlugin(fastify: FastifyInstance) {
@@ -41,8 +39,12 @@ export class Jwt {
   }
 
   public static registerCorsPlugin = (fastify: FastifyInstance) => {
+    if (!process.env.FRONTEND_URL) {
+      throw new Error('FRONTEND_URL environment variable is required')
+    }
+
     fastify.register(fastifyCors, {
-      origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: process.env.FRONTEND_URL,
       credentials: true
     })
   }
@@ -53,8 +55,23 @@ export class Jwt {
       async (request: FastifyRequest, response: FastifyReply) => {
         try {
           await request.jwtVerify()
-        } catch (error: any) {
-          if (error.code === 'FST_JWT_NO_AUTHORIZATION_IN_COOKIE') {
+
+          const accessToken = request.cookies.accessToken
+          if (accessToken) {
+            try {
+              const isRevoked = await cacheRepository.get(
+                `revoked:${accessToken}`
+              )
+              if (isRevoked !== null) {
+                return response.status(401).send({ status: 'unauthorized' })
+              }
+            } catch (revocationCheckError) {
+              console.error('Revocation check failed:', revocationCheckError)
+            }
+          }
+        } catch (error) {
+          const code = (error as { code?: string }).code
+          if (code === 'FST_JWT_NO_AUTHORIZATION_IN_COOKIE') {
             const refreshToken = request.cookies.refreshToken
 
             if (!refreshToken) {
@@ -62,11 +79,19 @@ export class Jwt {
             }
 
             try {
-              const decoded = fastify.jwt.verify(refreshToken) as JwtPayload
+              const authService = new AuthService(
+                authRepository,
+                fastify.jwt,
+                cacheRepository
+              )
+              const userId =
+                await authService.isRefreshTokenActive(refreshToken)
 
-              const newAccessToken = fastify.jwt.sign({
-                userId: decoded.userId
-              })
+              if (!userId) {
+                throw new Error('Refresh token is not active')
+              }
+
+              const newAccessToken = fastify.jwt.sign({ userId })
 
               response.setCookie('accessToken', newAccessToken, {
                 httpOnly: false,
@@ -80,7 +105,7 @@ export class Jwt {
 
               await request.jwtVerify()
             } catch (error) {
-              console.log('Refresh Error:', error)
+              console.error('Refresh Error:', error)
               response.clearCookie('accessToken')
               response.clearCookie('refreshToken')
               return response.status(401).send({ status: 'unauthorized' })
@@ -95,7 +120,6 @@ export class Jwt {
 
   public static registerCookiePlugin = (fastify: FastifyInstance) => {
     fastify.register(fastifyCookie, {
-      secret: 'abcd1234',
       hook: 'onRequest',
       parseOptions: {
         path: '/',

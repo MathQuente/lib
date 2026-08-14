@@ -43,7 +43,8 @@ export class GameService {
 
   private async enrichWithSiteRatings(games: IGDBGame[]) {
     const igdbIds = games.map(g => g.id)
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+    const ratingsMap =
+      await this.ratingRepository.getAverageRatingsForGames(igdbIds)
     return games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
   }
 
@@ -63,7 +64,8 @@ export class GameService {
     })
 
     const igdbIds = cached.map(g => g.igdbId)
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+    const ratingsMap =
+      await this.ratingRepository.getAverageRatingsForGames(igdbIds)
 
     const games = cached.map(g => ({
       igdbId: g.igdbId,
@@ -102,7 +104,11 @@ export class GameService {
 
       relatedGames = await IGDBService.getRelatedGames(igdbId)
 
-      await this.cacheRepository.set(key, {game, relatedGames }, GAME_CACHE_TTL_SECONDS)
+      await this.cacheRepository.set(
+        key,
+        { game, relatedGames },
+        GAME_CACHE_TTL_SECONDS
+      )
     }
 
     const ratingsMap = await this.ratingRepository.getAverageRatingsForGames([
@@ -112,7 +118,9 @@ export class GameService {
 
     return {
       game: this.formatGame(game, ratingsMap.get(igdbId) ?? null),
-      relatedGames: relatedGames.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+      relatedGames: relatedGames.map(g =>
+        this.formatGame(g, ratingsMap.get(g.id) ?? null)
+      )
     }
   }
 
@@ -131,7 +139,9 @@ export class GameService {
     return {
       mostRatedGames: mostRated.games,
       trendingGames: trending.games,
-      recentGames: recent.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null)),
+      recentGames: recent.map(g =>
+        this.formatGame(g, ratingsMap.get(g.id) ?? null)
+      ),
       futureGames: future.games
     }
   }
@@ -152,14 +162,14 @@ export class GameService {
       games = results.games
       total = results.total
 
-      await this.cacheRepository.set(key, {games, total }, GAME_CACHE_TTL_SECONDS)
+      await this.cacheRepository.set(
+        key,
+        { games, total },
+        GAME_CACHE_TTL_SECONDS
+      )
     }
 
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
-      games.map(g => g.id)
-    )
-    const formatted = games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
-    return { games: formatted, total }
+    return { games: await this.enrichWithSiteRatings(games), total }
   }
 
   private async findReleasedGamesByRankedIds(
@@ -186,11 +196,11 @@ export class GameService {
 
     const fetched = await IGDBService.getGamesByIds(missingIds)
 
-     await Promise.all(
-       fetched.map(g =>
-         this.cacheRepository.set(`game:meta:${g.id}`, g, GAME_CACHE_TTL_SECONDS)
-       )
-     )
+    await Promise.all(
+      fetched.map(g =>
+        this.cacheRepository.set(`game:meta:${g.id}`, g, GAME_CACHE_TTL_SECONDS)
+      )
+    )
 
     const games = [...cachedGames, ...fetched]
     const gamesById = new Map(games.map(g => [g.id, g]))
@@ -206,12 +216,15 @@ export class GameService {
   }
 
   async findTrendingGames(limit = 20) {
-    const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    const since = new Date(
+      Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    )
     const trending = await this.userRepository.findTrendingIgdbIds(limit, since)
     if (trending.length === 0) return { games: [], total: 0 }
 
     const igdbIds = trending.map(t => t.igdbId)
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(igdbIds)
+    const ratingsMap =
+      await this.ratingRepository.getAverageRatingsForGames(igdbIds)
     const games = await this.findReleasedGamesByRankedIds(igdbIds, ratingsMap)
 
     return { games, total: games.length }
@@ -222,7 +235,9 @@ export class GameService {
     if (topRated.length === 0) return { games: [], total: 0 }
 
     const igdbIds = topRated.map(r => r.igdbId)
-    const ratingsMap = new Map<number, number | null>(topRated.map(r => [r.igdbId, r.avgRating]))
+    const ratingsMap = new Map<number, number | null>(
+      topRated.map(r => [r.igdbId, r.avgRating])
+    )
     const games = await this.findReleasedGamesByRankedIds(igdbIds, ratingsMap)
 
     return { games, total: games.length }
@@ -245,9 +260,6 @@ export class GameService {
       await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
     }
 
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
-      games.map(g => g.id)
-    )
-    return games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
+    return this.enrichWithSiteRatings(games)
   }
 }

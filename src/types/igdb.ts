@@ -21,15 +21,3 @@ export interface IGDBGame {
   similar_games?: number[]
   involved_companies?: IGDBInvolvedCompany[]
 }
-
-export interface IGDBGameEnriched {
-  igdbId: number
-  name: string
-  coverUrl: string | null
-  summary?: string
-  genres?: string[]
-  platforms?: string[]
-  releaseDate?: number
-  rating?: number
-  status?: string
-}

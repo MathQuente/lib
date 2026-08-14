@@ -14,7 +14,12 @@ export async function gameRoutes(app: FastifyInstance) {
   const gameCacheRepository = new GameCacheRepository()
   const userRepository = new UserRepository()
   const cacheRepository = new CacheRepository()
-  const gameService = new GameService(ratingRepository, gameCacheRepository, userRepository, cacheRepository)
+  const gameService = new GameService(
+    ratingRepository,
+    gameCacheRepository,
+    userRepository,
+    cacheRepository
+  )
   const gameController = new GameController(gameService)
   app.withTypeProvider<ZodTypeProvider>().get(
     '/featured',
@@ -50,7 +55,8 @@ export async function gameRoutes(app: FastifyInstance) {
         params: GameSchema.GameParamsSchema,
         response: {
           200: GameSchema.GetSimilarGamesResponseSchema,
-          404: ErrorSchemas.NotFound
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
         }
       }
     },

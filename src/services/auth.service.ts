@@ -1,5 +1,6 @@
 import { JWT } from '@fastify/jwt'
 import { AuthRepository } from '../repositories/auth.repository'
+import { CacheRepository } from '../repositories/cache.repository'
 import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
 import { CreateUserDTO } from '../dtos/user.dto'
@@ -8,7 +9,8 @@ import { generateFromEmail } from 'unique-username-generator'
 export class AuthService {
   constructor(
     private authRepository: AuthRepository,
-    private jwt: JWT
+    private jwt: JWT,
+    private cacheRepository: CacheRepository
   ) {}
 
   async generateTokens(userId: string) {
@@ -28,8 +30,12 @@ export class AuthService {
       // Primeiro verifica no banco
       const storedToken = await this.authRepository.findToken(refreshToken)
 
-      if (!storedToken || storedToken.expiresAt < new Date()) {
-        throw new Error('invalid or expired refresh token')
+      if (
+        !storedToken ||
+        !storedToken.isValid ||
+        storedToken.expiresAt < new Date()
+      ) {
+        throw new ClientError('invalid or expired refresh token', 401)
       }
 
       // Depois verifica a assinatura JWT
@@ -39,14 +45,37 @@ export class AuthService {
       await this.authRepository.invalidateToken(refreshToken)
 
       return decoded.userId
-    } catch (error: any) {
-      if (
-        error.code === 'FAST_JWT_EXPIRED' ||
-        error.message?.includes('expired')
-      ) {
-        throw new Error('Refresh token expired')
+    } catch (error) {
+      if (error instanceof ClientError) {
+        throw error
       }
-      throw new Error('Invalid refresh token')
+      const { code, message } = error as { code?: string; message?: string }
+      if (code === 'FAST_JWT_EXPIRED' || message?.includes('expired')) {
+        throw new ClientError('Refresh token expired', 401)
+      }
+      throw new ClientError('Invalid refresh token', 401)
+    }
+  }
+
+  // Checagem só-leitura, sem rotação: usada pelo fallback silencioso do
+  // authenticateDecorator (jwt.ts) pra renovar o access token sem invalidar
+  // o refresh token a cada 15 minutos.
+  async isRefreshTokenActive(refreshToken: string): Promise<string | null> {
+    const storedToken = await this.authRepository.findToken(refreshToken)
+
+    if (
+      !storedToken ||
+      !storedToken.isValid ||
+      storedToken.expiresAt < new Date()
+    ) {
+      return null
+    }
+
+    try {
+      const decoded = this.jwt.verify(refreshToken) as { userId: string }
+      return decoded.userId
+    } catch {
+      return null
     }
   }
 
@@ -63,21 +92,19 @@ export class AuthService {
   }
 
   async createUser(data: CreateUserDTO) {
-    const emailIsAlreadyUsed = await this.authRepository.findUserByEmail(
-      data.email
-    )
+    const emailIsAlreadyUsed = await this.authRepository.findByEmail(data.email)
 
     if (emailIsAlreadyUsed) {
       throw new ClientError('This email is already used')
     }
 
     const passwordAfterHash = await bcrypt.hash(data.password, 10)
-    const userNameGeneretad = generateFromEmail(data.email, 4)
+    const userNameGenerated = generateFromEmail(data.email, 4)
 
     const user = await this.authRepository.createUser({
       email: data.email,
       password: passwordAfterHash,
-      userName: userNameGeneretad
+      userName: userNameGenerated
     })
 
     const { accessToken, refreshToken } = await this.generateTokens(user.id)
@@ -180,7 +207,7 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string) {
-    const user = await this.authRepository.findUserByEmail(email)
+    const user = await this.authRepository.findByEmail(email, true)
 
     const infoIsMatch = user && (await bcrypt.compare(password, user.password))
 
@@ -196,9 +223,26 @@ export class AuthService {
     }
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, accessToken?: string) {
     if (refreshToken) {
       await this.authRepository.invalidateToken(refreshToken)
+    }
+
+    if (accessToken) {
+      try {
+        const decoded = this.jwt.verify(accessToken) as { exp: number }
+        const ttlSeconds = decoded.exp - Math.floor(Date.now() / 1000)
+
+        if (ttlSeconds > 0) {
+          await this.cacheRepository.set(
+            `revoked:${accessToken}`,
+            true,
+            ttlSeconds
+          )
+        }
+      } catch {
+        // Token já inválido/expirado — nada pra revogar.
+      }
     }
   }
 }

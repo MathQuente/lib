@@ -78,6 +78,7 @@ export async function ratingRoutes(app: FastifyInstance) {
     '/',
     {
       schema: {
+        querystring: RatingSchema.GetRatingsQueryStringSchema,
         response: {
           200: RatingSchema.GetRatingsResponseSchema,
           500: ErrorSchemas.InternalServerError
@@ -90,7 +91,6 @@ export async function ratingRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/game/:igdbId',
     {
-      preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {
@@ -105,7 +105,6 @@ export async function ratingRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/ratingDistribution/:igdbId',
     {
-      preHandler: [app.authenticate],
       schema: {
         params: RatingSchema.RatingParamsSchema,
         response: {

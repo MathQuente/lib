@@ -2,13 +2,7 @@ import 'dotenv/config'
 import { prisma } from '../database/db'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
-
-const BATCH_SIZE = 500
-const DELAY_MS = 300
-
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+import { BATCH_SIZE, DELAY_MS, sleep } from './utils'
 
 async function main() {
   const repo = new GameCacheRepository()
@@ -17,7 +11,9 @@ async function main() {
   let batch = 0
 
   console.log('Backfilling hypes for cached games missing it...')
-  console.log('Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n')
+  console.log(
+    'Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n'
+  )
 
   while (true) {
     batch++
@@ -29,10 +25,14 @@ async function main() {
     }
 
     const hypesMap = await IGDBService.getHypesByIds(igdbIds)
-    await repo.updateHypes(igdbIds.map(igdbId => ({ igdbId, hypes: hypesMap.get(igdbId) ?? 0 })))
+    await repo.updateHypes(
+      igdbIds.map(igdbId => ({ igdbId, hypes: hypesMap.get(igdbId) ?? 0 }))
+    )
 
     totalUpdated += igdbIds.length
-    process.stdout.write(`\rBatch ${batch} | +${igdbIds.length} games | Total updated: ${totalUpdated}`)
+    process.stdout.write(
+      `\rBatch ${batch} | +${igdbIds.length} games | Total updated: ${totalUpdated}`
+    )
 
     await sleep(DELAY_MS)
   }

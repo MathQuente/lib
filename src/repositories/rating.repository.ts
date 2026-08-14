@@ -30,8 +30,10 @@ export class RatingRepository {
     })
   }
 
-  async findManyRating() {
+  async findManyRating({ pageIndex = 0, limit = 20 } = {}) {
     return prisma.rating.findMany({
+      skip: pageIndex * limit,
+      take: limit,
       select: {
         user: {
           select: {
@@ -45,11 +47,8 @@ export class RatingRepository {
     })
   }
 
-  async countRatingByName(igdbId: number) {
-    return prisma.rating.count({
-      where: { igdbId },
-      select: { value: true }
-    })
+  async countRatingsByGame(igdbId: number) {
+    return prisma.rating.count({ where: { igdbId } })
   }
 
   async findRatingDistribution(igdbId: number) {
@@ -61,17 +60,24 @@ export class RatingRepository {
     })
   }
 
-  async findTopRatedIgdbIds(limit: number): Promise<{ igdbId: number; avgRating: number }[]> {
+  async findTopRatedIgdbIds(
+    limit: number
+  ): Promise<{ igdbId: number; avgRating: number }[]> {
     const results = await prisma.rating.groupBy({
       by: ['igdbId'],
       _avg: { value: true },
       orderBy: { _avg: { value: 'desc' } },
       take: limit
     })
-    return results.map(r => ({ igdbId: r.igdbId, avgRating: r._avg.value ?? 0 }))
+    return results.map(r => ({
+      igdbId: r.igdbId,
+      avgRating: r._avg.value ?? 0
+    }))
   }
 
-  async getAverageRatingsForGames(igdbIds: number[]): Promise<Map<number, number | null>> {
+  async getAverageRatingsForGames(
+    igdbIds: number[]
+  ): Promise<Map<number, number | null>> {
     if (igdbIds.length === 0) return new Map()
     const results = await prisma.rating.groupBy({
       by: ['igdbId'],

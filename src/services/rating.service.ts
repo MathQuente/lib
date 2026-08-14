@@ -10,12 +10,14 @@ export class RatingService {
     private userRepository: UserRepository
   ) {}
 
-  async createRating(igdbId: number, value: number, userId: string) {
+  private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
+    if (!user) throw new ClientError('User not found.', 404)
+    return user
+  }
 
-    if (!user) {
-      throw new ClientError('User not found.', 404)
-    }
+  async createRating(igdbId: number, value: number, userId: string) {
+    await this.requireUser(userId)
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
@@ -42,11 +44,7 @@ export class RatingService {
   }
 
   async findUniqueByUserGame(igdbId: number, userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) {
-      throw new ClientError('User not found.')
-    }
+    await this.requireUser(userId)
 
     const rating = await this.ratingRepository.findUniqueByUserGame(
       igdbId,
@@ -57,11 +55,7 @@ export class RatingService {
   }
 
   async deleteRating(igdbId: number, userId: string) {
-    const user = await this.userRepository.findUserById(userId)
-
-    if (!user) {
-      throw new ClientError('User not found.')
-    }
+    await this.requireUser(userId)
 
     const existingRating = await this.ratingRepository.findUniqueByUserGame(
       igdbId,
@@ -80,8 +74,11 @@ export class RatingService {
     return { average: average._avg.value || 0 }
   }
 
-  async findManyRating() {
-    const ratings = await this.ratingRepository.findManyRating()
+  async findManyRating(pageIndex = 0, limit = 20) {
+    const ratings = await this.ratingRepository.findManyRating({
+      pageIndex,
+      limit
+    })
 
     return {
       ratings: ratings.map(({ user, value }) => ({
@@ -106,8 +103,8 @@ export class RatingService {
     }
   }
 
-  async countRatingByName(igdbId: number) {
-    const rating = await this.ratingRepository.countRatingByName(igdbId)
-    return { ratings: rating.value }
+  async countRatingsByGame(igdbId: number) {
+    const ratings = await this.ratingRepository.countRatingsByGame(igdbId)
+    return { ratings }
   }
 }

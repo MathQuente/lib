@@ -21,7 +21,7 @@ if (!token) {
 
 const now = Math.floor(Date.now() / 1000)
 const queries = [
-  `fields id,name,cover.url,rating; where first_release_date < ${now} & first_release_date != null & cover != null; sort first_release_date desc; limit 5;`,
+  `fields id,name,cover.url,rating; where first_release_date < ${now} & first_release_date != null & cover != null; sort first_release_date desc; limit 5;`
 ]
 
 for (const q of queries) {
@@ -31,9 +31,9 @@ for (const q of queries) {
     headers: {
       'Client-ID': clientId,
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'text/plain',
+      'Content-Type': 'text/plain'
     },
-    body: q,
+    body: q
   })
   const data = await res.json()
   console.log('Status:', res.status)

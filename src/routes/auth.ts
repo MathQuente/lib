@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { AuthController } from '../controllers/auth.controller'
 import { AuthRepository } from '../repositories/auth.repository'
 import { AuthService } from '../services/auth.service'
+import { CacheRepository } from '../repositories/cache.repository'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 
@@ -21,20 +22,35 @@ setInterval(() => {
 
 export async function authRoutes(app: FastifyInstance) {
   const authRepository = new AuthRepository()
-  const authService = new AuthService(authRepository, app.jwt)
+  const cacheRepository = new CacheRepository()
+  const authService = new AuthService(authRepository, app.jwt, cacheRepository)
   const authController = new AuthController(authService)
 
-  app
-    .withTypeProvider<ZodTypeProvider>()
-    .post('/register', async (request, reply) =>
-      authController.createUser(request, reply)
-    )
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/register',
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.createUser(request, reply)
+  )
 
-  app
-    .withTypeProvider<ZodTypeProvider>()
-    .post('/login', async (request, reply) =>
-      authController.loginHandler(request, reply)
-    )
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/login',
+    {
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.loginHandler(request, reply)
+  )
 
   app
     .withTypeProvider<ZodTypeProvider>()
@@ -48,9 +64,9 @@ export async function authRoutes(app: FastifyInstance) {
       authController.logoutHandler(request, reply)
     )
 
-  // ✅ Rota manual para iniciar OAuth (NOVO)
   app.get('/google', async (request, reply) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const oauth2 = (app as any).googleOAuth2
 
       if (!oauth2) {
@@ -69,7 +85,7 @@ export async function authRoutes(app: FastifyInstance) {
       const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
       const params = new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID!,
-        redirect_uri: 'http://localhost:3333/auth/google/callback',
+        redirect_uri: process.env.GOOGLE_OAUTH_CALLBACK_URL!,
         response_type: 'code',
         scope: 'openid email profile',
         state: state,
@@ -144,6 +160,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/discord', async (request, reply) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const oauth2 = (app as any).discordOAuth2
 
       if (!oauth2) {
@@ -157,7 +174,7 @@ export async function authRoutes(app: FastifyInstance) {
       const baseUrl = 'https://discord.com/api/oauth2/authorize'
       const params = new URLSearchParams({
         client_id: process.env.DISCORD_CLIENT_ID!,
-        redirect_uri: 'http://localhost:3333/auth/discord/callback',
+        redirect_uri: process.env.DISCORD_OAUTH_CALLBACK_URL!,
         response_type: 'code',
         scope: 'identify email',
         state: state,

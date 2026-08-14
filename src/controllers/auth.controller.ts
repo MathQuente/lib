@@ -60,32 +60,26 @@ export class AuthController {
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
     const refreshToken = request.cookies.refreshToken
 
-    if (!refreshToken) throw new ClientError('Refresh token not provided')
-
-    const { value: jwt } = request.unsignCookie(refreshToken)
-
-    if (!jwt) {
-      return
-    }
+    if (!refreshToken) throw new ClientError('Refresh token not provided', 401)
 
     const {
       accessToken,
       refreshToken: newRefreshToken,
       expiresAt
-    } = await this.authService.refreshTokens(jwt)
+    } = await this.authService.refreshTokens(refreshToken)
 
     reply
       .setCookie('accessToken', accessToken, {
         httpOnly: false,
         secure: true,
-        sameSite: 'none',
+        sameSite: 'lax',
         path: '/',
-        expires: new Date(Date.now() + 60 * 60 * 1000)
+        maxAge: 60 * 15
       })
       .setCookie('refreshToken', newRefreshToken, {
-        httpOnly: false,
+        httpOnly: true,
         secure: true,
-        sameSite: 'none',
+        sameSite: 'lax',
         path: '/',
         expires: expiresAt
       })
@@ -94,12 +88,13 @@ export class AuthController {
 
   async logoutHandler(request: FastifyRequest, reply: FastifyReply) {
     const refreshToken = request.cookies.refreshToken
+    const accessToken = request.cookies.accessToken
 
     if (!refreshToken) {
       return reply.status(400).send({ message: 'Refresh token is missing' })
     }
 
-    await this.authService.logout(refreshToken)
+    await this.authService.logout(refreshToken, accessToken)
 
     reply
       .clearCookie('accessToken')
@@ -115,12 +110,13 @@ export class AuthController {
         throw new Error('Authorization code missing')
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const oauth2 = (request.server as any).googleOAuth2
 
       const tokenResponse = await oauth2
         .getNewAccessTokenUsingRefreshToken(oauth2.accessToken, {
           code,
-          redirect_uri: 'http://localhost:3333/auth/google/callback',
+          redirect_uri: process.env.GOOGLE_OAUTH_CALLBACK_URL!,
           grant_type: 'authorization_code'
         })
         .catch(async () => {
@@ -128,7 +124,7 @@ export class AuthController {
             code,
             client_id: process.env.GOOGLE_CLIENT_ID!,
             client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-            redirect_uri: 'http://localhost:3333/auth/google/callback',
+            redirect_uri: process.env.GOOGLE_OAUTH_CALLBACK_URL!,
             grant_type: 'authorization_code'
           })
 
@@ -182,7 +178,7 @@ export class AuthController {
           path: '/',
           maxAge: 60 * 60 * 24 * 7
         })
-        .redirect(process.env.FRONTEND_URL || 'http://localhost:5173' + '/')
+        .redirect(process.env.FRONTEND_URL + '/')
     } catch (error) {
       console.error('Google OAuth Error:', error)
       reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
@@ -197,6 +193,7 @@ export class AuthController {
         throw new Error('Authorization code missing')
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const oauth2 = (request.server as any).discordOAuth2
 
       const tokenResponse = await oauth2
@@ -206,7 +203,7 @@ export class AuthController {
             code,
             client_id: process.env.DISCORD_CLIENT_ID!,
             client_secret: process.env.DISCORD_CLIENT_SECRET!,
-            redirect_uri: 'http://localhost:3333/auth/discord/callback',
+            redirect_uri: process.env.DISCORD_OAUTH_CALLBACK_URL!,
             grant_type: 'authorization_code'
           })
 
@@ -259,7 +256,7 @@ export class AuthController {
           path: '/',
           maxAge: 60 * 60 * 24 * 7
         })
-        .redirect(process.env.FRONTEND_URL || 'http://localhost:5173' + '/')
+        .redirect(process.env.FRONTEND_URL + '/')
     } catch (error) {
       console.error('Discord OAuth Error:', error)
       reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
