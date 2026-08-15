@@ -34,6 +34,7 @@ model Rating {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, igdbId])
+  @@index([igdbId])
   @@map("ratings")
 }
 

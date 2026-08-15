@@ -2,8 +2,12 @@ import { Status } from '@prisma/client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 import { RatingRepository } from '../repositories/rating.repository'
-import { UserRepository } from '../repositories/users.repository'
+import {
+  PaginatedUserGameRow,
+  UserRepository
+} from '../repositories/users.repository'
 import { IGDBService } from './igdb.service'
+import { GameCacheService } from './game-cache.service'
 import { randomInt } from 'crypto'
 
 const PLAYED_STATUS_ID = 1
@@ -13,7 +17,8 @@ export class UserService {
 
   constructor(
     private userRepository: UserRepository,
-    private ratingRepository: RatingRepository
+    private ratingRepository: RatingRepository,
+    private gameCacheService: GameCacheService
   ) {}
 
   private async requireUser(userId: string) {
@@ -28,6 +33,9 @@ export class UserService {
     statusIds: number
   ) {
     await this.requireUser(userId)
+
+    const gameExists = await this.gameCacheService.ensureCached(igdbId)
+    if (!gameExists) throw new ClientError('Game not found.', 404)
 
     const existing = await this.userRepository.findUserGame(igdbId, userId)
 
@@ -73,7 +81,6 @@ export class UserService {
     return {
       user: {
         id: user.id,
-        email: user.email,
         profilePicture: user.profilePicture,
         userBanner: user.userBanner,
         userName: user.userName,
@@ -121,76 +128,19 @@ export class UserService {
   ) {
     await this.requireUser(userId)
 
-    const userGames = await this.userRepository.findManyGamesOfUser(
+    const rows = await this.userRepository.findManyGamesOfUser({
       userId,
-      filter
-    )
-
-    if (userGames.length === 0) {
-      const totalPerStatus =
-        await this.userRepository.findGamesCountByStatus(userId)
-      return {
-        games: {
-          PLAYED: [],
-          PLAYING: [],
-          PAUSED: [],
-          BACKLOG: [],
-          WISHLIST: []
-        },
-        totalPerStatus: totalPerStatus.map(item => ({
-          status: item.status,
-          totalGames: item._count.userGames
-        })),
-        total: 0
-      }
-    }
-
-    const igdbIds = userGames.map(ug => ug.igdbId)
-    const [igdbGames, ratingsMap] = await Promise.all([
-      IGDBService.getGamesByIds(igdbIds),
-      this.ratingRepository.getAverageRatingsForGames(igdbIds)
-    ])
-
-    const igdbMap = new Map(igdbGames.map(g => [g.id, g]))
-
-    let enriched = userGames
-      .map(ug => {
-        const g = igdbMap.get(ug.igdbId)
-        if (!g) return null
-        return {
-          igdbId: g.id,
-          name: g.name,
-          coverUrl: IGDBService.formatCoverUrl(g.cover?.url),
-          platforms: g.platforms?.map(p => p.name),
-          releaseDate: g.first_release_date,
-          siteRating: ratingsMap.get(ug.igdbId) ?? null,
-          status: ug.UserGamesStatus.status as string
-        }
-      })
-      .filter((g): g is NonNullable<typeof g> => g !== null)
-
-    if (query) {
-      const q = query.toLowerCase()
-      enriched = enriched.filter(g => g.name.toLowerCase().includes(q))
-    }
-
-    const sortMultiplier = sortOrder === 'asc' ? 1 : -1
-    enriched.sort((a, b) => {
-      if (sortBy === 'gameName')
-        return sortMultiplier * a.name.localeCompare(b.name)
-      if (sortBy === 'dateRelease')
-        return sortMultiplier * ((a.releaseDate ?? 0) - (b.releaseDate ?? 0))
-      if (sortBy === 'rating')
-        return sortMultiplier * ((a.siteRating ?? -1) - (b.siteRating ?? -1))
-      return 0
+      filter,
+      query,
+      sortBy,
+      sortOrder,
+      skip: pageIndex * this.ITEMS_PER_PAGE,
+      take: this.ITEMS_PER_PAGE
     })
 
-    const paged = enriched.slice(
-      pageIndex * this.ITEMS_PER_PAGE,
-      (pageIndex + 1) * this.ITEMS_PER_PAGE
-    )
+    const enriched = await this.fillMissingGameCacheEntries(rows)
 
-    const games: Record<string, typeof paged> = {
+    const games: Record<string, typeof enriched> = {
       PLAYED: [],
       PLAYING: [],
       PAUSED: [],
@@ -198,7 +148,7 @@ export class UserService {
       WISHLIST: []
     }
 
-    for (const entry of paged) {
+    for (const entry of enriched) {
       if (entry.status in games) {
         games[entry.status].push(entry)
       }
@@ -217,6 +167,55 @@ export class UserService {
       : totalPerStatusMapped.reduce((acc, t) => acc + t.totalGames, 0)
 
     return { games, totalPerStatus: totalPerStatusMapped, total }
+  }
+
+  // Safety net for igdbIds that reached user_games without ever landing in
+  // games_cache (pre-existing gap, or the fire-and-forget cache write from
+  // addGameToUserLibrary/createRating hasn't completed yet). Should be
+  // unreachable in steady state after the backfill script has run.
+  private async fillMissingGameCacheEntries(rows: PaginatedUserGameRow[]) {
+    const missing = rows.filter(r => r.name === null)
+
+    const fetched =
+      missing.length > 0
+        ? await IGDBService.getGamesByIds(missing.map(r => r.igdbId))
+        : []
+    const fetchedMap = new Map(fetched.map(g => [g.id, g]))
+
+    if (fetched.length > 0) {
+      this.gameCacheService
+        .cacheMany(fetched)
+        .catch(err => console.error('[GameCache] cacheMany failed', err))
+    }
+
+    return rows
+      .map(r => {
+        if (r.name !== null) {
+          return {
+            igdbId: r.igdbId,
+            name: r.name,
+            coverUrl: r.coverUrl,
+            platforms: r.platforms ?? undefined,
+            releaseDate: r.releaseDate ?? undefined,
+            siteRating: r.siteRating,
+            status: r.status as string
+          }
+        }
+
+        const g = fetchedMap.get(r.igdbId)
+        if (!g) return null
+
+        return {
+          igdbId: r.igdbId,
+          name: g.name,
+          coverUrl: IGDBService.formatCoverUrl(g.cover?.url),
+          platforms: g.platforms?.map(p => p.name),
+          releaseDate: g.first_release_date,
+          siteRating: r.siteRating,
+          status: r.status as string
+        }
+      })
+      .filter((g): g is NonNullable<typeof g> => g !== null)
   }
 
   async removeGame(igdbId: number, userId: string) {
@@ -327,20 +326,20 @@ export class UserService {
       incrementValue
     )
 
-    return { playedCount: userGameStats.completions }
+    return { playedCount: userGameStats?.completions ?? 0 }
   }
 
   async findGamesToDisplay(userId: string) {
     await this.requireUser(userId)
 
-    const userGames = await this.userRepository.findManyGamesOfUser(userId)
+    const userGames = await this.userRepository.findManyGamesOfUser({ userId })
 
     const playingIds = userGames
-      .filter(ug => ug.UserGamesStatus.status === Status.PLAYING)
+      .filter(ug => ug.status === Status.PLAYING)
       .map(ug => ug.igdbId)
 
     const backlogIds = userGames
-      .filter(ug => ug.UserGamesStatus.status === Status.BACKLOG)
+      .filter(ug => ug.status === Status.BACKLOG)
       .map(ug => ug.igdbId)
 
     const ownedIds = new Set(userGames.map(ug => ug.igdbId))

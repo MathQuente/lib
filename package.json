@@ -15,7 +15,8 @@
     "backfill:hypes": "tsx --env-file .env src/scripts/backfill-hypes.ts",
     "backfill:total-rating-count": "tsx --env-file .env src/scripts/backfill-total-rating-count.ts",
     "backfill:missing-content": "tsx --env-file .env src/scripts/backfill-missing-content.ts",
-    "backfill:category-parent": "tsx --env-file .env src/scripts/backfill-category-parent.ts"
+    "backfill:category-parent": "tsx --env-file .env src/scripts/backfill-category-parent.ts",
+    "backfill:user-library-gaps": "tsx --env-file .env src/scripts/backfill-user-library-gaps.ts"
   },
   "keywords": [],
   "author": "",

@@ -25,7 +25,6 @@ export const UserParamsSchema = z.object({
 export const GetUserResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
-    email: z.string().email(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),

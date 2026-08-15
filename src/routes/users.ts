@@ -6,12 +6,20 @@ import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
 import { RatingRepository } from '../repositories/rating.repository'
+import { GameCacheRepository } from '../repositories/game-cache.repository'
+import { GameCacheService } from '../services/game-cache.service'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
   const ratingRepository = new RatingRepository()
-  const userService = new UserService(userRepository, ratingRepository)
+  const gameCacheRepository = new GameCacheRepository()
+  const gameCacheService = new GameCacheService(gameCacheRepository)
+  const userService = new UserService(
+    userRepository,
+    ratingRepository,
+    gameCacheService
+  )
   const userController = new UserController(userService)
 
   app.withTypeProvider<ZodTypeProvider>().get(

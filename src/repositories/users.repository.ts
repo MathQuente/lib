@@ -1,7 +1,19 @@
-import { Status } from '@prisma/client'
+import { Prisma, Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
-import { ClientError } from '../errors/client-error'
+
+type UserGameSortBy = 'gameName' | 'dateRelease' | 'rating'
+type SortOrder = 'asc' | 'desc'
+
+export type PaginatedUserGameRow = {
+  igdbId: number
+  status: Status
+  name: string | null
+  coverUrl: string | null
+  platforms: string[] | null
+  releaseDate: number | null
+  siteRating: number | null
+}
 
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
@@ -20,20 +32,24 @@ export class UserRepository {
     igdbId: number,
     completions: number = 1
   ) {
-    return prisma.$transaction(async tx => {
-      const userGame = await tx.userGame.findUnique({
-        where: { userId_igdbId: { userId, igdbId } },
-        select: { id: true }
-      })
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_igdbId: { userId, igdbId } },
+      select: { id: true }
+    })
 
-      if (!userGame) return null
-
-      return tx.userGameStats.upsert({
-        where: { userGameId: userGame.id },
-        update: { completions },
-        create: { userGameId: userGame.id, completions },
-        select: { completions: true }
+    if (!userGame) {
+      console.error('[UserGameStats] createUserGameStats: userGame not found', {
+        userId,
+        igdbId
       })
+      return null
+    }
+
+    return prisma.userGameStats.upsert({
+      where: { userGameId: userGame.id },
+      update: { completions },
+      create: { userGameId: userGame.id, completions },
+      select: { completions: true }
     })
   }
 
@@ -63,10 +79,6 @@ export class UserRepository {
         _count: { select: { userGames: true } }
       }
     })
-  }
-
-  async findByStatusId(statusId: number) {
-    return prisma.userGamesStatus.findMany({ where: { id: statusId } })
   }
 
   async findUserGameStatus(igdbId: number, userId: string) {
@@ -108,19 +120,75 @@ export class UserRepository {
     }))
   }
 
-  async findManyGamesOfUser(userId: string, filterStatus?: Status | string) {
-    return prisma.userGame.findMany({
-      where: {
-        userId,
-        ...(filterStatus
-          ? { UserGamesStatus: { status: filterStatus as Status } }
-          : {})
-      },
-      select: {
-        igdbId: true,
-        UserGamesStatus: { select: { id: true, status: true } }
-      }
-    })
+  // Single entry point for "this user's library", from a plain unpaginated
+  // list (findGamesToDisplay) to the sorted/filtered/paginated one
+  // (findManyUserGames) — filter/query/sortBy/skip/take are all optional so
+  // one query shape serves both callers.
+  async findManyGamesOfUser({
+    userId,
+    filter,
+    query,
+    sortBy,
+    sortOrder = 'asc',
+    skip,
+    take
+  }: {
+    userId: string
+    filter?: Status
+    query?: string
+    sortBy?: UserGameSortBy
+    sortOrder?: SortOrder
+    skip?: number
+    take?: number
+  }): Promise<PaginatedUserGameRow[]> {
+    const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
+
+    const orderByClause =
+      sortBy === 'gameName'
+        ? Prisma.sql`gc.name ${direction} NULLS LAST`
+        : sortBy === 'dateRelease'
+          ? Prisma.sql`COALESCE(gc.release_date, 0) ${direction}`
+          : sortBy === 'rating'
+            ? Prisma.sql`COALESCE(r.avg_rating, -1) ${direction}`
+            : Prisma.sql`ug.created_at ASC`
+
+    const statusFilter = filter
+      ? Prisma.sql`AND ugs.status = ${filter}::"Status"`
+      : Prisma.empty
+
+    const queryFilter = query
+      ? Prisma.sql`AND gc.name ILIKE ${`%${query}%`}`
+      : Prisma.empty
+
+    const limitClause =
+      take !== undefined
+        ? Prisma.sql`LIMIT ${take} OFFSET ${skip ?? 0}`
+        : Prisma.empty
+
+    return prisma.$queryRaw<PaginatedUserGameRow[]>(Prisma.sql`
+      SELECT
+        ug.igdb_id       AS "igdbId",
+        ugs.status       AS "status",
+        gc.name          AS "name",
+        gc.cover_url     AS "coverUrl",
+        gc.platforms     AS "platforms",
+        gc.release_date  AS "releaseDate",
+        r.avg_rating     AS "siteRating"
+      FROM user_games ug
+      JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
+      LEFT JOIN games_cache gc ON gc.igdb_id = ug.igdb_id
+      LEFT JOIN (
+        SELECT igdb_id, AVG(value) AS avg_rating
+        FROM ratings
+        WHERE igdb_id IN (SELECT igdb_id FROM user_games WHERE user_id = ${userId})
+        GROUP BY igdb_id
+      ) r ON r.igdb_id = ug.igdb_id
+      WHERE ug.user_id = ${userId}
+      ${statusFilter}
+      ${queryFilter}
+      ORDER BY ${orderByClause}
+      ${limitClause}
+    `)
   }
 
   async findGamesCountByStatus(userId: string) {
@@ -160,18 +228,22 @@ export class UserRepository {
   }
 
   async removeUserGameStats(userId: string, igdbId: number) {
-    return prisma.$transaction(async tx => {
-      const userGame = await tx.userGame.findUnique({
-        where: { userId_igdbId: { userId, igdbId } },
-        select: { id: true }
-      })
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_igdbId: { userId, igdbId } },
+      select: { id: true }
+    })
 
-      if (!userGame) throw new ClientError('UserGame not found.', 404)
-
-      return tx.userGameStats.delete({
-        where: { userGameId: userGame.id },
-        select: { completions: true }
+    if (!userGame) {
+      console.error('[UserGameStats] removeUserGameStats: userGame not found', {
+        userId,
+        igdbId
       })
+      return null
+    }
+
+    return prisma.userGameStats.delete({
+      where: { userGameId: userGame.id },
+      select: { completions: true }
     })
   }
 
@@ -211,19 +283,23 @@ export class UserRepository {
     igdbId: number,
     incrementValue: number
   ) {
-    return prisma.$transaction(async tx => {
-      const userGame = await tx.userGame.findUnique({
-        where: { userId_igdbId: { userId, igdbId } },
-        select: { id: true }
-      })
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_igdbId: { userId, igdbId } },
+      select: { id: true }
+    })
 
-      if (!userGame) throw new ClientError('UserGame not found.', 404)
+    if (!userGame) {
+      console.error(
+        '[UserGameStats] updateUserGamePlayedCount: userGame not found',
+        { userId, igdbId }
+      )
+      return null
+    }
 
-      return tx.userGameStats.update({
-        where: { userGameId: userGame.id },
-        data: { completions: { increment: incrementValue } },
-        select: { completions: true }
-      })
+    return prisma.userGameStats.update({
+      where: { userGameId: userGame.id },
+      data: { completions: { increment: incrementValue } },
+      select: { completions: true }
     })
   }
 }

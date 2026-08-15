@@ -161,6 +161,13 @@ export class GameCacheRepository {
     })
   }
 
+  async findByIgdbId(igdbId: number) {
+    return prisma.gameCache.findUnique({
+      where: { igdbId },
+      select: { igdbId: true }
+    })
+  }
+
   async getMaxIgdbId(): Promise<number> {
     const result = await prisma.gameCache.findFirst({
       orderBy: { igdbId: 'desc' },
