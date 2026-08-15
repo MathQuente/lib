@@ -6,13 +6,16 @@ import { ClientError } from '../errors/client-error'
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  async createUser(request: FastifyRequest, reply: FastifyReply) {
-    const data = UserSchema.UserBodySchema.parse(request.body)
-
-    const { accessToken, refreshToken, user } =
-      await this.authService.createUser(data)
-
-    reply
+  // Shared by createUser/loginHandler/googleCallback/discordCallback — same
+  // session-establishing rule everywhere, not per-provider behavior. Kept
+  // separate from refreshTokenHandler, which sets refreshToken with the
+  // token's real `expires` instead of a rolling maxAge.
+  private setAuthCookies(
+    reply: FastifyReply,
+    accessToken: string,
+    refreshToken: string
+  ) {
+    return reply
       .setCookie('accessToken', accessToken, {
         httpOnly: false,
         secure: true,
@@ -27,7 +30,24 @@ export class AuthController {
         path: '/',
         maxAge: 60 * 60 * 24 * 7
       })
-      .send({ user })
+  }
+
+  private redirectWithOAuthError(
+    reply: FastifyReply,
+    provider: string,
+    error: unknown
+  ) {
+    console.error(`${provider} OAuth Error:`, error)
+    return reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
+  }
+
+  async createUser(request: FastifyRequest, reply: FastifyReply) {
+    const data = UserSchema.UserBodySchema.parse(request.body)
+
+    const { accessToken, refreshToken, user } =
+      await this.authService.createUser(data)
+
+    this.setAuthCookies(reply, accessToken, refreshToken).send({ user })
   }
 
   async loginHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -39,22 +59,7 @@ export class AuthController {
       user.id
     )
 
-    reply
-      .setCookie('accessToken', accessToken, {
-        httpOnly: false,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 15
-      })
-      .setCookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7
-      })
-      .send({ user })
+    this.setAuthCookies(reply, accessToken, refreshToken).send({ user })
   }
 
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -107,7 +112,7 @@ export class AuthController {
       const { code } = request.query as { code: string; state: string }
 
       if (!code) {
-        throw new Error('Authorization code missing')
+        throw new ClientError('Authorization code missing', 400)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,7 +141,7 @@ export class AuthController {
 
           if (!response.ok) {
             const error = await response.text()
-            throw new Error(`Token exchange failed: ${error}`)
+            throw new ClientError(`Token exchange failed: ${error}`, 502)
           }
 
           return await response.json()
@@ -150,7 +155,7 @@ export class AuthController {
       )
 
       if (!res.ok) {
-        throw new Error('Failed to fetch user info')
+        throw new ClientError('Failed to fetch user info', 502)
       }
 
       const profile = (await res.json()) as {
@@ -163,25 +168,11 @@ export class AuthController {
       const { accessToken, refreshToken } =
         await this.authService.loginWithGoogle(profile)
 
-      reply
-        .setCookie('accessToken', accessToken, {
-          httpOnly: false,
-          secure: true,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 15
-        })
-        .setCookie('refreshToken', refreshToken, {
-          httpOnly: true,
-          secure: true,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 60 * 24 * 7
-        })
-        .redirect(process.env.FRONTEND_URL + '/')
+      this.setAuthCookies(reply, accessToken, refreshToken).redirect(
+        process.env.FRONTEND_URL + '/'
+      )
     } catch (error) {
-      console.error('Google OAuth Error:', error)
-      reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
+      this.redirectWithOAuthError(reply, 'Google', error)
     }
   }
 
@@ -190,7 +181,7 @@ export class AuthController {
       const { code } = request.query as { code: string }
 
       if (!code) {
-        throw new Error('Authorization code missing')
+        throw new ClientError('Authorization code missing', 400)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -215,7 +206,7 @@ export class AuthController {
 
           if (!response.ok) {
             const error = await response.text()
-            throw new Error(`Token exchange failed: ${error}`)
+            throw new ClientError(`Token exchange failed: ${error}`, 502)
           }
 
           return await response.json()
@@ -228,7 +219,7 @@ export class AuthController {
       })
 
       if (!res.ok) {
-        throw new Error('Failed to fetch user info')
+        throw new ClientError('Failed to fetch user info', 502)
       }
 
       const profile = (await res.json()) as {
@@ -241,25 +232,11 @@ export class AuthController {
       const { accessToken, refreshToken } =
         await this.authService.loginWithDiscord(profile)
 
-      reply
-        .setCookie('accessToken', accessToken, {
-          httpOnly: false,
-          secure: true,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 15
-        })
-        .setCookie('refreshToken', refreshToken, {
-          httpOnly: true,
-          secure: true,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 60 * 24 * 7
-        })
-        .redirect(process.env.FRONTEND_URL + '/')
+      this.setAuthCookies(reply, accessToken, refreshToken).redirect(
+        process.env.FRONTEND_URL + '/'
+      )
     } catch (error) {
-      console.error('Discord OAuth Error:', error)
-      reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
+      this.redirectWithOAuthError(reply, 'Discord', error)
     }
   }
 }

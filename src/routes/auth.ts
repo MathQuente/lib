@@ -6,19 +6,11 @@ import { CacheRepository } from '../repositories/cache.repository'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 
-// Store temporário para states (mesmo do server.ts)
-const stateStore = new Map<string, number>()
-
-// Limpa states expirados
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, timestamp] of stateStore.entries()) {
-    if (now - timestamp > 600000) {
-      // 10 minutos
-      stateStore.delete(key)
-    }
-  }
-}, 300000)
+// OAuth CSRF state lives in Redis (10 min TTL, expires on its own) instead of
+// an in-memory Map — survives a server restart mid-flow (routine in dev with
+// tsx watch) and would work across multiple instances if this ever scales.
+const OAUTH_STATE_TTL_SECONDS = 600
+const oauthStateKey = (state: string) => `oauth-state:${state}`
 
 export async function authRoutes(app: FastifyInstance) {
   const authRepository = new AuthRepository()
@@ -76,10 +68,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       // Gera state manualmente
       const state = crypto.randomBytes(16).toString('hex')
-      stateStore.set(state, Date.now())
-
-      console.log(`✅ [MANUAL] State gerado: ${state}`)
-      console.log(`📊 States no store:`, Array.from(stateStore.keys()))
+      await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
 
       // Constrói a URL manualmente
       const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -94,7 +83,6 @@ export async function authRoutes(app: FastifyInstance) {
       })
 
       const authUrl = `${baseUrl}?${params.toString()}`
-      console.log(`🔗 Redirecionando para:`, authUrl)
 
       return reply.redirect(authUrl)
     } catch (error) {
@@ -105,10 +93,6 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ✅ Callback do Google
   app.get('/google/callback', async (request, reply) => {
-    console.log('=== CALLBACK RECEBIDO ===')
-    console.log('URL:', request.url)
-    console.log('Query params:', request.query)
-
     const query = request.query as {
       state?: string
       code?: string
@@ -116,10 +100,6 @@ export async function authRoutes(app: FastifyInstance) {
     }
     const stateFromQuery = query.state
     const code = query.code
-
-    console.log(`🔍 Validando state: ${stateFromQuery}`)
-    console.log(`📊 States disponíveis:`, Array.from(stateStore.keys()))
-    console.log(`📊 Tamanho do store:`, stateStore.size)
 
     // Verifica se há erro do Google
     if (query.error) {
@@ -137,7 +117,8 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    if (!stateStore.has(stateFromQuery)) {
+    const cachedState = await cacheRepository.get(oauthStateKey(stateFromQuery))
+    if (!cachedState) {
       console.error('❌ State inválido ou expirado')
       return reply.redirect(
         process.env.FRONTEND_URL + '/auth?error=invalid_state'
@@ -152,8 +133,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     // Remove state após validação
-    stateStore.delete(stateFromQuery)
-    console.log('✅ State validado e removido')
+    await cacheRepository.del(oauthStateKey(stateFromQuery))
 
     return authController.googleCallback(request, reply)
   })
@@ -169,7 +149,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const state = crypto.randomBytes(16).toString('hex')
-      stateStore.set(state, Date.now())
+      await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
 
       const baseUrl = 'https://discord.com/api/oauth2/authorize'
       const params = new URLSearchParams({
@@ -182,7 +162,6 @@ export async function authRoutes(app: FastifyInstance) {
       })
 
       const authUrl = `${baseUrl}?${params.toString()}`
-      console.log(`🔗 Redirecionando para:`, authUrl)
 
       return reply.redirect(authUrl)
     } catch (error) {
@@ -192,10 +171,6 @@ export async function authRoutes(app: FastifyInstance) {
   })
 
   app.get('/discord/callback', async (request, reply) => {
-    console.log('=== DISCORD CALLBACK RECEBIDO ===')
-    console.log('URL:', request.url)
-    console.log('Query params:', request.query)
-
     const query = request.query as {
       state?: string
       code?: string
@@ -211,7 +186,15 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    if (!stateFromQuery || !stateStore.has(stateFromQuery)) {
+    if (!stateFromQuery) {
+      console.error('❌ State inválido')
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=invalid_state'
+      )
+    }
+
+    const cachedState = await cacheRepository.get(oauthStateKey(stateFromQuery))
+    if (!cachedState) {
       console.error('❌ State inválido')
       return reply.redirect(
         process.env.FRONTEND_URL + '/auth?error=invalid_state'
@@ -225,7 +208,7 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    stateStore.delete(stateFromQuery)
+    await cacheRepository.del(oauthStateKey(stateFromQuery))
     return authController.discordCallback(request, reply)
   })
 }
