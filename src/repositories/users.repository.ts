@@ -112,10 +112,6 @@ export class UserRepository {
     }))
   }
 
-  // Single entry point for "this user's library", from a plain unpaginated
-  // list (findGamesToDisplay) to the sorted/filtered/paginated one
-  // (findManyUserGames) — filter/query/sortBy/skip/take are all optional so
-  // one query shape serves both callers.
   async findManyGamesOfUser({
     userId,
     filter,

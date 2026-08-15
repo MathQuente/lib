@@ -6,10 +6,6 @@ import { ClientError } from '../errors/client-error'
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  // Shared by createUser/loginHandler/googleCallback/discordCallback — same
-  // session-establishing rule everywhere, not per-provider behavior. Kept
-  // separate from refreshTokenHandler, which sets refreshToken with the
-  // token's real `expires` instead of a rolling maxAge.
   private setAuthCookies(
     reply: FastifyReply,
     accessToken: string,

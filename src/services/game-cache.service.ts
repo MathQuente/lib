@@ -5,9 +5,6 @@ import { IGDBGame } from '../types/igdb'
 export class GameCacheService {
   constructor(private gameCacheRepository: GameCacheRepository) {}
 
-  // Returns whether igdbId is a real IGDB game (and, as a side effect,
-  // makes sure it's cached). Used both to warm the cache (fire-and-forget,
-  // return value ignored) and to validate a new library entry (awaited).
   async ensureCached(igdbId: number): Promise<boolean> {
     const cached = await this.gameCacheRepository.findByIgdbId(igdbId)
     if (cached) return true

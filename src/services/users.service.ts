@@ -167,10 +167,6 @@ export class UserService {
     return { games, totalPerStatus: totalPerStatusMapped, total }
   }
 
-  // Safety net for igdbIds that reached user_games without ever landing in
-  // games_cache (pre-existing gap, or the fire-and-forget cache write from
-  // addGameToUserLibrary/createRating hasn't completed yet). Should be
-  // unreachable in steady state after the backfill script has run.
   private async fillMissingGameCacheEntries(rows: PaginatedUserGameRow[]) {
     const missing = rows.filter(r => r.name === null)
 

@@ -6,9 +6,6 @@ import { CacheRepository } from '../repositories/cache.repository'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 
-// OAuth CSRF state lives in Redis (10 min TTL, expires on its own) instead of
-// an in-memory Map — survives a server restart mid-flow (routine in dev with
-// tsx watch) and would work across multiple instances if this ever scales.
 const OAUTH_STATE_TTL_SECONDS = 600
 const oauthStateKey = (state: string) => `oauth-state:${state}`
 

@@ -5,8 +5,6 @@ import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { BATCH_SIZE, DELAY_MS, sleep } from './utils'
 
-// `exclude` covers ids we already tried this run and IGDB no longer has —
-// without it those ids would keep reappearing in every batch forever.
 async function findMissingIgdbIds(
   limit: number,
   exclude: number[]
