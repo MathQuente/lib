@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { RatingService } from './rating.service'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { GameCacheService } from './game-cache.service'
 import { ClientError } from '../errors/client-error'
 
 function fakeRatingRepository(
@@ -16,16 +17,52 @@ function fakeUserRepository(
   return { ...overrides } as unknown as UserRepository
 }
 
+function fakeGameCacheService(
+  overrides: Partial<GameCacheService> = {}
+): GameCacheService {
+  return {
+    ensureCached: vi.fn().mockResolvedValue(true),
+    cacheMany: vi.fn().mockResolvedValue(undefined),
+    ...overrides
+  } as unknown as GameCacheService
+}
+
 describe('RatingService.createRating', () => {
   it('throws ClientError when the user does not exist', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue(null)
     })
-    const service = new RatingService(fakeRatingRepository(), userRepository)
+    const service = new RatingService(
+      fakeRatingRepository(),
+      userRepository,
+      fakeGameCacheService()
+    )
 
     await expect(
       service.createRating(11133, 5, 'missing-user')
     ).rejects.toThrow(ClientError)
+  })
+
+  it('throws ClientError when the igdbId is not a real IGDB game', async () => {
+    const addGameToUserLibrary = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue(null),
+      addGameToUserLibrary
+    })
+    const gameCacheService = fakeGameCacheService({
+      ensureCached: vi.fn().mockResolvedValue(false)
+    })
+    const service = new RatingService(
+      fakeRatingRepository(),
+      userRepository,
+      gameCacheService
+    )
+
+    await expect(service.createRating(999999, 5, 'user-1')).rejects.toThrow(
+      ClientError
+    )
+    expect(addGameToUserLibrary).not.toHaveBeenCalled()
   })
 
   it('adds the game to the library on first rating', async () => {
@@ -40,7 +77,11 @@ describe('RatingService.createRating', () => {
     const ratingRepository = fakeRatingRepository({
       create: vi.fn().mockResolvedValue({ value: 5 })
     })
-    const service = new RatingService(ratingRepository, userRepository)
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
 
     const result = await service.createRating(11133, 5, 'user-1')
 
@@ -63,7 +104,11 @@ describe('RatingService.createRating', () => {
     const ratingRepository = fakeRatingRepository({
       create: vi.fn().mockResolvedValue({ value: 4 })
     })
-    const service = new RatingService(ratingRepository, userRepository)
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
 
     await service.createRating(11133, 4, 'user-1')
 
@@ -79,7 +124,11 @@ describe('RatingService.deleteRating', () => {
     const ratingRepository = fakeRatingRepository({
       findUniqueByUserGame: vi.fn().mockResolvedValue(null)
     })
-    const service = new RatingService(ratingRepository, userRepository)
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
 
     await expect(service.deleteRating(11133, 'user-1')).rejects.toThrow(
       ClientError
@@ -95,7 +144,11 @@ describe('RatingService.deleteRating', () => {
       findUniqueByUserGame: vi.fn().mockResolvedValue({ value: 3 }),
       delete: deleteFn
     })
-    const service = new RatingService(ratingRepository, userRepository)
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
 
     await service.deleteRating(11133, 'user-1')
 
@@ -110,7 +163,11 @@ describe('RatingService.findAverageRating', () => {
         .fn()
         .mockResolvedValue({ _avg: { value: null } })
     })
-    const service = new RatingService(ratingRepository, fakeUserRepository())
+    const service = new RatingService(
+      ratingRepository,
+      fakeUserRepository(),
+      fakeGameCacheService()
+    )
 
     const result = await service.findAverageRating(11133)
 
@@ -123,7 +180,11 @@ describe('RatingService.findAverageRating', () => {
         .fn()
         .mockResolvedValue({ _avg: { value: 4.5 } })
     })
-    const service = new RatingService(ratingRepository, fakeUserRepository())
+    const service = new RatingService(
+      ratingRepository,
+      fakeUserRepository(),
+      fakeGameCacheService()
+    )
 
     const result = await service.findAverageRating(11133)
 

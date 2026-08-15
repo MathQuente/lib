@@ -1,13 +1,15 @@
 import { ClientError } from '../errors/client-error'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { GameCacheService } from './game-cache.service'
 
 const PLAYED_STATUS_ID = 1
 
 export class RatingService {
   constructor(
     private ratingRepository: RatingRepository,
-    private userRepository: UserRepository
+    private userRepository: UserRepository,
+    private gameCacheService: GameCacheService
   ) {}
 
   private async requireUser(userId: string) {
@@ -22,6 +24,9 @@ export class RatingService {
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
     if (!userGame) {
+      const gameExists = await this.gameCacheService.ensureCached(igdbId)
+      if (!gameExists) throw new ClientError('Game not found.', 404)
+
       await this.userRepository.addGameToUserLibrary({
         igdbId,
         userId,

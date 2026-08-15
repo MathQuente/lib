@@ -1,19 +1,11 @@
 import { Prisma, Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
-
-type UserGameSortBy = 'gameName' | 'dateRelease' | 'rating'
-type SortOrder = 'asc' | 'desc'
-
-export type PaginatedUserGameRow = {
-  igdbId: number
-  status: Status
-  name: string | null
-  coverUrl: string | null
-  platforms: string[] | null
-  releaseDate: number | null
-  siteRating: number | null
-}
+import {
+  PaginatedUserGameRow,
+  UserGameSortBy,
+  UserGameSortOrder
+} from '../types/user'
 
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
@@ -137,7 +129,7 @@ export class UserRepository {
     filter?: Status
     query?: string
     sortBy?: UserGameSortBy
-    sortOrder?: SortOrder
+    sortOrder?: UserGameSortOrder
     skip?: number
     take?: number
   }): Promise<PaginatedUserGameRow[]> {

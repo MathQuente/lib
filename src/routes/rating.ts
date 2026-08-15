@@ -4,13 +4,21 @@ import { RatingService } from '../services/rating.service'
 import { RatingController } from '../controllers/rating.controller'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { GameCacheRepository } from '../repositories/game-cache.repository'
+import { GameCacheService } from '../services/game-cache.service'
 import * as RatingSchema from '../schemas/rating.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function ratingRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const userRepository = new UserRepository()
-  const ratingService = new RatingService(ratingRepository, userRepository)
+  const gameCacheRepository = new GameCacheRepository()
+  const gameCacheService = new GameCacheService(gameCacheRepository)
+  const ratingService = new RatingService(
+    ratingRepository,
+    userRepository,
+    gameCacheService
+  )
   const ratingController = new RatingController(ratingService)
 
   app.withTypeProvider<ZodTypeProvider>().post(

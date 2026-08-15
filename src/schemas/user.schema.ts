@@ -1,21 +1,10 @@
 import z from 'zod'
 
-export const CreateUserResponseSchema = z.object({
-  token: z.string(),
-  user: z.object({
-    id: z.string().uuid()
-  })
-})
-
 export const DeleteUserResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
     userName: z.string()
   })
-})
-
-export const LoginResponseSchema = z.object({
-  token: z.string()
 })
 
 export const UserParamsSchema = z.object({
@@ -59,22 +48,12 @@ export const UserGameParamsSchema = z.object({
   igdbId: z.coerce.number().int()
 })
 
-export const UserGamePlayedCountUpdateParamsSchema = z.object({
-  userId: z.string().uuid(),
-  igdbId: z.coerce.number().int()
-})
-
 export const UserGameBodySchema = z.object({
   statusId: z.number()
 })
 
 export const UserGamePlayedCountUpdateBodySchema = z.object({
   incrementValue: z.number().int()
-})
-
-export const RemoveGameParamsSchema = z.object({
-  itemId: z.string().uuid(),
-  userId: z.string().uuid()
 })
 
 export const AddGameResponseSchema = z.object({
@@ -85,21 +64,12 @@ export const RemoveGameResponseSchema = z.object({
   igdbId: z.number()
 })
 
-export const GetUserGameStatusParamsSchema = z.object({
-  userId: z.string().uuid(),
-  itemId: z.string().uuid()
-})
-
 export const UpdateUserResponseSchema = z.object({
   user: z.object({
     profilePicture: z.string(),
     userBanner: z.string().nullable(),
     userName: z.string()
   })
-})
-
-export const UpdateUserGameStatusBody = z.object({
-  statusIds: z.number()
 })
 
 export const GetUserGameStatusResponse = z.object({

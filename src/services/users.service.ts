@@ -2,10 +2,8 @@ import { Status } from '@prisma/client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 import { RatingRepository } from '../repositories/rating.repository'
-import {
-  PaginatedUserGameRow,
-  UserRepository
-} from '../repositories/users.repository'
+import { UserRepository } from '../repositories/users.repository'
+import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
 import { GameCacheService } from './game-cache.service'
 import { randomInt } from 'crypto'

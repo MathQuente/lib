@@ -14,15 +14,6 @@ import { errorHandler } from './error-handler'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (
-      request: FastifyRequest,
-      reply: FastifyReply
-    ) => Promise<void>
-  }
-}
-
 export class Server {
   private static app: FastifyInstance = fastify()
   private static port: number = Number(process.env.PORT) || 3333

@@ -1,8 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../database/db'
-
-type SortBy = 'name' | 'release_date' | 'rating'
-type SortOrder = 'asc' | 'desc'
+import { GameCacheSortBy, GameCacheSortOrder } from '../types/game-cache'
 
 // A cached game is notable enough to list/search if it clears either bar:
 // enough post-release ratings (covers classics, which rarely have hype), or
@@ -14,14 +12,14 @@ export class GameCacheRepository {
   async findMany({
     limit = 20,
     pageIndex = 0,
-    sortBy = 'release_date' as SortBy,
-    sortOrder = 'desc' as SortOrder,
+    sortBy = 'release_date' as GameCacheSortBy,
+    sortOrder = 'desc' as GameCacheSortOrder,
     query
   }: {
     limit?: number
     pageIndex?: number
-    sortBy?: SortBy
-    sortOrder?: SortOrder
+    sortBy?: GameCacheSortBy
+    sortOrder?: GameCacheSortOrder
     query?: string
   }) {
     const offset = pageIndex * limit
@@ -74,7 +72,7 @@ export class GameCacheRepository {
   }: {
     limit: number
     offset: number
-    sortOrder: SortOrder
+    sortOrder: GameCacheSortOrder
     query?: string
   }) {
     const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
