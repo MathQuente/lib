@@ -41,6 +41,12 @@ export class IGDBService {
       body
     })
     const data = (await response.json()) as { count?: number }
+
+    if (!response.ok || 'title' in data) {
+      console.error('[IGDB] count request failed', { status: response.status, data })
+      throw new IGDBRequestError('IGDB count request failed', data)
+    }
+
     return data.count ?? 0
   }
 
@@ -138,22 +144,6 @@ export class IGDBService {
     return Math.floor(tomorrowUTC / 1000)
   }
 
-  static async searchGames(
-    query: string,
-    limit = 10,
-    pageIndex = 0
-  ): Promise<{ games: IGDBGame[]; total: number }> {
-    const where = `search "${query}"`
-    const [games, rawTotal] = await Promise.all([
-      this.request<IGDBGame[]>(
-        'games',
-        `${where}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game,rating,follows; limit ${limit}; offset ${pageIndex * limit};`
-      ),
-      this.countRequest('games', `${where};`)
-    ])
-    return { games, total: Math.min(rawTotal, 10000) }
-  }
-
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
@@ -185,32 +175,6 @@ export class IGDBService {
       'games',
       `fields id,name,cover.url,rating,platforms.name,first_release_date,category,parent_game; where first_release_date < ${cutoff} & first_release_date != null & cover != null & total_rating_count >= ${this.MIN_TOTAL_RATING_COUNT}; sort first_release_date desc; limit ${limit};`
     )
-  }
-
-  static async getPopularGames(
-    limit = 20,
-    pageIndex = 0,
-    sortBy: 'name' | 'release_date' | 'rating' = 'release_date',
-    sortOrder: 'asc' | 'desc' = 'desc'
-  ): Promise<{ games: IGDBGame[]; total: number }> {
-    const now = Math.floor(Date.now() / 1000)
-    let igdbSort: string
-    if (sortBy === 'name') {
-      igdbSort = `sort name ${sortOrder}`
-    } else if (sortBy === 'release_date') {
-      igdbSort = `sort first_release_date ${sortOrder}`
-    } else {
-      igdbSort = `sort first_release_date desc`
-    }
-    const where = `where first_release_date < ${now} & first_release_date != null & cover != null & parent_game = null`
-    const [games, rawTotal] = await Promise.all([
-      this.request<IGDBGame[]>(
-        'games',
-        `fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date; ${where}; ${igdbSort}; limit ${limit}; offset ${pageIndex * limit};`
-      ),
-      this.countRequest('games', `${where};`)
-    ])
-    return { games, total: Math.min(rawTotal, 10000) }
   }
 
   static async fetchForSync(
