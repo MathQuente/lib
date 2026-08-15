@@ -128,22 +128,31 @@ export class GameService {
     const [trending, mostRated, recent, future] = await Promise.all([
       this.findTrendingGames(6),
       this.findMostRatedGames(6),
-      IGDBService.getRecentlyReleasedGames(6),
+      this.findRecentlyReleasedGames(6),
       this.findComingSoonGames(6)
     ])
-
-    const ratingsMap = await this.ratingRepository.getAverageRatingsForGames(
-      [...recent].map(g => g.id)
-    )
 
     return {
       mostRatedGames: mostRated.games,
       trendingGames: trending.games,
-      recentGames: recent.map(g =>
-        this.formatGame(g, ratingsMap.get(g.id) ?? null)
-      ),
+      recentGames: recent.games,
       futureGames: future.games
     }
+  }
+
+  private async findRecentlyReleasedGames(limit = 6) {
+    const key = `games:recent:${limit}`
+    let games: IGDBGame[]
+    const cached = await this.cacheRepository.get(key)
+
+    if (cached !== null) {
+      games = (cached as { games: IGDBGame[] }).games
+    } else {
+      games = await IGDBService.getRecentlyReleasedGames(limit)
+      await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
+    }
+
+    return { games: await this.enrichWithSiteRatings(games) }
   }
 
   async findComingSoonGames(limit = 20, pageIndex = 0) {
@@ -215,7 +224,7 @@ export class GameService {
     return ordered.map(g => this.formatGame(g, siteRatings.get(g.id) ?? null))
   }
 
-  async findTrendingGames(limit = 20) {
+  private async findTrendingGames(limit = 20) {
     const since = new Date(
       Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000
     )
@@ -230,7 +239,7 @@ export class GameService {
     return { games, total: games.length }
   }
 
-  async findMostRatedGames(limit = 20) {
+  private async findMostRatedGames(limit = 20) {
     const topRated = await this.ratingRepository.findTopRatedIgdbIds(limit)
     if (topRated.length === 0) return { games: [], total: 0 }
 
