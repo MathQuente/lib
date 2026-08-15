@@ -1,4 +1,4 @@
-import { redis } from "../database/redis";
+import { redis } from '../database/redis'
 
 export class CacheRepository {
   async get(key: string): Promise<unknown | null> {
