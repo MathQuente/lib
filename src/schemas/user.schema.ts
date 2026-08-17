@@ -87,7 +87,7 @@ const UserGameEntrySchema = z.object({
   coverUrl: z.string().nullable(),
   platforms: z.array(z.string()).optional(),
   releaseDate: z.number().optional(),
-  siteRating: z.number().nullable(),
+  rating: z.number().nullable(),
   status: z.string()
 })
 

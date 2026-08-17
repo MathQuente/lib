@@ -135,7 +135,7 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: ['PC'],
         releaseDate: 100,
-        siteRating: 4
+        rating: 4
       },
       {
         igdbId: 2,
@@ -144,7 +144,7 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: [],
         releaseDate: 200,
-        siteRating: null
+        rating: null
       }
     ]
     const userRepository = fakeUserRepository({
@@ -183,7 +183,7 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: 'https://img/cached.jpg',
         platforms: ['PC'],
         releaseDate: 100,
-        siteRating: 4
+        rating: 4
       },
       {
         igdbId: 99,
@@ -192,7 +192,7 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: null,
         releaseDate: null,
-        siteRating: null
+        rating: null
       }
     ]
     const userRepository = fakeUserRepository({
@@ -247,7 +247,7 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: [],
         releaseDate: null,
-        siteRating: null
+        rating: null
       }
     ]
     const userRepository = fakeUserRepository({

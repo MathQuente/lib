@@ -8,7 +8,7 @@ export const IGDBGameSchema = z.object({
   genres: z.array(z.string()).optional(),
   platforms: z.array(z.string()).optional(),
   releaseDate: z.number().optional(),
-  siteRating: z.number().nullable(),
+  rating: z.number().nullable(),
   developers: z.array(z.string()).optional(),
   publishers: z.array(z.string()).optional(),
   // IGDB category id (0=main_game, 1=dlc_addon, 2=expansion, 8=remake, 9=remaster, ...),
@@ -16,7 +16,25 @@ export const IGDBGameSchema = z.object({
   category: z.number(),
   // Presence of parentGameId is the reliable "this is DLC/related content" signal,
   // since category is often missing even when this isn't.
-  parentGameId: z.number().nullable()
+  parentGameId: z.number().nullable(),
+  // Only populated on the single-game detail endpoint (parent_game is requested
+  // with sub-fields there); absent everywhere else even when parentGameId is set.
+  parentGame: z
+    .object({
+      igdbId: z.number(),
+      name: z.string(),
+      coverUrl: z.string().nullable()
+    })
+    .optional(),
+  // Per-platform release dates; only requested on the single-game detail endpoint.
+  releaseDates: z
+    .array(
+      z.object({
+        platformName: z.string(),
+        date: z.number().nullable()
+      })
+    )
+    .optional()
 })
 
 export const GameParamsSchema = z.object({

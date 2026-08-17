@@ -191,7 +191,7 @@ export class UserService {
             coverUrl: r.coverUrl,
             platforms: r.platforms ?? undefined,
             releaseDate: r.releaseDate ?? undefined,
-            siteRating: r.siteRating,
+            rating: r.rating,
             status: r.status as string
           }
         }
@@ -205,7 +205,7 @@ export class UserService {
           coverUrl: IGDBService.formatCoverUrl(g.cover?.url),
           platforms: g.platforms?.map(p => p.name),
           releaseDate: g.first_release_date,
-          siteRating: r.siteRating,
+          rating: r.rating,
           status: r.status as string
         }
       })

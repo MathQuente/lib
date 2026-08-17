@@ -86,6 +86,14 @@ export class IGDBService {
 
   static readonly INT4_MAX = 2_147_483_647
 
+  // parent_game comes back as a plain id normally, but as {id, name, cover}
+  // when the query expands it with sub-fields (e.g. the single-game detail query).
+  static getParentGameId(g: IGDBGame): number | null {
+    return typeof g.parent_game === 'object'
+      ? (g.parent_game?.id ?? null)
+      : (g.parent_game ?? null)
+  }
+
   static toGameCacheInput(g: IGDBGame) {
     return {
       igdbId: g.id,
@@ -102,7 +110,7 @@ export class IGDBService {
       totalRatingCount: g.total_rating_count ?? 0,
       // -1 marks "IGDB has no category for this game" vs. a real category id (0-14).
       category: g.category ?? -1,
-      parentGameId: g.parent_game ?? null
+      parentGameId: this.getParentGameId(g)
     }
   }
 
@@ -147,7 +155,7 @@ export class IGDBService {
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
-      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher; limit 1;`
+      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name; limit 1;`
     )
     return results[0] ?? null
   }

@@ -13,11 +13,12 @@ export interface IGDBGame {
   platforms?: { name: string }[]
   first_release_date?: number
   category?: number
-  parent_game?: number
+  parent_game?: number | { id: number; name: string; cover?: { url: string } }
   rating?: number
   follows?: number
   hypes?: number
   total_rating_count?: number
   similar_games?: number[]
   involved_companies?: IGDBInvolvedCompany[]
+  release_dates?: { date?: number; platform?: { name: string } }[]
 }

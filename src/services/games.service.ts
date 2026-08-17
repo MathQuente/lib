@@ -17,13 +17,31 @@ export class GameService {
     private cacheRepository: CacheRepository
   ) {}
 
-  private formatGame(game: IGDBGame, siteRating: number | null = null) {
+  private formatGame(game: IGDBGame, rating: number | null = null) {
     const developers = game.involved_companies
       ?.filter(c => c.developer)
       .map(c => c.company.name)
     const publishers = game.involved_companies
       ?.filter(c => c.publisher)
       .map(c => c.company.name)
+
+    const parentGameId = IGDBService.getParentGameId(game)
+
+    const parentGame =
+      typeof game.parent_game === 'object' && game.parent_game
+        ? {
+            igdbId: game.parent_game.id,
+            name: game.parent_game.name,
+            coverUrl: IGDBService.formatCoverUrl(game.parent_game.cover?.url)
+          }
+        : undefined
+
+    const releaseDates = game.release_dates
+      ?.filter(rd => rd.platform?.name)
+      .map(rd => ({
+        platformName: rd.platform?.name as string,
+        date: rd.date ?? null
+      }))
 
     return {
       igdbId: game.id,
@@ -33,15 +51,18 @@ export class GameService {
       genres: game.genres?.map(g => g.name),
       platforms: game.platforms?.map(p => p.name),
       releaseDate: game.first_release_date,
-      siteRating,
+      rating,
       developers: developers && developers.length > 0 ? developers : undefined,
       publishers: publishers && publishers.length > 0 ? publishers : undefined,
       category: game.category ?? -1,
-      parentGameId: game.parent_game ?? null
+      parentGameId,
+      parentGame,
+      releaseDates:
+        releaseDates && releaseDates.length > 0 ? releaseDates : undefined
     }
   }
 
-  private async enrichWithSiteRatings(games: IGDBGame[]) {
+  private async enrichWithRatings(games: IGDBGame[]) {
     const igdbIds = games.map(g => g.id)
     const ratingsMap =
       await this.ratingRepository.getAverageRatingsForGames(igdbIds)
@@ -75,7 +96,7 @@ export class GameService {
       genres: g.genres.length > 0 ? g.genres : undefined,
       platforms: g.platforms.length > 0 ? g.platforms : undefined,
       releaseDate: g.releaseDate ?? undefined,
-      siteRating: ratingsMap.get(g.igdbId) ?? null,
+      rating: ratingsMap.get(g.igdbId) ?? null,
       category: g.category ?? -1,
       parentGameId: g.parentGameId ?? null
     }))
@@ -152,7 +173,7 @@ export class GameService {
       await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
     }
 
-    return { games: await this.enrichWithSiteRatings(games) }
+    return { games: await this.enrichWithRatings(games) }
   }
 
   async findComingSoonGames(limit = 20, pageIndex = 0) {
@@ -178,12 +199,12 @@ export class GameService {
       )
     }
 
-    return { games: await this.enrichWithSiteRatings(games), total }
+    return { games: await this.enrichWithRatings(games), total }
   }
 
   private async findReleasedGamesByRankedIds(
     rankedIds: number[],
-    siteRatings: Map<number, number | null>
+    ratings: Map<number, number | null>
   ) {
     const cutoff = IGDBService.getReleaseCutoffEpoch()
     const keys = rankedIds.map(id => `game:meta:${id}`)
@@ -221,7 +242,7 @@ export class GameService {
           !!g && g.first_release_date != null && g.first_release_date < cutoff
       )
 
-    return ordered.map(g => this.formatGame(g, siteRatings.get(g.id) ?? null))
+    return ordered.map(g => this.formatGame(g, ratings.get(g.id) ?? null))
   }
 
   private async findTrendingGames(limit = 20) {
@@ -269,6 +290,6 @@ export class GameService {
       await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
     }
 
-    return this.enrichWithSiteRatings(games)
+    return this.enrichWithRatings(games)
   }
 }

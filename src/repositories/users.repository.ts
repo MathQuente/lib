@@ -161,7 +161,7 @@ export class UserRepository {
         gc.cover_url     AS "coverUrl",
         gc.platforms     AS "platforms",
         gc.release_date  AS "releaseDate",
-        r.avg_rating     AS "siteRating"
+        r.avg_rating     AS "rating"
       FROM user_games ug
       JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
       LEFT JOIN games_cache gc ON gc.igdb_id = ug.igdb_id
