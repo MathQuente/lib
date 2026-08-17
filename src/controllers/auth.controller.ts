@@ -13,7 +13,7 @@ export class AuthController {
   ) {
     return reply
       .setCookie('accessToken', accessToken, {
-        httpOnly: false,
+        httpOnly: true,
         secure: true,
         sameSite: 'lax',
         path: '/',
@@ -71,7 +71,7 @@ export class AuthController {
 
     reply
       .setCookie('accessToken', accessToken, {
-        httpOnly: false,
+        httpOnly: true,
         secure: true,
         sameSite: 'lax',
         path: '/',

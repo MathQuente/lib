@@ -94,7 +94,7 @@ export class Jwt {
               const newAccessToken = fastify.jwt.sign({ userId })
 
               response.setCookie('accessToken', newAccessToken, {
-                httpOnly: false,
+                httpOnly: true,
                 secure: true,
                 sameSite: 'lax',
                 path: '/',
