@@ -1,6 +1,10 @@
 import { Status } from '@prisma/client'
 
-export type UserGameSortBy = 'gameName' | 'dateRelease' | 'rating'
+export type UserGameSortBy =
+  | 'gameName'
+  | 'dateRelease'
+  | 'rating'
+  | 'dateAdded'
 export type UserGameSortOrder = 'asc' | 'desc'
 
 export type PaginatedUserGameRow = {
@@ -11,4 +15,5 @@ export type PaginatedUserGameRow = {
   platforms: string[] | null
   releaseDate: number | null
   rating: number | null
+  completions: number
 }

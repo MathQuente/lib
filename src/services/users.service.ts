@@ -121,8 +121,8 @@ export class UserService {
     pageIndex: number,
     filter: Status | undefined,
     query: string | undefined,
-    sortBy: 'gameName' | 'dateRelease' | 'rating',
-    sortOrder: 'asc' | 'desc' = 'asc'
+    sortBy: 'gameName' | 'dateRelease' | 'rating' | 'dateAdded' = 'dateAdded',
+    sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' ? 'desc' : 'asc'
   ) {
     await this.requireUser(userId)
 
@@ -192,6 +192,7 @@ export class UserService {
             platforms: r.platforms ?? undefined,
             releaseDate: r.releaseDate ?? undefined,
             rating: r.rating,
+            completions: r.completions,
             status: r.status as string
           }
         }
@@ -206,6 +207,7 @@ export class UserService {
           platforms: g.platforms?.map(p => p.name),
           releaseDate: g.first_release_date,
           rating: r.rating,
+          completions: r.completions,
           status: r.status as string
         }
       })

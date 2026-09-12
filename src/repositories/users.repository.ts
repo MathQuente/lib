@@ -137,8 +137,8 @@ export class UserRepository {
         : sortBy === 'dateRelease'
           ? Prisma.sql`COALESCE(gc.release_date, 0) ${direction}`
           : sortBy === 'rating'
-            ? Prisma.sql`COALESCE(r.avg_rating, -1) ${direction}`
-            : Prisma.sql`ug.created_at ASC`
+            ? Prisma.sql`COALESCE(r.value, -1) ${direction}`
+            : Prisma.sql`ug.created_at ${direction}`
 
     const statusFilter = filter
       ? Prisma.sql`AND ugs.status = ${filter}::"Status"`
@@ -155,22 +155,19 @@ export class UserRepository {
 
     return prisma.$queryRaw<PaginatedUserGameRow[]>(Prisma.sql`
       SELECT
-        ug.igdb_id       AS "igdbId",
-        ugs.status       AS "status",
-        gc.name          AS "name",
-        gc.cover_url     AS "coverUrl",
-        gc.platforms     AS "platforms",
-        gc.release_date  AS "releaseDate",
-        r.avg_rating     AS "rating"
+        ug.igdb_id                    AS "igdbId",
+        ugs.status                    AS "status",
+        gc.name                       AS "name",
+        gc.cover_url                  AS "coverUrl",
+        gc.platforms                  AS "platforms",
+        gc.release_date               AS "releaseDate",
+        r.value                       AS "rating",
+        COALESCE(ugst.completions, 0) AS "completions"
       FROM user_games ug
       JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
       LEFT JOIN games_cache gc ON gc.igdb_id = ug.igdb_id
-      LEFT JOIN (
-        SELECT igdb_id, AVG(value) AS avg_rating
-        FROM ratings
-        WHERE igdb_id IN (SELECT igdb_id FROM user_games WHERE user_id = ${userId})
-        GROUP BY igdb_id
-      ) r ON r.igdb_id = ug.igdb_id
+      LEFT JOIN ratings r ON r.igdb_id = ug.igdb_id AND r.user_id = ${userId}
+      LEFT JOIN user_game_stats ugst ON ugst.user_game_id = ug.id
       WHERE ug.user_id = ${userId}
       ${statusFilter}
       ${queryFilter}

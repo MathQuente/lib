@@ -28,8 +28,10 @@ export const QueryStringSchema = z.object({
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional()
     .catch(undefined),
-  sortBy: z.enum(['gameName', 'dateRelease', 'rating']).catch('gameName'),
-  sortOrder: z.enum(['asc', 'desc']).catch('asc')
+  sortBy: z
+    .enum(['gameName', 'dateRelease', 'rating', 'dateAdded'])
+    .optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional()
 })
 
 export const GetAllUsersResponseSchema = z.object({
@@ -88,6 +90,7 @@ const UserGameEntrySchema = z.object({
   platforms: z.array(z.string()).optional(),
   releaseDate: z.number().optional(),
   rating: z.number().nullable(),
+  completions: z.number(),
   status: z.string()
 })
 
