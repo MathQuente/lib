@@ -86,8 +86,6 @@ export class IGDBService {
 
   static readonly INT4_MAX = 2_147_483_647
 
-  // parent_game comes back as a plain id normally, but as {id, name, cover}
-  // when the query expands it with sub-fields (e.g. the single-game detail query).
   static getParentGameId(g: IGDBGame): number | null {
     return typeof g.parent_game === 'object'
       ? (g.parent_game?.id ?? null)
@@ -108,34 +106,15 @@ export class IGDBService {
           : undefined,
       hypes: g.hypes ?? 0,
       totalRatingCount: g.total_rating_count ?? 0,
-      // -1 marks "IGDB has no category for this game" vs. a real category id (0-14).
       category: g.category ?? -1,
       parentGameId: this.getParentGameId(g)
     }
   }
 
-  // Minimum IGDB "hypes" (people who marked interest before release) to
-  // consider an upcoming game notable enough to surface as "coming soon".
   static readonly MIN_HYPES = 5
-
-  // Minimum IGDB "total_rating_count" (critic + user ratings) to consider an
-  // already-released game notable enough to surface. Unlike hypes, this works
-  // for classics released before IGDB's hype-tracking feature existed.
-  // IGDB's "category" field (main_game/dlc/remaster/...) is too inconsistently
-  // populated to filter on — plenty of legitimate DLCs and remasters (e.g.
-  // Alan Wake Remastered) have no category set at all — so we rely on these
-  // engagement numbers instead of category to separate real games from shovelware.
   static readonly MIN_TOTAL_RATING_COUNT = 10
-
-  // Brazil has not observed daylight saving time since 2019, so a fixed UTC-3
-  // offset reliably represents "today" for our users, regardless of server timezone.
   private static readonly RELEASE_CUTOFF_UTC_OFFSET_HOURS = 3
 
-  /**
-   * Epoch (seconds) for the start of tomorrow in the America/Fortaleza timezone.
-   * Comparing against this cutoff (instead of the exact current instant) keeps
-   * games releasing "today" out of "coming soon" regardless of what time it is.
-   */
   static getReleaseCutoffEpoch(): number {
     const [year, month, day] = new Date()
       .toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' })
@@ -155,18 +134,18 @@ export class IGDBService {
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
-      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name; limit 1;`
+      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name; limit 1;`
     )
     return results[0] ?? null
   }
 
-  // DLCs/expansions/remasters that point to this game via parent_game — fetched
-  // live so it doesn't depend on the local cache backfill being up to date.
   static async getRelatedGames(igdbId: number): Promise<IGDBGame[]> {
-    return this.request<IGDBGame[]>(
+    const games = await this.request<IGDBGame[]>(
       'games',
-      `where parent_game = ${igdbId}; fields id,name,cover.url,category,parent_game,first_release_date,rating; sort first_release_date asc; limit 50;`
+      `where parent_game = ${igdbId} & game_type != (5,12); fields id,name,cover.url,category,game_type,parent_game,first_release_date,rating; sort first_release_date asc; limit 50;`
     )
+
+    return games.filter(g => !/\bbundle\b/i.test(g.name))
   }
 
   static async getGamesByIds(ids: number[]): Promise<IGDBGame[]> {
@@ -195,12 +174,6 @@ export class IGDBService {
     )
   }
 
-  /**
-   * One-off backfill helper: earlier syncs excluded anything with a parent_game
-   * (DLCs, expansions, remasters...). This re-scans an already-synced id range
-   * for that previously-skipped content so it can be added to the cache.
-   * Quality is filtered downstream via total_rating_count/hypes, not here.
-   */
   static async fetchMissingReleasedContent(
     lastId: number,
     maxId: number,

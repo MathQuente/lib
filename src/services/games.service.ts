@@ -38,10 +38,25 @@ export class GameService {
 
     const releaseDates = game.release_dates
       ?.filter(rd => rd.platform?.name)
-      .map(rd => ({
-        platformName: rd.platform?.name as string,
-        date: rd.date ?? null
-      }))
+      .reduce<Array<{ platformName: string; date: number | null }>>(
+        (acc, rd) => {
+          const platformName = rd.platform?.name as string
+          const date = rd.date ?? null
+          const existing = acc.find(r => r.platformName === platformName)
+
+          if (!existing) {
+            acc.push({ platformName, date })
+          } else if (
+            date !== null &&
+            (existing.date === null || date < existing.date)
+          ) {
+            existing.date = date
+          }
+
+          return acc
+        },
+        []
+      )
 
     return {
       igdbId: game.id,
@@ -54,7 +69,7 @@ export class GameService {
       rating,
       developers: developers && developers.length > 0 ? developers : undefined,
       publishers: publishers && publishers.length > 0 ? publishers : undefined,
-      category: game.category ?? -1,
+      category: game.game_type ?? game.category ?? -1,
       parentGameId,
       parentGame,
       releaseDates:
