@@ -16,4 +16,5 @@ export type PaginatedUserGameRow = {
   releaseDate: number | null
   rating: number | null
   completions: number
+  hoursPlayed: number
 }

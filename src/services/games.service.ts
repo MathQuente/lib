@@ -84,12 +84,33 @@ export class GameService {
     return games.map(g => this.formatGame(g, ratingsMap.get(g.id) ?? null))
   }
 
+  private async enrichWithUserLibraryData<T extends { igdbId: number }>(
+    games: T[],
+    userId: string | undefined
+  ): Promise<
+    Array<T & { status?: string; completions?: number; hoursPlayed?: number }>
+  > {
+    if (!userId || games.length === 0) return games
+
+    const statusMap = await this.userRepository.findUserGameStatusesForGames(
+      userId,
+      games.map(g => g.igdbId)
+    )
+
+    return games.map(g => {
+      const entry = statusMap.get(g.igdbId)
+      if (!entry) return g
+      return { ...g, ...entry }
+    })
+  }
+
   async findAllGames(
     query: string | undefined,
     limit: number,
     pageIndex: number,
     sortBy: 'name' | 'release_date' | 'rating',
-    sortOrder: 'asc' | 'desc'
+    sortOrder: 'asc' | 'desc',
+    userId?: string
   ) {
     const { games: cached, total } = await this.gameCacheRepository.findMany({
       limit,
@@ -116,7 +137,7 @@ export class GameService {
       parentGameId: g.parentGameId ?? null
     }))
 
-    return { games, total }
+    return { games: await this.enrichWithUserLibraryData(games, userId), total }
   }
 
   async findGameById(igdbId: number) {
@@ -160,18 +181,32 @@ export class GameService {
     }
   }
 
-  async findFeaturedGames() {
+  async findFeaturedGames(userId?: string) {
     const [trending, mostRated, recent, future] = await Promise.all([
       this.findTrendingGames(6),
       this.findMostRatedGames(6),
       this.findRecentlyReleasedGames(6),
-      this.findComingSoonGames(6)
+      this.findComingSoonGames(6, 0, userId)
     ])
 
+    const enriched = await this.enrichWithUserLibraryData(
+      [...trending.games, ...mostRated.games, ...recent.games],
+      userId
+    )
+
+    const trendingGames = enriched.slice(0, trending.games.length)
+    const mostRatedGames = enriched.slice(
+      trending.games.length,
+      trending.games.length + mostRated.games.length
+    )
+    const recentGames = enriched.slice(
+      trending.games.length + mostRated.games.length
+    )
+
     return {
-      mostRatedGames: mostRated.games,
-      trendingGames: trending.games,
-      recentGames: recent.games,
+      mostRatedGames,
+      trendingGames,
+      recentGames,
       futureGames: future.games
     }
   }
@@ -191,7 +226,7 @@ export class GameService {
     return { games: await this.enrichWithRatings(games) }
   }
 
-  async findComingSoonGames(limit = 20, pageIndex = 0) {
+  async findComingSoonGames(limit = 20, pageIndex = 0, userId?: string) {
     const key = `games:comingSoon:${limit}:${pageIndex}`
     let games: IGDBGame[]
     let total: number
@@ -214,7 +249,13 @@ export class GameService {
       )
     }
 
-    return { games: await this.enrichWithRatings(games), total }
+    return {
+      games: await this.enrichWithUserLibraryData(
+        await this.enrichWithRatings(games),
+        userId
+      ),
+      total
+    }
   }
 
   private async findReleasedGamesByRankedIds(
@@ -288,7 +329,7 @@ export class GameService {
     return { games, total: games.length }
   }
 
-  async findSimilarGames(igdbId: number) {
+  async findSimilarGames(igdbId: number, userId?: string) {
     const key = `game:similar:${igdbId}`
 
     const cached = await this.cacheRepository.get(key)
@@ -305,6 +346,9 @@ export class GameService {
       await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
     }
 
-    return this.enrichWithRatings(games)
+    return this.enrichWithUserLibraryData(
+      await this.enrichWithRatings(games),
+      userId
+    )
   }
 }

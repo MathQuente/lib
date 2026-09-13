@@ -4,6 +4,7 @@ import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 
 const PLAYED_STATUS_ID = 1
+const WISHLIST_STATUS_ID = 5
 
 export class RatingService {
   constructor(
@@ -21,31 +22,38 @@ export class RatingService {
   async createRating(igdbId: number, value: number, userId: string) {
     await this.requireUser(userId)
 
+    const gameExists = await this.gameCacheService.ensureCached(igdbId)
+    if (!gameExists) throw new ClientError('Game not found.', 404)
+
+    const releaseDate = await this.gameCacheService.getReleaseDate(igdbId)
+    if (releaseDate != null && releaseDate * 1000 > Date.now()) {
+      throw new ClientError('This game has not been released yet.', 400)
+    }
+
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
+    let promotedToPlayed = false
 
     if (!userGame) {
-      const gameExists = await this.gameCacheService.ensureCached(igdbId)
-      if (!gameExists) throw new ClientError('Game not found.', 404)
-
       await this.userRepository.addGameToUserLibrary({
         igdbId,
         userId,
         statusIds: PLAYED_STATUS_ID
       })
-
       await this.userRepository.createUserGameStats(userId, igdbId, 1)
-    } else if (userGame.UserGamesStatus.id !== PLAYED_STATUS_ID) {
+      promotedToPlayed = true
+    } else if (userGame.UserGamesStatus.id === WISHLIST_STATUS_ID) {
       await this.userRepository.updateGameStatus(
         igdbId,
         userId,
         PLAYED_STATUS_ID
       )
       await this.userRepository.updateUserGamePlayedCount(userId, igdbId, 1)
+      promotedToPlayed = true
     }
 
     const rating = await this.ratingRepository.create(igdbId, value, userId)
 
-    return { rating: rating.value }
+    return { rating: rating.value, promotedToPlayed }
   }
 
   async findUniqueByUserGame(igdbId: number, userId: string) {

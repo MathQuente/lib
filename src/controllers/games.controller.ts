@@ -16,21 +16,25 @@ export class GameController {
   async getAllGames(request: FastifyRequest, reply: FastifyReply) {
     const { query, limit, pageIndex, sortBy, sortOrder } =
       GameSchema.GameQueryStringSchema.parse(request.query)
+    const userId = request.user?.userId
 
     const { games, total } = await this.gameService.findAllGames(
       query,
       limit,
       pageIndex,
       sortBy,
-      sortOrder
+      sortOrder,
+      userId
     )
 
     return reply.status(200).send({ games, total })
   }
 
   async getFeaturedGames(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user?.userId
+
     const { mostRatedGames, trendingGames, recentGames, futureGames } =
-      await this.gameService.findFeaturedGames()
+      await this.gameService.findFeaturedGames(userId)
 
     return reply.send({
       mostRatedGames,
@@ -42,8 +46,12 @@ export class GameController {
 
   async getSimilarGames(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = GameSchema.GameParamsSchema.parse(request.params)
+    const userId = request.user?.userId
 
-    const similarGames = await this.gameService.findSimilarGames(igdbId)
+    const similarGames = await this.gameService.findSimilarGames(
+      igdbId,
+      userId
+    )
 
     return reply.send({ similarGames })
   }
@@ -52,10 +60,12 @@ export class GameController {
     const { limit, pageIndex } = GameSchema.ComingSoonQueryStringSchema.parse(
       request.query
     )
+    const userId = request.user?.userId
 
     const { games, total } = await this.gameService.findComingSoonGames(
       limit,
-      pageIndex
+      pageIndex,
+      userId
     )
 
     return reply.send({ games, total })

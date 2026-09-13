@@ -45,6 +45,78 @@ export class UserRepository {
     })
   }
 
+  async upsertUserGameHours(
+    userId: string,
+    igdbId: number,
+    hoursPlayed: number
+  ) {
+    const userGame = await prisma.userGame.findUnique({
+      where: { userId_igdbId: { userId, igdbId } },
+      select: { id: true }
+    })
+
+    if (!userGame) {
+      console.error('[UserGameStats] upsertUserGameHours: userGame not found', {
+        userId,
+        igdbId
+      })
+      return null
+    }
+
+    return prisma.userGameStats.upsert({
+      where: { userGameId: userGame.id },
+      update: { hoursPlayed },
+      create: { userGameId: userGame.id, hoursPlayed },
+      select: { hoursPlayed: true }
+    })
+  }
+
+  async findUserGameHours(igdbId: number, userId: string) {
+    const stats = await prisma.userGameStats.findFirst({
+      where: { userGame: { userId, igdbId } },
+      select: { hoursPlayed: true }
+    })
+    return { stats }
+  }
+
+  async findUserGameStatusesForGames(userId: string, igdbIds: number[]) {
+    const statusMap = new Map<
+      number,
+      { status: string; completions: number; hoursPlayed: number }
+    >()
+
+    if (igdbIds.length === 0) return statusMap
+
+    const rows = await prisma.userGame.findMany({
+      where: { userId, igdbId: { in: igdbIds } },
+      select: {
+        igdbId: true,
+        UserGamesStatus: { select: { status: true } },
+        UserGameStats: { select: { completions: true, hoursPlayed: true } }
+      }
+    })
+
+    for (const row of rows) {
+      statusMap.set(row.igdbId, {
+        status: row.UserGamesStatus.status,
+        completions: row.UserGameStats?.completions ?? 0,
+        hoursPlayed: row.UserGameStats?.hoursPlayed
+          ? Number(row.UserGameStats.hoursPlayed)
+          : 0
+      })
+    }
+
+    return statusMap
+  }
+
+  async sumUserHoursPlayed(userId: string) {
+    const result = await prisma.userGameStats.aggregate({
+      where: { userGame: { userId } },
+      _sum: { hoursPlayed: true }
+    })
+    return result._sum.hoursPlayed
+  }
+
   async countUserGames(userId: string) {
     return prisma.user.findUnique({
       where: { id: userId },
@@ -162,7 +234,8 @@ export class UserRepository {
         gc.platforms                  AS "platforms",
         gc.release_date               AS "releaseDate",
         r.value                       AS "rating",
-        COALESCE(ugst.completions, 0) AS "completions"
+        COALESCE(ugst.completions, 0) AS "completions",
+        COALESCE(ugst.hours_played, 0)::float AS "hoursPlayed"
       FROM user_games ug
       JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
       LEFT JOIN games_cache gc ON gc.igdb_id = ug.igdb_id
@@ -226,10 +299,12 @@ export class UserRepository {
       return null
     }
 
-    return prisma.userGameStats.delete({
+    await prisma.userGameStats.updateMany({
       where: { userGameId: userGame.id },
-      select: { completions: true }
+      data: { completions: 0 }
     })
+
+    return { completions: 0 }
   }
 
   async updateGameStatus(igdbId: number, userId: string, statusId: number) {

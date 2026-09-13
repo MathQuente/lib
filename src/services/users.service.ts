@@ -9,6 +9,7 @@ import { GameCacheService } from './game-cache.service'
 import { randomInt } from 'crypto'
 
 const PLAYED_STATUS_ID = 1
+const WISHLIST_STATUS_ID = 5
 
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
@@ -75,6 +76,7 @@ export class UserService {
     const user = await this.requireUser(userId)
 
     const gamesAmount = await this.userRepository.countUserGames(userId)
+    const totalHoursPlayed = await this.userRepository.sumUserHoursPlayed(userId)
 
     return {
       user: {
@@ -82,7 +84,8 @@ export class UserService {
         profilePicture: user.profilePicture,
         userBanner: user.userBanner,
         userName: user.userName,
-        gamesAmount: gamesAmount?._count.userGames
+        gamesAmount: gamesAmount?._count.userGames,
+        totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0
       }
     }
   }
@@ -193,6 +196,7 @@ export class UserService {
             releaseDate: r.releaseDate ?? undefined,
             rating: r.rating,
             completions: r.completions,
+            hoursPlayed: r.hoursPlayed,
             status: r.status as string
           }
         }
@@ -208,6 +212,7 @@ export class UserService {
           releaseDate: g.first_release_date,
           rating: r.rating,
           completions: r.completions,
+          hoursPlayed: r.hoursPlayed,
           status: r.status as string
         }
       })
@@ -246,6 +251,16 @@ export class UserService {
     if (!userGame) throw new ClientError('Game not found in your library.', 404)
 
     const currentStatus = userGame.UserGamesStatus.id
+
+    if (statusId === WISHLIST_STATUS_ID) {
+      // Wishlist means "haven't played it" — an existing rating would be a
+      // leftover opinion that no longer makes sense there.
+      const rating = await this.ratingRepository.findUniqueByUserGame(
+        igdbId,
+        userId
+      )
+      if (rating) await this.ratingRepository.delete(igdbId, userId)
+    }
 
     if (currentStatus === PLAYED_STATUS_ID && statusId !== PLAYED_STATUS_ID) {
       await this.userRepository.removeUserGameStats(userId, igdbId)
@@ -323,6 +338,42 @@ export class UserService {
     )
 
     return { playedCount: userGameStats?.completions ?? 0 }
+  }
+
+  async findUserGameHours(igdbId: number, userId: string) {
+    await this.requireUser(userId)
+
+    const { stats } = await this.userRepository.findUserGameHours(
+      igdbId,
+      userId
+    )
+
+    return { hoursPlayed: stats?.hoursPlayed ? Number(stats.hoursPlayed) : 0 }
+  }
+
+  async updateUserGameHours(userId: string, igdbId: number, hoursPlayed: number) {
+    await this.requireUser(userId)
+
+    const userGame = await this.userRepository.findUserGameStatus(
+      igdbId,
+      userId
+    )
+    if (!userGame) throw new ClientError('Game not found in your library.', 404)
+
+    if (userGame.UserGamesStatus?.status === Status.WISHLIST) {
+      throw new ClientError(
+        'Cannot set hours played for a wishlist game.',
+        400
+      )
+    }
+
+    const stats = await this.userRepository.upsertUserGameHours(
+      userId,
+      igdbId,
+      hoursPlayed
+    )
+
+    return { hoursPlayed: stats?.hoursPlayed ? Number(stats.hoursPlayed) : 0 }
   }
 
   async findGamesToDisplay(userId: string) {

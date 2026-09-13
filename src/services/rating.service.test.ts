@@ -22,6 +22,7 @@ function fakeGameCacheService(
 ): GameCacheService {
   return {
     ensureCached: vi.fn().mockResolvedValue(true),
+    getReleaseDate: vi.fn().mockResolvedValue(null),
     cacheMany: vi.fn().mockResolvedValue(undefined),
     ...overrides
   } as unknown as GameCacheService
@@ -91,7 +92,7 @@ describe('RatingService.createRating', () => {
       statusIds: 1
     })
     expect(createUserGameStats).toHaveBeenCalledWith('user-1', 11133, 1)
-    expect(result).toEqual({ rating: 5 })
+    expect(result).toEqual({ rating: 5, promotedToPlayed: true })
   })
 
   it('does not touch the library when the game is already marked PLAYED', async () => {
@@ -110,9 +111,80 @@ describe('RatingService.createRating', () => {
       fakeGameCacheService()
     )
 
-    await service.createRating(11133, 4, 'user-1')
+    const result = await service.createRating(11133, 4, 'user-1')
 
     expect(updateGameStatus).not.toHaveBeenCalled()
+    expect(result.promotedToPlayed).toBe(false)
+  })
+
+  it('promotes WISHLIST to PLAYED on rating', async () => {
+    const updateGameStatus = vi.fn()
+    const updateUserGamePlayedCount = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 5 } }),
+      updateGameStatus,
+      updateUserGamePlayedCount
+    })
+    const ratingRepository = fakeRatingRepository({
+      create: vi.fn().mockResolvedValue({ value: 5 })
+    })
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
+
+    const result = await service.createRating(11133, 5, 'user-1')
+
+    expect(updateGameStatus).toHaveBeenCalledWith(11133, 'user-1', 1)
+    expect(updateUserGamePlayedCount).toHaveBeenCalledWith('user-1', 11133, 1)
+    expect(result.promotedToPlayed).toBe(true)
+  })
+
+  it('does not promote PLAYING/BACKLOG/PAUSED — only saves the rating', async () => {
+    const updateGameStatus = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 3 } }),
+      updateGameStatus
+    })
+    const ratingRepository = fakeRatingRepository({
+      create: vi.fn().mockResolvedValue({ value: 4 })
+    })
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      fakeGameCacheService()
+    )
+
+    const result = await service.createRating(11133, 4, 'user-1')
+
+    expect(updateGameStatus).not.toHaveBeenCalled()
+    expect(result).toEqual({ rating: 4, promotedToPlayed: false })
+  })
+
+  it('throws ClientError when the game has not been released yet', async () => {
+    const futureReleaseDate = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' })
+    })
+    const gameCacheService = fakeGameCacheService({
+      getReleaseDate: vi.fn().mockResolvedValue(futureReleaseDate)
+    })
+    const ratingRepository = fakeRatingRepository({
+      create: vi.fn()
+    })
+    const service = new RatingService(
+      ratingRepository,
+      userRepository,
+      gameCacheService
+    )
+
+    await expect(service.createRating(11133, 5, 'user-1')).rejects.toThrow(
+      ClientError
+    )
+    expect(ratingRepository.create).not.toHaveBeenCalled()
   })
 })
 

@@ -17,7 +17,8 @@ export const GetUserResponseSchema = z.object({
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
-    gamesAmount: z.number()
+    gamesAmount: z.number(),
+    totalHoursPlayed: z.number()
   })
 })
 
@@ -58,6 +59,10 @@ export const UserGamePlayedCountUpdateBodySchema = z.object({
   incrementValue: z.number().int()
 })
 
+export const UserGameHoursUpdateBodySchema = z.object({
+  hoursPlayed: z.number().min(0).max(9999.99)
+})
+
 export const AddGameResponseSchema = z.object({
   igdbId: z.number()
 })
@@ -91,6 +96,7 @@ const UserGameEntrySchema = z.object({
   releaseDate: z.number().optional(),
   rating: z.number().nullable(),
   completions: z.number(),
+  hoursPlayed: z.number(),
   status: z.string()
 })
 
@@ -135,6 +141,10 @@ export const UserBodySchema = z.object({
 
 export const GetUserGameStatsResponse = z.object({
   playedCount: z.number()
+})
+
+export const GetUserGameHoursResponse = z.object({
+  hoursPlayed: z.number()
 })
 
 export const GetGamesToDisplayResponseSchema = z.object({

@@ -24,6 +24,7 @@ export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/featured',
     {
+      preHandler: [app.tryAuthenticate],
       schema: {
         response: {
           200: GameSchema.GetFeaturedGamesResponseSchema,
@@ -37,6 +38,7 @@ export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/comingSoon',
     {
+      preHandler: [app.tryAuthenticate],
       schema: {
         querystring: GameSchema.ComingSoonQueryStringSchema,
         response: {
@@ -51,6 +53,7 @@ export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/similarGames/:igdbId',
     {
+      preHandler: [app.tryAuthenticate],
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
@@ -66,6 +69,7 @@ export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
+      preHandler: [app.tryAuthenticate],
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {

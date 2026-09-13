@@ -135,7 +135,9 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: ['PC'],
         releaseDate: 100,
-        rating: 4
+        rating: 4,
+        completions: 0,
+        hoursPlayed: 0
       },
       {
         igdbId: 2,
@@ -144,7 +146,9 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: [],
         releaseDate: 200,
-        rating: null
+        rating: null,
+        completions: 0,
+        hoursPlayed: 0
       }
     ]
     const userRepository = fakeUserRepository({
@@ -183,7 +187,9 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: 'https://img/cached.jpg',
         platforms: ['PC'],
         releaseDate: 100,
-        rating: 4
+        rating: 4,
+        completions: 0,
+        hoursPlayed: 0
       },
       {
         igdbId: 99,
@@ -192,7 +198,9 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: null,
         releaseDate: null,
-        rating: null
+        rating: null,
+        completions: 0,
+        hoursPlayed: 0
       }
     ]
     const userRepository = fakeUserRepository({
@@ -247,7 +255,9 @@ describe('UserService.findManyUserGames', () => {
         coverUrl: null,
         platforms: [],
         releaseDate: null,
-        rating: null
+        rating: null,
+        completions: 0,
+        hoursPlayed: 0
       }
     ]
     const userRepository = fakeUserRepository({
@@ -273,5 +283,79 @@ describe('UserService.findManyUserGames', () => {
     )
 
     expect(result.games.WISHLIST[0].releaseDate).toBeUndefined()
+  })
+})
+
+describe('UserService.updateGame', () => {
+  it('deletes an existing rating when moving to WISHLIST', async () => {
+    const deleteRating = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 3 } }),
+      updateGameStatus: vi.fn().mockResolvedValue({
+        igdbId: 11133,
+        UserGamesStatus: { id: 5, status: 'WISHLIST' }
+      })
+    })
+    const ratingRepository = fakeRatingRepository({
+      findUniqueByUserGame: vi.fn().mockResolvedValue({ value: 4 }),
+      delete: deleteRating
+    })
+    const service = new UserService(
+      userRepository,
+      ratingRepository,
+      fakeGameCacheService()
+    )
+
+    await service.updateGame(11133, 'user-1', 5)
+
+    expect(deleteRating).toHaveBeenCalledWith(11133, 'user-1')
+  })
+
+  it('does not try to delete when there is no rating', async () => {
+    const deleteRating = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 3 } }),
+      updateGameStatus: vi.fn().mockResolvedValue({
+        igdbId: 11133,
+        UserGamesStatus: { id: 5, status: 'WISHLIST' }
+      })
+    })
+    const ratingRepository = fakeRatingRepository({
+      findUniqueByUserGame: vi.fn().mockResolvedValue(null),
+      delete: deleteRating
+    })
+    const service = new UserService(
+      userRepository,
+      ratingRepository,
+      fakeGameCacheService()
+    )
+
+    await service.updateGame(11133, 'user-1', 5)
+
+    expect(deleteRating).not.toHaveBeenCalled()
+  })
+
+  it('does not touch the rating when moving to a non-WISHLIST status', async () => {
+    const findUniqueByUserGame = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 5 } }),
+      updateGameStatus: vi.fn().mockResolvedValue({
+        igdbId: 11133,
+        UserGamesStatus: { id: 4, status: 'BACKLOG' }
+      })
+    })
+    const ratingRepository = fakeRatingRepository({ findUniqueByUserGame })
+    const service = new UserService(
+      userRepository,
+      ratingRepository,
+      fakeGameCacheService()
+    )
+
+    await service.updateGame(11133, 'user-1', 4)
+
+    expect(findUniqueByUserGame).not.toHaveBeenCalled()
   })
 })

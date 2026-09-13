@@ -150,6 +150,34 @@ export class UserController {
     return reply.status(200).send({ playedCount })
   }
 
+  async getUserGameHours(request: FastifyRequest, reply: FastifyReply) {
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
+
+    const { hoursPlayed } = await this.userService.findUserGameHours(
+      igdbId,
+      userId
+    )
+
+    return reply.status(200).send({ hoursPlayed })
+  }
+
+  async updateUserGameHours(request: FastifyRequest, reply: FastifyReply) {
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
+    const { hoursPlayed } = UserSchema.UserGameHoursUpdateBodySchema.parse(
+      request.body
+    )
+
+    const { hoursPlayed: updated } = await this.userService.updateUserGameHours(
+      userId,
+      igdbId,
+      hoursPlayed
+    )
+
+    return reply.status(200).send({ hoursPlayed: updated })
+  }
+
   async getGamesToDisplay(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
     const { game, message } = await this.userService.findGamesToDisplay(userId)

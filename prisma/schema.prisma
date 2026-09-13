@@ -52,6 +52,7 @@ model User {
   userGames      UserGame[]
   refreshToken   RefreshToken[]
   Rating         Rating[]
+  Review         Review[]
 
   @@map("users")
 }
@@ -109,10 +110,25 @@ model GameCache {
   @@map("games_cache")
 }
 
+model Review {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  igdbId    Int      @map("igdb_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, igdbId])
+  @@index([igdbId])
+  @@map("reviews")
+}
+
 model UserGameStats {
-  id          String @id @default(uuid())
-  userGameId  String @map("user_game_id")
-  completions Int    @default(0)
+  id          String   @id @default(uuid())
+  userGameId  String   @map("user_game_id")
+  completions Int      @default(0)
+  hoursPlayed Decimal? @map("hours_played") @db.Decimal(6, 2)
 
   userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
 

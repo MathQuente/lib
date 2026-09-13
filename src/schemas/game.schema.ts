@@ -26,7 +26,6 @@ export const IGDBGameSchema = z.object({
       coverUrl: z.string().nullable()
     })
     .optional(),
-  // Per-platform release dates; only requested on the single-game detail endpoint.
   releaseDates: z
     .array(
       z.object({
@@ -34,7 +33,10 @@ export const IGDBGameSchema = z.object({
         date: z.number().nullable()
       })
     )
-    .optional()
+    .optional(),
+  status: z.string().optional(),
+  completions: z.number().optional(),
+  hoursPlayed: z.number().optional()
 })
 
 export const GameParamsSchema = z.object({

@@ -18,6 +18,13 @@ export class GameCacheService {
     return true
   }
 
+  async getReleaseDate(igdbId: number): Promise<number | null> {
+    const cached = await this.gameCacheRepository.findReleaseDateByIgdbId(
+      igdbId
+    )
+    return cached?.releaseDate ?? null
+  }
+
   async cacheMany(games: IGDBGame[]): Promise<void> {
     if (games.length === 0) return
     await this.gameCacheRepository.upsertMany(

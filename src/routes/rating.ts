@@ -29,6 +29,8 @@ export async function ratingRoutes(app: FastifyInstance) {
         params: RatingSchema.RatingParamsSchema,
         response: {
           201: RatingSchema.CreateRatingResponseSchema,
+          400: ErrorSchemas.BadRequest,
+          404: ErrorSchemas.NotFound,
           500: ErrorSchemas.InternalServerError
         }
       }

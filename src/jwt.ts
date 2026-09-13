@@ -22,6 +22,7 @@ export class Jwt {
     this.registerJwtPlugin(fastify)
     this.registerCookiePlugin(fastify)
     this.authenticateDecorator(fastify)
+    this.tryAuthenticateDecorator(fastify)
     this.registerCorsPlugin(fastify)
   }
 
@@ -116,6 +117,16 @@ export class Jwt {
         }
       }
     )
+  }
+
+  private static tryAuthenticateDecorator = (fastify: FastifyInstance) => {
+    fastify.decorate('tryAuthenticate', async (request: FastifyRequest) => {
+      try {
+        await request.jwtVerify()
+      } catch {
+        // anonymous — proceed without request.user
+      }
+    })
   }
 
   public static registerCookiePlugin = (fastify: FastifyInstance) => {

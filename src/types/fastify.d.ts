@@ -22,5 +22,9 @@ declare module 'fastify' {
       request: FastifyRequest,
       reply: FastifyReply
     ) => Promise<void>
+    tryAuthenticate: (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => Promise<void>
   }
 }
