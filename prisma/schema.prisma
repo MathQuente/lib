@@ -48,6 +48,7 @@ model User {
   googleId       String?        @unique @map("google_id")
   discordId      String?        @unique @map("discord_id")
   steamId        String?        @unique @map("steam_id")
+  isPublic       Boolean        @default(true) @map("is_public")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @default(now()) @map("updated_at")
   userGames      UserGame[]

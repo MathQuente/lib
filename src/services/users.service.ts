@@ -61,19 +61,35 @@ export class UserService {
   async findMe(userId: string) {
     const user = await this.requireUser(userId)
 
+    const totalHoursPlayed =
+      await this.userRepository.sumUserHoursPlayed(userId)
+
     return {
       user: {
         id: user.id,
         profilePicture: user.profilePicture,
         userName: user.userName,
         userBanner: user.userBanner,
-        gamesAmount: user._count.userGames
+        gamesAmount: user._count.userGames,
+        totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
+        steamId: user.steamId,
+        isPublic: user.isPublic
       }
     }
   }
 
   async findById(userId: string) {
     const user = await this.requireUser(userId)
+
+    if (!user.isPublic) {
+      return {
+        user: {
+          id: user.id,
+          userName: user.userName,
+          isPublic: false as const
+        }
+      }
+    }
 
     const gamesAmount = await this.userRepository.countUserGames(userId)
     const totalHoursPlayed =
@@ -87,7 +103,7 @@ export class UserService {
         userName: user.userName,
         gamesAmount: gamesAmount?._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
-        steamId: user.steamId
+        isPublic: true as const
       }
     }
   }
@@ -309,7 +325,8 @@ export class UserService {
     const user = await this.userRepository.updateUser(userId, {
       profilePicture: data.profilePicture,
       userBanner: data.userBanner,
-      userName: data.userName
+      userName: data.userName,
+      isPublic: data.isPublic
     })
 
     return { user }

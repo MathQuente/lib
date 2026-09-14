@@ -107,14 +107,15 @@ export class UserController {
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
-    const { profilePicture, userBanner, userName } =
+    const { profilePicture, userBanner, userName, isPublic } =
       UserSchema.UpdateUserBodySchema.parse(request.body)
     const userId = request.user.userId
 
     const { user } = await this.userService.update(userId, {
       profilePicture,
       userBanner,
-      userName
+      userName,
+      isPublic
     })
 
     return reply.status(200).send({ user })

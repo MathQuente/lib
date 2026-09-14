@@ -26,7 +26,13 @@ export async function userRoutes(app: FastifyInstance) {
     '/me',
     {
       preHandler: [app.authenticate],
-      schema: {}
+      schema: {
+        response: {
+          200: UserSchema.GetMeResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
     },
     async (request, reply) => userController.getMe(request, reply)
   )

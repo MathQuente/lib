@@ -141,6 +141,7 @@ export class UserRepository {
         userName: true,
         profilePicture: true,
         steamId: true,
+        isPublic: true,
         _count: { select: { userGames: true } }
       }
     })
@@ -334,7 +335,8 @@ export class UserRepository {
       select: {
         profilePicture: true,
         userBanner: true,
-        userName: true
+        userName: true,
+        isPublic: true
       }
     })
   }

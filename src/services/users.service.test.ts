@@ -385,3 +385,109 @@ describe('UserService.updateGame', () => {
     expect(findUniqueByUserGame).not.toHaveBeenCalled()
   })
 })
+
+describe('UserService.findById', () => {
+  it('returns the full profile, without steamId, when the user is public', async () => {
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({
+        id: 'user-1',
+        userName: 'matheus',
+        profilePicture: 'pic.png',
+        userBanner: 'banner.png',
+        steamId: '12345',
+        isPublic: true,
+        _count: { userGames: 3 }
+      }),
+      countUserGames: vi
+        .fn()
+        .mockResolvedValue({ _count: { userGames: 3 } }),
+      sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService()
+    )
+
+    const { user } = await service.findById('user-1')
+
+    expect(user).toEqual({
+      id: 'user-1',
+      profilePicture: 'pic.png',
+      userBanner: 'banner.png',
+      userName: 'matheus',
+      gamesAmount: 3,
+      totalHoursPlayed: 12.5,
+      isPublic: true
+    })
+    expect(user).not.toHaveProperty('steamId')
+  })
+
+  it('returns only id/userName/isPublic when the user is private', async () => {
+    const countUserGames = vi.fn()
+    const sumUserHoursPlayed = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({
+        id: 'user-1',
+        userName: 'matheus',
+        profilePicture: 'pic.png',
+        userBanner: 'banner.png',
+        steamId: '12345',
+        isPublic: false,
+        _count: { userGames: 3 }
+      }),
+      countUserGames,
+      sumUserHoursPlayed
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService()
+    )
+
+    const { user } = await service.findById('user-1')
+
+    expect(user).toEqual({
+      id: 'user-1',
+      userName: 'matheus',
+      isPublic: false
+    })
+    expect(countUserGames).not.toHaveBeenCalled()
+    expect(sumUserHoursPlayed).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserService.findMe', () => {
+  it('returns the full self profile, including steamId and isPublic', async () => {
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({
+        id: 'user-1',
+        userName: 'matheus',
+        profilePicture: 'pic.png',
+        userBanner: 'banner.png',
+        steamId: '12345',
+        isPublic: false,
+        _count: { userGames: 3 }
+      }),
+      sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService()
+    )
+
+    const { user } = await service.findMe('user-1')
+
+    expect(user).toEqual({
+      id: 'user-1',
+      profilePicture: 'pic.png',
+      userBanner: 'banner.png',
+      userName: 'matheus',
+      gamesAmount: 3,
+      totalHoursPlayed: 12.5,
+      steamId: '12345',
+      isPublic: false
+    })
+  })
+})

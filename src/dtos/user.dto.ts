@@ -14,4 +14,5 @@ export interface UpdateUserDTO {
   userName?: string | null
   profilePicture?: string | null
   userBanner?: string | null
+  isPublic?: boolean
 }

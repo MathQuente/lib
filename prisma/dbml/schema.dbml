@@ -36,6 +36,7 @@ Table users {
   googleId String [unique]
   discordId String [unique]
   steamId String [unique]
+  isPublic Boolean [not null, default: true]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]

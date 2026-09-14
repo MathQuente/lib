@@ -14,12 +14,25 @@ export const UserParamsSchema = z.object({
 export const GetUserResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
+    userName: z.string().nullable(),
+    isPublic: z.boolean(),
+    profilePicture: z.string().nullable().optional(),
+    userBanner: z.string().nullable().optional(),
+    gamesAmount: z.number().optional(),
+    totalHoursPlayed: z.number().optional()
+  })
+})
+
+export const GetMeResponseSchema = z.object({
+  user: z.object({
+    id: z.string().uuid(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
     gamesAmount: z.number(),
     totalHoursPlayed: z.number(),
-    steamId: z.string().nullable()
+    steamId: z.string().nullable(),
+    isPublic: z.boolean()
   })
 })
 
@@ -30,9 +43,7 @@ export const QueryStringSchema = z.object({
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional()
     .catch(undefined),
-  sortBy: z
-    .enum(['gameName', 'dateRelease', 'rating', 'dateAdded'])
-    .optional(),
+  sortBy: z.enum(['gameName', 'dateRelease', 'rating', 'dateAdded']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional()
 })
 
@@ -76,7 +87,8 @@ export const UpdateUserResponseSchema = z.object({
   user: z.object({
     profilePicture: z.string(),
     userBanner: z.string().nullable(),
-    userName: z.string()
+    userName: z.string(),
+    isPublic: z.boolean()
   })
 })
 
@@ -122,7 +134,8 @@ export const UpdateUserBodySchema = z
   .object({
     userName: z.string().nullable(),
     profilePicture: z.string().nullable(),
-    userBanner: z.string().nullable()
+    userBanner: z.string().nullable(),
+    isPublic: z.boolean()
   })
   .partial()
 
