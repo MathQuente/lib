@@ -100,7 +100,7 @@ describe('UserService.findManyUserGames', () => {
     ).rejects.toThrow(ClientError)
   })
 
-  it('calls the repository with skip/take derived from pageIndex', async () => {
+  it('calls the repository with skip/take derived from pageIndex when a status filter is set', async () => {
     const findManyGamesOfUser = vi.fn().mockResolvedValue([])
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
@@ -113,7 +113,33 @@ describe('UserService.findManyUserGames', () => {
       fakeGameCacheService()
     )
 
-    await service.findManyUserGames('user-1', 2, undefined, undefined, 'rating', 'desc')
+    await service.findManyUserGames('user-1', 2, 'PLAYED', undefined, 'rating', 'desc')
+
+    expect(findManyGamesOfUser).toHaveBeenCalledWith({
+      userId: 'user-1',
+      filter: 'PLAYED',
+      query: undefined,
+      sortBy: 'rating',
+      sortOrder: 'desc',
+      skip: 60,
+      take: 30
+    })
+  })
+
+  it('fetches unpaginated when no status filter is set, so one large bucket cannot crowd the others out', async () => {
+    const findManyGamesOfUser = vi.fn().mockResolvedValue([])
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findManyGamesOfUser,
+      findGamesCountByStatus: vi.fn().mockResolvedValue(statusCounts({}))
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService()
+    )
+
+    await service.findManyUserGames('user-1', 0, undefined, undefined, 'rating', 'desc')
 
     expect(findManyGamesOfUser).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -121,8 +147,8 @@ describe('UserService.findManyUserGames', () => {
       query: undefined,
       sortBy: 'rating',
       sortOrder: 'desc',
-      skip: 60,
-      take: 30
+      skip: undefined,
+      take: undefined
     })
   })
 

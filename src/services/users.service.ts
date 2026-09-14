@@ -76,7 +76,8 @@ export class UserService {
     const user = await this.requireUser(userId)
 
     const gamesAmount = await this.userRepository.countUserGames(userId)
-    const totalHoursPlayed = await this.userRepository.sumUserHoursPlayed(userId)
+    const totalHoursPlayed =
+      await this.userRepository.sumUserHoursPlayed(userId)
 
     return {
       user: {
@@ -85,7 +86,8 @@ export class UserService {
         userBanner: user.userBanner,
         userName: user.userName,
         gamesAmount: gamesAmount?._count.userGames,
-        totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0
+        totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
+        steamId: user.steamId
       }
     }
   }
@@ -135,8 +137,8 @@ export class UserService {
       query,
       sortBy,
       sortOrder,
-      skip: pageIndex * this.ITEMS_PER_PAGE,
-      take: this.ITEMS_PER_PAGE
+      skip: filter ? pageIndex * this.ITEMS_PER_PAGE : undefined,
+      take: filter ? this.ITEMS_PER_PAGE : undefined
     })
 
     const enriched = await this.fillMissingGameCacheEntries(rows)
@@ -351,7 +353,11 @@ export class UserService {
     return { hoursPlayed: stats?.hoursPlayed ? Number(stats.hoursPlayed) : 0 }
   }
 
-  async updateUserGameHours(userId: string, igdbId: number, hoursPlayed: number) {
+  async updateUserGameHours(
+    userId: string,
+    igdbId: number,
+    hoursPlayed: number
+  ) {
     await this.requireUser(userId)
 
     const userGame = await this.userRepository.findUserGameStatus(
@@ -361,10 +367,7 @@ export class UserService {
     if (!userGame) throw new ClientError('Game not found in your library.', 404)
 
     if (userGame.UserGamesStatus?.status === Status.WISHLIST) {
-      throw new ClientError(
-        'Cannot set hours played for a wishlist game.',
-        400
-      )
+      throw new ClientError('Cannot set hours played for a wishlist game.', 400)
     }
 
     const stats = await this.userRepository.upsertUserGameHours(
