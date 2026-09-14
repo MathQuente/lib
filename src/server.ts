@@ -11,9 +11,11 @@ import { userRoutes } from './routes/users'
 import { gameRoutes } from './routes/game'
 import { ratingRoutes } from './routes/rating'
 import { reviewRoutes } from './routes/review'
+import { steamRoutes } from './routes/steam'
 import { errorHandler } from './error-handler'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
+import { startSteamImportWorker } from './workers/steam-import.worker'
 
 export class Server {
   private static app: FastifyInstance = fastify()
@@ -37,6 +39,7 @@ export class Server {
     await this.initOAuth2()
     await this.initRateLimit()
     this.initRoutes()
+    startSteamImportWorker()
 
     await this.app.listen({
       port: Server.port,
@@ -93,12 +96,16 @@ export class Server {
     this.app.register(gameRoutes, { prefix: '/games' })
     this.app.register(ratingRoutes, { prefix: '/rating' })
     this.app.register(reviewRoutes, { prefix: '/reviews' })
+    this.app.register(steamRoutes, { prefix: '/users/steam' })
     this.app.register(userGameStatusRoutes, { prefix: '/status' })
   }
 
   private static async initRateLimit() {
+    // Raised from 100: TanStack Query's cross-cutting cache invalidation
+    // (several query keys refetched per mutation) plus Steam-import status
+    // polling made 100/min too tight for normal single-user usage.
     await this.app.register(fastifyRateLimit, {
-      max: 100,
+      max: 300,
       timeWindow: '1 minute',
       redis,
       nameSpace: 'rate-limit'

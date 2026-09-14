@@ -18,7 +18,8 @@ export const GetUserResponseSchema = z.object({
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
     gamesAmount: z.number(),
-    totalHoursPlayed: z.number()
+    totalHoursPlayed: z.number(),
+    steamId: z.string().nullable()
   })
 })
 

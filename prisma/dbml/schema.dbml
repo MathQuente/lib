@@ -35,6 +35,7 @@ Table users {
   userBanner String
   googleId String [unique]
   discordId String [unique]
+  steamId String [unique]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]

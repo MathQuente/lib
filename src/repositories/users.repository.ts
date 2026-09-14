@@ -140,8 +140,17 @@ export class UserRepository {
         userBanner: true,
         userName: true,
         profilePicture: true,
+        steamId: true,
         _count: { select: { userGames: true } }
       }
+    })
+  }
+
+  async setSteamId(userId: string, steamId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { steamId },
+      select: { steamId: true }
     })
   }
 

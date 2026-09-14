@@ -1,5 +1,6 @@
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBGame } from '../types/igdb'
+import { fetchWithTimeout } from '../utils/fetch-with-timeout'
 
 export class IGDBService {
   private static accessToken: string | null = null
@@ -10,7 +11,7 @@ export class IGDBService {
       return this.accessToken
     }
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://id.twitch.tv/oauth2/token?client_id=${process.env.IGDB_CLIENT_ID}&client_secret=${process.env.IGDB_CLIENT_SECRET}&grant_type=client_credentials`,
       { method: 'POST' }
     )
@@ -31,7 +32,7 @@ export class IGDBService {
     body: string
   ): Promise<number> {
     const token = await this.getAccessToken()
-    const response = await fetch(`https://api.igdb.com/v4/${endpoint}/count`, {
+    const response = await fetchWithTimeout(`https://api.igdb.com/v4/${endpoint}/count`, {
       method: 'POST',
       headers: {
         'Client-ID': process.env.IGDB_CLIENT_ID!,
@@ -53,7 +54,7 @@ export class IGDBService {
   private static async request<T>(endpoint: string, body: string): Promise<T> {
     const token = await this.getAccessToken()
 
-    const response = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+    const response = await fetchWithTimeout(`https://api.igdb.com/v4/${endpoint}`, {
       method: 'POST',
       headers: {
         'Client-ID': process.env.IGDB_CLIENT_ID!,
@@ -154,6 +155,60 @@ export class IGDBService {
       'games',
       `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game,rating,follows; limit ${Math.min(ids.length, 500)};`
     )
+  }
+
+  // external_games.category is deprecated (always empty). The current
+  // field is external_game_source, a reference into external_game_sources
+  // — id 1 there is "Steam" (confirmed by querying that endpoint directly).
+  private static readonly STEAM_EXTERNAL_GAME_SOURCE = 1
+  private static readonly EXTERNAL_GAMES_BATCH_SIZE = 500
+
+  // `external_games` is a reverse multi-relation on `games` — it can't be
+  // filtered via `where external_games.uid = (...)` on the `games`
+  // endpoint. IGDB requires querying the `external_games` endpoint
+  // directly for the uid->game id mapping, then fetching those games.
+  static async getGamesBySteamAppIds(
+    appIds: number[]
+  ): Promise<{ appId: number; game: IGDBGame }[]> {
+    if (appIds.length === 0) return []
+
+    const chunks: number[][] = []
+    for (let i = 0; i < appIds.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      chunks.push(appIds.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE))
+    }
+
+    const externalGamesResults = await Promise.all(
+      chunks.map(chunk =>
+        this.request<{ uid: string; game: number }[]>(
+          'external_games',
+          `where uid = (${chunk.map(id => `"${id}"`).join(',')}) & external_game_source = ${this.STEAM_EXTERNAL_GAME_SOURCE}; fields uid,game; limit ${chunk.length};`
+        )
+      )
+    )
+
+    const appIdToIgdbId = new Map<number, number>()
+    for (const row of externalGamesResults.flat()) {
+      const appId = Number(row.uid)
+      if (!appIdToIgdbId.has(appId)) appIdToIgdbId.set(appId, row.game)
+    }
+
+    const igdbIds = [...new Set(appIdToIgdbId.values())]
+    const igdbIdChunks: number[][] = []
+    for (let i = 0; i < igdbIds.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      igdbIdChunks.push(igdbIds.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE))
+    }
+    const games = (
+      await Promise.all(igdbIdChunks.map(chunk => this.getGamesByIds(chunk)))
+    ).flat()
+    const gamesById = new Map(games.map(g => [g.id, g]))
+
+    const results: { appId: number; game: IGDBGame }[] = []
+    for (const [appId, igdbId] of appIdToIgdbId) {
+      const game = gamesById.get(igdbId)
+      if (game) results.push({ appId, game })
+    }
+
+    return results
   }
 
   static async getRecentlyReleasedGames(limit = 6): Promise<IGDBGame[]> {
