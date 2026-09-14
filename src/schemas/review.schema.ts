@@ -22,3 +22,24 @@ export const GetReviewResponseSchema = z.object({
 })
 
 export const DeleteReviewResponseSchema = z.void()
+
+export const CommunityReviewsQueryStringSchema = z.object({
+  pageIndex: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(50).optional()
+})
+
+const CommunityReviewSchema = z.object({
+  userId: z.string().uuid(),
+  userName: z.string().nullable(),
+  profilePicture: z.string().nullable(),
+  rating: z.number().nullable(),
+  hoursPlayed: z.number(),
+  completions: z.number(),
+  text: z.string(),
+  createdAt: z.date()
+})
+
+export const GetCommunityReviewsResponseSchema = z.object({
+  reviews: z.array(CommunityReviewSchema),
+  total: z.number()
+})

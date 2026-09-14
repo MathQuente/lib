@@ -66,4 +66,19 @@ export async function reviewRoutes(app: FastifyInstance) {
     },
     async (request, reply) => reviewController.deleteReview(request, reply)
   )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/:igdbId/community',
+    {
+      schema: {
+        params: ReviewSchema.ReviewParamsSchema,
+        querystring: ReviewSchema.CommunityReviewsQueryStringSchema,
+        response: {
+          200: ReviewSchema.GetCommunityReviewsResponseSchema,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => reviewController.getCommunityReviews(request, reply)
+  )
 }

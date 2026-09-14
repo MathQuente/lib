@@ -73,4 +73,35 @@ export class ReviewService {
 
     await this.reviewRepository.delete(userId, igdbId)
   }
+
+  private readonly COMMUNITY_REVIEWS_PER_PAGE = 10
+
+  async findCommunityReviews(
+    igdbId: number,
+    pageIndex: number,
+    limit = this.COMMUNITY_REVIEWS_PER_PAGE
+  ) {
+    const [reviews, total] = await Promise.all([
+      this.reviewRepository.findCommunityReviews({
+        igdbId,
+        skip: pageIndex * limit,
+        take: limit
+      }),
+      this.reviewRepository.countCommunityReviews(igdbId)
+    ])
+
+    return {
+      reviews: reviews.map(r => ({
+        userId: r.userId,
+        userName: r.userName,
+        profilePicture: r.profilePicture,
+        rating: r.rating,
+        hoursPlayed: r.hoursPlayed,
+        completions: r.completions,
+        text: r.text,
+        createdAt: r.createdAt
+      })),
+      total
+    }
+  }
 }

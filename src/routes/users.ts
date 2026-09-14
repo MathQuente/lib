@@ -54,6 +54,21 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(
+    '/:userId/games',
+    {
+      schema: {
+        params: UserSchema.UserParamsSchema,
+        response: {
+          200: UserSchema.GetAllUserGamesResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => userController.getPublicUserGames(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
       preHandler: [app.authenticate],

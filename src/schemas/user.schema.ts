@@ -16,8 +16,8 @@ export const GetUserResponseSchema = z.object({
     id: z.string().uuid(),
     userName: z.string().nullable(),
     isPublic: z.boolean(),
-    profilePicture: z.string().nullable().optional(),
-    userBanner: z.string().nullable().optional(),
+    profilePicture: z.string().nullable(),
+    userBanner: z.string().nullable(),
     gamesAmount: z.number().optional(),
     totalHoursPlayed: z.number().optional()
   })
@@ -85,9 +85,9 @@ export const RemoveGameResponseSchema = z.object({
 
 export const UpdateUserResponseSchema = z.object({
   user: z.object({
-    profilePicture: z.string(),
+    profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
-    userName: z.string(),
+    userName: z.string().nullable(),
     isPublic: z.boolean()
   })
 })

@@ -423,7 +423,7 @@ describe('UserService.findById', () => {
     expect(user).not.toHaveProperty('steamId')
   })
 
-  it('returns only id/userName/isPublic when the user is private', async () => {
+  it('returns avatar/banner/username but not game counts when the user is private', async () => {
     const countUserGames = vi.fn()
     const sumUserHoursPlayed = vi.fn()
     const userRepository = fakeUserRepository({
@@ -449,9 +449,13 @@ describe('UserService.findById', () => {
 
     expect(user).toEqual({
       id: 'user-1',
+      profilePicture: 'pic.png',
+      userBanner: 'banner.png',
       userName: 'matheus',
       isPublic: false
     })
+    expect(user).not.toHaveProperty('gamesAmount')
+    expect(user).not.toHaveProperty('totalHoursPlayed')
     expect(countUserGames).not.toHaveBeenCalled()
     expect(sumUserHoursPlayed).not.toHaveBeenCalled()
   })

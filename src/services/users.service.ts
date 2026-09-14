@@ -85,6 +85,8 @@ export class UserService {
       return {
         user: {
           id: user.id,
+          profilePicture: user.profilePicture,
+          userBanner: user.userBanner,
           userName: user.userName,
           isPublic: false as const
         }
@@ -186,6 +188,37 @@ export class UserService {
       : totalPerStatusMapped.reduce((acc, t) => acc + t.totalGames, 0)
 
     return { games, totalPerStatus: totalPerStatusMapped, total }
+  }
+
+  private readonly PUBLIC_PROFILE_PREVIEW_PER_STATUS = 6
+
+  async findPublicUserGames(userId: string) {
+    const user = await this.requireUser(userId)
+
+    if (!user.isPublic) {
+      return {
+        games: {
+          PLAYED: [],
+          PLAYING: [],
+          PAUSED: [],
+          BACKLOG: [],
+          WISHLIST: []
+        },
+        totalPerStatus: [],
+        total: 0
+      }
+    }
+
+    const result = await this.findManyUserGames(userId, 0, undefined, undefined)
+
+    const games = Object.fromEntries(
+      Object.entries(result.games).map(([status, list]) => [
+        status,
+        list.slice(0, this.PUBLIC_PROFILE_PREVIEW_PER_STATUS)
+      ])
+    ) as typeof result.games
+
+    return { ...result, games }
   }
 
   private async fillMissingGameCacheEntries(rows: PaginatedUserGameRow[]) {
