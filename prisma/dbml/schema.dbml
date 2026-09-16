@@ -36,13 +36,27 @@ Table users {
   googleId String [unique]
   discordId String [unique]
   steamId String [unique]
-  isPublic Boolean [not null, default: true]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]
   refreshToken refresh_token [not null]
   Rating ratings [not null]
   Review reviews [not null]
+  following follows [not null]
+  followers follows [not null]
+}
+
+Table follows {
+  id String [pk]
+  follower users [not null]
+  followerId String [not null]
+  following users [not null]
+  followingId String [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (followerId, followingId) [unique]
+  }
 }
 
 Table user_games {
@@ -115,6 +129,10 @@ Enum Status {
 Ref: refresh_token.userId > users.id [delete: Cascade]
 
 Ref: ratings.userId > users.id [delete: Cascade]
+
+Ref: follows.followerId > users.id [delete: Cascade]
+
+Ref: follows.followingId > users.id [delete: Cascade]
 
 Ref: user_games.userId > users.id [delete: Cascade]
 

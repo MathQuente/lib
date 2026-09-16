@@ -5,6 +5,7 @@ import { GameCacheService } from './game-cache.service'
 import { UserRepository } from '../repositories/users.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { RatingRepository } from '../repositories/rating.repository'
+import { FollowRepository } from '../repositories/follow.repository'
 import { ClientError } from '../errors/client-error'
 
 function fakeUserRepository(
@@ -17,6 +18,12 @@ function fakeRatingRepository(
   overrides: Partial<RatingRepository> = {}
 ): RatingRepository {
   return { ...overrides } as unknown as RatingRepository
+}
+
+function fakeFollowRepository(
+  overrides: Partial<FollowRepository> = {}
+): FollowRepository {
+  return { ...overrides } as unknown as FollowRepository
 }
 
 function fakeGameCacheService(
@@ -48,7 +55,8 @@ describe('UserService.addGameToUserLibrary', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      gameCacheService
+      gameCacheService,
+      fakeFollowRepository()
     )
 
     await expect(
@@ -70,7 +78,8 @@ describe('UserService.addGameToUserLibrary', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      gameCacheService
+      gameCacheService,
+      fakeFollowRepository()
     )
 
     const result = await service.addGameToUserLibrary(1022, 'user-1', 1)
@@ -92,7 +101,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await expect(
@@ -110,7 +120,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await service.findManyUserGames('user-1', 2, 'PLAYED', undefined, 'rating', 'desc')
@@ -136,7 +147,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await service.findManyUserGames('user-1', 0, undefined, undefined, 'rating', 'desc')
@@ -187,7 +199,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     const result = await service.findManyUserGames(
@@ -250,7 +263,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     const result = await service.findManyUserGames(
@@ -296,7 +310,8 @@ describe('UserService.findManyUserGames', () => {
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     const result = await service.findManyUserGames(
@@ -330,7 +345,8 @@ describe('UserService.updateGame', () => {
     const service = new UserService(
       userRepository,
       ratingRepository,
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await service.updateGame(11133, 'user-1', 5)
@@ -355,7 +371,8 @@ describe('UserService.updateGame', () => {
     const service = new UserService(
       userRepository,
       ratingRepository,
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await service.updateGame(11133, 'user-1', 5)
@@ -377,7 +394,8 @@ describe('UserService.updateGame', () => {
     const service = new UserService(
       userRepository,
       ratingRepository,
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      fakeFollowRepository()
     )
 
     await service.updateGame(11133, 'user-1', 4)
@@ -387,7 +405,7 @@ describe('UserService.updateGame', () => {
 })
 
 describe('UserService.findById', () => {
-  it('returns the full profile, without steamId, when the user is public', async () => {
+  it('returns the full profile, without steamId, including follow counts', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
@@ -395,7 +413,6 @@ describe('UserService.findById', () => {
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
         steamId: '12345',
-        isPublic: true,
         _count: { userGames: 3 }
       }),
       countUserGames: vi
@@ -403,10 +420,15 @@ describe('UserService.findById', () => {
         .mockResolvedValue({ _count: { userGames: 3 } }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
     })
+    const followRepository = fakeFollowRepository({
+      countFollowers: vi.fn().mockResolvedValue(2),
+      countFollowing: vi.fn().mockResolvedValue(5)
+    })
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      followRepository
     )
 
     const { user } = await service.findById('user-1')
@@ -418,51 +440,15 @@ describe('UserService.findById', () => {
       userName: 'matheus',
       gamesAmount: 3,
       totalHoursPlayed: 12.5,
-      isPublic: true
+      followersCount: 2,
+      followingCount: 5
     })
     expect(user).not.toHaveProperty('steamId')
-  })
-
-  it('returns avatar/banner/username but not game counts when the user is private', async () => {
-    const countUserGames = vi.fn()
-    const sumUserHoursPlayed = vi.fn()
-    const userRepository = fakeUserRepository({
-      findUserById: vi.fn().mockResolvedValue({
-        id: 'user-1',
-        userName: 'matheus',
-        profilePicture: 'pic.png',
-        userBanner: 'banner.png',
-        steamId: '12345',
-        isPublic: false,
-        _count: { userGames: 3 }
-      }),
-      countUserGames,
-      sumUserHoursPlayed
-    })
-    const service = new UserService(
-      userRepository,
-      fakeRatingRepository(),
-      fakeGameCacheService()
-    )
-
-    const { user } = await service.findById('user-1')
-
-    expect(user).toEqual({
-      id: 'user-1',
-      profilePicture: 'pic.png',
-      userBanner: 'banner.png',
-      userName: 'matheus',
-      isPublic: false
-    })
-    expect(user).not.toHaveProperty('gamesAmount')
-    expect(user).not.toHaveProperty('totalHoursPlayed')
-    expect(countUserGames).not.toHaveBeenCalled()
-    expect(sumUserHoursPlayed).not.toHaveBeenCalled()
   })
 })
 
 describe('UserService.findMe', () => {
-  it('returns the full self profile, including steamId and isPublic', async () => {
+  it('returns the full self profile, including steamId and follow counts', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
@@ -470,15 +456,19 @@ describe('UserService.findMe', () => {
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
         steamId: '12345',
-        isPublic: false,
         _count: { userGames: 3 }
       }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
     })
+    const followRepository = fakeFollowRepository({
+      countFollowers: vi.fn().mockResolvedValue(2),
+      countFollowing: vi.fn().mockResolvedValue(5)
+    })
     const service = new UserService(
       userRepository,
       fakeRatingRepository(),
-      fakeGameCacheService()
+      fakeGameCacheService(),
+      followRepository
     )
 
     const { user } = await service.findMe('user-1')
@@ -491,7 +481,8 @@ describe('UserService.findMe', () => {
       gamesAmount: 3,
       totalHoursPlayed: 12.5,
       steamId: '12345',
-      isPublic: false
+      followersCount: 2,
+      followingCount: 5
     })
   })
 })

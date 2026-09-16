@@ -34,7 +34,6 @@ export class ReviewRepository {
       LEFT JOIN user_games ug ON ug.igdb_id = rv.igdb_id AND ug.user_id = rv.user_id
       LEFT JOIN user_game_stats ugst ON ugst.user_game_id = ug.id
       WHERE rv.igdb_id = ${igdbId}
-      AND u.is_public = true
       ORDER BY rv.created_at DESC
       LIMIT ${take} OFFSET ${skip}
     `)
@@ -44,9 +43,7 @@ export class ReviewRepository {
     const result = await prisma.$queryRaw<[{ count: bigint }]>(Prisma.sql`
       SELECT COUNT(*) AS count
       FROM reviews rv
-      JOIN users u ON u.id = rv.user_id
       WHERE rv.igdb_id = ${igdbId}
-      AND u.is_public = true
     `)
 
     return Number(result[0].count)

@@ -15,11 +15,12 @@ export const GetUserResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
     userName: z.string().nullable(),
-    isPublic: z.boolean(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
-    gamesAmount: z.number().optional(),
-    totalHoursPlayed: z.number().optional()
+    gamesAmount: z.number(),
+    totalHoursPlayed: z.number(),
+    followersCount: z.number(),
+    followingCount: z.number()
   })
 })
 
@@ -32,7 +33,8 @@ export const GetMeResponseSchema = z.object({
     gamesAmount: z.number(),
     totalHoursPlayed: z.number(),
     steamId: z.string().nullable(),
-    isPublic: z.boolean()
+    followersCount: z.number(),
+    followingCount: z.number()
   })
 })
 
@@ -87,8 +89,7 @@ export const UpdateUserResponseSchema = z.object({
   user: z.object({
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
-    userName: z.string().nullable(),
-    isPublic: z.boolean()
+    userName: z.string().nullable()
   })
 })
 
@@ -134,8 +135,7 @@ export const UpdateUserBodySchema = z
   .object({
     userName: z.string().nullable(),
     profilePicture: z.string().nullable(),
-    userBanner: z.string().nullable(),
-    isPublic: z.boolean()
+    userBanner: z.string().nullable()
   })
   .partial()
 

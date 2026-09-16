@@ -2,12 +2,14 @@ import { FastifyInstance } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 
 import * as UserSchema from '../schemas/user.schema'
+import * as FollowSchema from '../schemas/follow.schema'
 import { UserRepository } from '../repositories/users.repository'
 import { UserService } from '../services/users.service'
 import { UserController } from '../controllers/users.controller'
 import { RatingRepository } from '../repositories/rating.repository'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
+import { FollowRepository } from '../repositories/follow.repository'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function userRoutes(app: FastifyInstance) {
@@ -15,10 +17,12 @@ export async function userRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const gameCacheRepository = new GameCacheRepository()
   const gameCacheService = new GameCacheService(gameCacheRepository)
+  const followRepository = new FollowRepository()
   const userService = new UserService(
     userRepository,
     ratingRepository,
-    gameCacheService
+    gameCacheService,
+    followRepository
   )
   const userController = new UserController(userService)
 
@@ -66,6 +70,36 @@ export async function userRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => userController.getPublicUserGames(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/:userId/followers',
+    {
+      schema: {
+        params: UserSchema.UserParamsSchema,
+        response: {
+          200: FollowSchema.GetFollowersResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => userController.getUserFollowers(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/:userId/following',
+    {
+      schema: {
+        params: UserSchema.UserParamsSchema,
+        response: {
+          200: FollowSchema.GetFollowingResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => userController.getUserFollowing(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(

@@ -12,6 +12,7 @@ import { gameRoutes } from './routes/game'
 import { ratingRoutes } from './routes/rating'
 import { reviewRoutes } from './routes/review'
 import { steamRoutes } from './routes/steam'
+import { followRoutes } from './routes/follow'
 import { errorHandler } from './error-handler'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
@@ -98,6 +99,7 @@ export class Server {
     this.app.register(reviewRoutes, { prefix: '/reviews' })
     this.app.register(steamRoutes, { prefix: '/users/steam' })
     this.app.register(userGameStatusRoutes, { prefix: '/status' })
+    this.app.register(followRoutes, { prefix: '/follows' })
   }
 
   private static async initRateLimit() {

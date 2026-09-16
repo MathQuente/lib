@@ -3,6 +3,7 @@ import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { FollowRepository } from '../repositories/follow.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
 import { GameCacheService } from './game-cache.service'
@@ -17,7 +18,8 @@ export class UserService {
   constructor(
     private userRepository: UserRepository,
     private ratingRepository: RatingRepository,
-    private gameCacheService: GameCacheService
+    private gameCacheService: GameCacheService,
+    private followRepository: FollowRepository
   ) {}
 
   private async requireUser(userId: string) {
@@ -63,6 +65,8 @@ export class UserService {
 
     const totalHoursPlayed =
       await this.userRepository.sumUserHoursPlayed(userId)
+    const followersCount = await this.followRepository.countFollowers(userId)
+    const followingCount = await this.followRepository.countFollowing(userId)
 
     return {
       user: {
@@ -73,7 +77,8 @@ export class UserService {
         gamesAmount: user._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
         steamId: user.steamId,
-        isPublic: user.isPublic
+        followersCount,
+        followingCount
       }
     }
   }
@@ -81,21 +86,11 @@ export class UserService {
   async findById(userId: string) {
     const user = await this.requireUser(userId)
 
-    if (!user.isPublic) {
-      return {
-        user: {
-          id: user.id,
-          profilePicture: user.profilePicture,
-          userBanner: user.userBanner,
-          userName: user.userName,
-          isPublic: false as const
-        }
-      }
-    }
-
     const gamesAmount = await this.userRepository.countUserGames(userId)
     const totalHoursPlayed =
       await this.userRepository.sumUserHoursPlayed(userId)
+    const followersCount = await this.followRepository.countFollowers(userId)
+    const followingCount = await this.followRepository.countFollowing(userId)
 
     return {
       user: {
@@ -105,7 +100,8 @@ export class UserService {
         userName: user.userName,
         gamesAmount: gamesAmount?._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
-        isPublic: true as const
+        followersCount,
+        followingCount
       }
     }
   }
@@ -193,21 +189,7 @@ export class UserService {
   private readonly PUBLIC_PROFILE_PREVIEW_PER_STATUS = 6
 
   async findPublicUserGames(userId: string) {
-    const user = await this.requireUser(userId)
-
-    if (!user.isPublic) {
-      return {
-        games: {
-          PLAYED: [],
-          PLAYING: [],
-          PAUSED: [],
-          BACKLOG: [],
-          WISHLIST: []
-        },
-        totalPerStatus: [],
-        total: 0
-      }
-    }
+    await this.requireUser(userId)
 
     const result = await this.findManyUserGames(userId, 0, undefined, undefined)
 
@@ -219,6 +201,18 @@ export class UserService {
     ) as typeof result.games
 
     return { ...result, games }
+  }
+
+  async findUserFollowers(userId: string) {
+    await this.requireUser(userId)
+    const followers = await this.followRepository.findFollowers(userId)
+    return { followers }
+  }
+
+  async findUserFollowing(userId: string) {
+    await this.requireUser(userId)
+    const following = await this.followRepository.findFollowing(userId)
+    return { following }
   }
 
   private async fillMissingGameCacheEntries(rows: PaginatedUserGameRow[]) {
@@ -358,8 +352,7 @@ export class UserService {
     const user = await this.userRepository.updateUser(userId, {
       profilePicture: data.profilePicture,
       userBanner: data.userBanner,
-      userName: data.userName,
-      isPublic: data.isPublic
+      userName: data.userName
     })
 
     return { user }

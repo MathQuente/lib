@@ -69,6 +69,22 @@ export class UserController {
     return reply.status(200).send({ totalPerStatus, games, total })
   }
 
+  async getUserFollowers(request: FastifyRequest, reply: FastifyReply) {
+    const { userId } = UserSchema.UserParamsSchema.parse(request.params)
+
+    const { followers } = await this.userService.findUserFollowers(userId)
+
+    return reply.status(200).send({ followers })
+  }
+
+  async getUserFollowing(request: FastifyRequest, reply: FastifyReply) {
+    const { userId } = UserSchema.UserParamsSchema.parse(request.params)
+
+    const { following } = await this.userService.findUserFollowing(userId)
+
+    return reply.status(200).send({ following })
+  }
+
   async getUsers(request: FastifyRequest, reply: FastifyReply) {
     const { pageIndex, query } = UserSchema.QueryStringSchema.parse(
       request.query
@@ -116,15 +132,14 @@ export class UserController {
   }
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
-    const { profilePicture, userBanner, userName, isPublic } =
+    const { profilePicture, userBanner, userName } =
       UserSchema.UpdateUserBodySchema.parse(request.body)
     const userId = request.user.userId
 
     const { user } = await this.userService.update(userId, {
       profilePicture,
       userBanner,
-      userName,
-      isPublic
+      userName
     })
 
     return reply.status(200).send({ user })
