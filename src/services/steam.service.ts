@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
@@ -16,9 +17,8 @@ const PLAYING_STATUS_ID = 3
 const BACKLOG_STATUS_ID = 4
 const WISHLIST_STATUS_ID = 5
 const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
+const IMPORT_COOLDOWN_MS = 60 * 60 * 1000
 
-// A game needs at least this many achievements for its completion ratio to
-// mean anything — 1/1 achieved would otherwise trivially read as "finished".
 const MIN_ACHIEVEMENTS_FOR_SIGNAL = 5
 const FINISHED_ACHIEVEMENT_RATIO = 0.9
 const ACHIEVEMENT_CHECK_CONCURRENCY = 10
@@ -56,11 +56,6 @@ export class SteamService {
     return user
   }
 
-  // Shared by both the owned-library and wishlist passes: resolve each
-  // appid to its IGDB match, drop unmatched ones into notFound, and skip
-  // anything already in the library — including two different appids
-  // (e.g. a base game and a bundle) that resolve to the same IGDB game,
-  // which would otherwise both pass the check and collide on insert.
   private async resolveImportTargets<T extends { appid: number; name: string }>(
     items: T[],
     appIdToIgdb: Map<number, IGDBGame>,
@@ -106,11 +101,11 @@ export class SteamService {
   async connectSteam(userId: string, profileInput: string) {
     await this.requireUser(userId)
 
-    const { steamId64, vanity } = SteamApiService.parseProfileInput(
-      profileInput
-    )
+    const { steamId64, vanity } =
+      SteamApiService.parseProfileInput(profileInput)
     const resolvedId =
-      steamId64 ?? (vanity ? await SteamApiService.resolveVanityUrl(vanity) : null)
+      steamId64 ??
+      (vanity ? await SteamApiService.resolveVanityUrl(vanity) : null)
 
     if (!resolvedId) {
       throw new ClientError(
@@ -119,8 +114,27 @@ export class SteamService {
       )
     }
 
-    await this.userRepository.setSteamId(userId, resolvedId)
+    try {
+      await this.userRepository.setSteamId(userId, resolvedId)
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ClientError(
+          'This Steam profile is already linked to another account.',
+          409
+        )
+      }
+      throw err
+    }
+
     return { steamId: resolvedId }
+  }
+
+  async disconnectSteam(userId: string) {
+    await this.requireUser(userId)
+    await this.userRepository.setSteamId(userId, null)
   }
 
   async enqueueImport(userId: string) {
@@ -137,6 +151,17 @@ export class SteamService {
       if (state === 'waiting' || state === 'active' || state === 'delayed') {
         throw new ClientError('A Steam import is already running.', 409)
       }
+      if (state === 'completed' && existing.finishedOn) {
+        const remainingMs =
+          existing.finishedOn + IMPORT_COOLDOWN_MS - Date.now()
+        if (remainingMs > 0) {
+          const remainingMinutes = Math.ceil(remainingMs / 60000)
+          throw new ClientError(
+            `You can import again in ${remainingMinutes} minute(s).`,
+            429
+          )
+        }
+      }
       await existing.remove()
     }
 
@@ -151,20 +176,31 @@ export class SteamService {
     const state = await job.getState()
 
     if (state === 'completed') {
+      const cooldownUntil = job.finishedOn
+        ? job.finishedOn + IMPORT_COOLDOWN_MS
+        : undefined
       return {
         status: 'completed' as const,
-        result: job.returnvalue as SteamImportJobResult
+        result: job.returnvalue as SteamImportJobResult,
+        cooldownUntil:
+          cooldownUntil && cooldownUntil > Date.now()
+            ? cooldownUntil
+            : undefined
       }
     }
     if (state === 'failed') {
       return { status: 'failed' as const, error: job.failedReason }
     }
 
-    return { status: state as 'waiting' | 'active' | 'delayed' }
+    const progress = typeof job.progress === 'number' ? job.progress : undefined
+
+    return { status: state as 'waiting' | 'active' | 'delayed', progress }
   }
 
-  // Runs inside the BullMQ worker — the actual import.
-  async runImport(userId: string): Promise<SteamImportJobResult> {
+  async runImport(
+    userId: string,
+    onProgress?: (percent: number) => void
+  ): Promise<SteamImportJobResult> {
     const user = await this.requireUser(userId)
     if (!user.steamId) {
       throw new ClientError('Connect your Steam profile first.', 400)
@@ -183,8 +219,6 @@ export class SteamService {
       )
     }
 
-    // Steam doesn't return a name for wishlist entries (never owned) — fall
-    // back to the appid for the rare not-found report.
     const wishlistItems = (wishlistItemsRaw ?? []).map(w => ({
       appid: w.appid,
       name: `App ${w.appid}`
@@ -197,29 +231,52 @@ export class SteamService {
     const matches = await IGDBService.getGamesBySteamAppIds(allAppIds)
     const appIdToIgdb = new Map(matches.map(m => [m.appId, m.game]))
 
-    const library = await this.importOwnedGames(ownedGames, appIdToIgdb, userId, steamId)
-    const wishlist = await this.importWishlist(wishlistItems, appIdToIgdb, userId)
+    const ownedResolved = await this.resolveImportTargets(
+      ownedGames,
+      appIdToIgdb,
+      userId
+    )
+    const wishlistResolved = await this.resolveImportTargets(
+      wishlistItems,
+      appIdToIgdb,
+      userId
+    )
+
+    const total =
+      ownedResolved.toImport.length + wishlistResolved.toImport.length
+    let processed = 0
+    const bump = () => {
+      processed++
+      onProgress?.(total === 0 ? 100 : Math.round((processed / total) * 100))
+    }
+
+    const library = await this.importOwnedGames(
+      ownedResolved,
+      userId,
+      steamId,
+      bump
+    )
+    const wishlist = await this.importWishlist(wishlistResolved, userId, bump)
+
+    onProgress?.(100)
 
     return { library, wishlist }
   }
 
   private async importOwnedGames(
-    ownedGames: SteamOwnedGame[],
-    appIdToIgdb: Map<number, IGDBGame>,
+    {
+      toImport,
+      skipped,
+      notFound
+    }: {
+      toImport: { item: SteamOwnedGame; igdbGame: IGDBGame }[]
+      skipped: number
+      notFound: string[]
+    },
     userId: string,
-    steamId: string
+    steamId: string,
+    onItemDone: () => void
   ): Promise<SteamImportSectionResult> {
-    const { toImport, skipped, notFound } = await this.resolveImportTargets(
-      ownedGames,
-      appIdToIgdb,
-      userId
-    )
-
-    // Achievement % is the only completion signal Steam's API exposes at
-    // all — checked here (not just for "recently played" games) since a
-    // finished-and-shelved game is the main case it's meant to catch.
-    // Fetched concurrently: it's one HTTP call per game, sequential would
-    // make large libraries take forever.
     const achievementSummaries = await mapWithConcurrency(
       toImport,
       ACHIEVEMENT_CHECK_CONCURRENCY,
@@ -237,10 +294,6 @@ export class SteamService {
 
       await this.gameCacheService.cacheMany([igdbGame])
 
-      // playtime alone doesn't say whether it's still being played — a game
-      // touched years ago shouldn't land in PLAYING. rtime_last_played
-      // comes free in the same GetOwnedGames call, so this recency check
-      // needs no periodic job, only at import time.
       const secondsSinceLastPlayed =
         Math.floor(Date.now() / 1000) - (owned.rtime_last_played ?? 0)
       const recentlyPlayed =
@@ -271,22 +324,25 @@ export class SteamService {
       )
 
       imported++
+      onItemDone()
     }
 
     return { imported, skipped, notFound }
   }
 
   private async importWishlist(
-    wishlistItems: { appid: number; name: string }[],
-    appIdToIgdb: Map<number, IGDBGame>,
-    userId: string
+    {
+      toImport,
+      skipped,
+      notFound
+    }: {
+      toImport: { item: { appid: number; name: string }; igdbGame: IGDBGame }[]
+      skipped: number
+      notFound: string[]
+    },
+    userId: string,
+    onItemDone: () => void
   ): Promise<SteamImportSectionResult> {
-    const { toImport, skipped, notFound } = await this.resolveImportTargets(
-      wishlistItems,
-      appIdToIgdb,
-      userId
-    )
-
     let imported = 0
 
     for (const { igdbGame } of toImport) {
@@ -298,6 +354,7 @@ export class SteamService {
       })
       await this.userRepository.createUserGameStats(userId, igdbGame.id)
       imported++
+      onItemDone()
     }
 
     return { imported, skipped, notFound }

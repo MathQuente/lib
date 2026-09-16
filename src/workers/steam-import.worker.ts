@@ -8,9 +8,11 @@ import { SteamService } from '../services/steam.service'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
+import { ClientError } from '../errors/client-error'
 
-// Raised from 2min: achievement checks add one HTTP call per played game,
-// run with limited concurrency, so large libraries need more headroom.
+const GENERIC_IMPORT_ERROR =
+  'Erro ao importar sua biblioteca da Steam. Tente novamente mais tarde.'
+
 const IMPORT_TIMEOUT_MS = 5 * 60 * 1000
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
@@ -29,8 +31,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
   })
 }
 
-// Runs in the same process as the Fastify server (no separate worker
-// deployment) — a personal-project-scale tradeoff, see design notes.
 export function startSteamImportWorker() {
   const userRepository = new UserRepository()
   const gameCacheService = new GameCacheService(new GameCacheRepository())
@@ -40,14 +40,22 @@ export function startSteamImportWorker() {
     STEAM_IMPORT_QUEUE_NAME,
     async job => {
       const { userId } = job.data as SteamImportJobData
-      // Per-request HTTP timeouts (fetchWithTimeout) handle a single hung
-      // call; this is the ceiling for the whole import, so a stuck job can
-      // never leave the "Importar" button disabled forever.
-      return withTimeout(
-        steamService.runImport(userId),
-        IMPORT_TIMEOUT_MS,
-        'Steam import timed out after 5 minutes.'
-      )
+      try {
+        return await withTimeout(
+          steamService.runImport(userId, percent =>
+            job.updateProgress(percent)
+          ),
+          IMPORT_TIMEOUT_MS,
+          'Steam import timed out after 5 minutes.'
+        )
+      } catch (err) {
+        if (err instanceof ClientError) throw err
+        console.error('[SteamImport] unexpected job failure', {
+          jobId: job.id,
+          error: err
+        })
+        throw new Error(GENERIC_IMPORT_ERROR)
+      }
     },
     { connection: bullConnection }
   )

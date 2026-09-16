@@ -16,6 +16,14 @@ export class SteamController {
     return reply.status(200).send(result)
   }
 
+  async disconnect(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user.userId
+
+    await this.steamService.disconnectSteam(userId)
+
+    return reply.status(204).send()
+  }
+
   async startImport(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
 

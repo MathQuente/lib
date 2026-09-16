@@ -32,6 +32,21 @@ export async function steamRoutes(app: FastifyInstance) {
     async (request, reply) => steamController.connect(request, reply)
   )
 
+  app.withTypeProvider<ZodTypeProvider>().delete(
+    '/',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        response: {
+          204: SteamSchema.DisconnectResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => steamController.disconnect(request, reply)
+  )
+
   app.withTypeProvider<ZodTypeProvider>().post(
     '/import',
     {

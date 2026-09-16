@@ -8,6 +8,8 @@ export const ConnectSteamResponseSchema = z.object({
   steamId: z.string()
 })
 
+export const DisconnectResponseSchema = z.void()
+
 export const StartImportResponseSchema = z.object({
   status: z.literal('queued')
 })
@@ -27,11 +29,13 @@ export const ImportStatusResponseSchema = z.object({
     'completed',
     'failed'
   ]),
+  progress: z.number().optional(),
   result: z
     .object({
       library: SteamImportSectionResultSchema,
       wishlist: SteamImportSectionResultSchema
     })
     .optional(),
-  error: z.string().optional()
+  error: z.string().optional(),
+  cooldownUntil: z.number().optional()
 })
