@@ -47,7 +47,7 @@ export class UserController {
   async getMe(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
 
-    if (!userId) throw new ClientError('User ID not found in token')
+    if (!userId) throw new ClientError('ID do usuário não encontrado no token.')
 
     const { user } = await this.userService.findMe(userId)
 
@@ -201,6 +201,38 @@ export class UserController {
     )
 
     return reply.status(200).send({ hoursPlayed: updated })
+  }
+
+  async getUserGameCompletedAt(request: FastifyRequest, reply: FastifyReply) {
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
+
+    const { completedAt } = await this.userService.findUserGameCompletedAt(
+      igdbId,
+      userId
+    )
+
+    return reply.status(200).send({ completedAt })
+  }
+
+  async updateUserGameCompletedAt(
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) {
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
+    const { completedAt } = UserSchema.UserGameCompletedAtUpdateBodySchema.parse(
+      request.body
+    )
+
+    const { completedAt: updated } =
+      await this.userService.updateUserGameCompletedAt(
+        userId,
+        igdbId,
+        completedAt
+      )
+
+    return reply.status(200).send({ completedAt: updated })
   }
 
   async getGamesToDisplay(request: FastifyRequest, reply: FastifyReply) {

@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthService } from '../services/auth.service'
 import * as UserSchema from '../schemas/user.schema'
+import * as AuthSchema from '../schemas/auth.schema'
 import { ClientError } from '../errors/client-error'
 
 export class AuthController {
@@ -58,10 +59,31 @@ export class AuthController {
     this.setAuthCookies(reply, accessToken, refreshToken).send({ user })
   }
 
+  async forgotPassword(request: FastifyRequest, reply: FastifyReply) {
+    const { email } = AuthSchema.ForgotPasswordBodySchema.parse(request.body)
+
+    await this.authService.requestPasswordReset(email)
+
+    return reply.status(200).send({
+      message:
+        'Se existir uma conta com esse email, um link de redefinição foi enviado.'
+    })
+  }
+
+  async resetPassword(request: FastifyRequest, reply: FastifyReply) {
+    const { token, password } = AuthSchema.ResetPasswordBodySchema.parse(
+      request.body
+    )
+
+    await this.authService.resetPassword(token, password)
+
+    return reply.status(200).send({ message: 'Senha atualizada com sucesso.' })
+  }
+
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
     const refreshToken = request.cookies.refreshToken
 
-    if (!refreshToken) throw new ClientError('Refresh token not provided', 401)
+    if (!refreshToken) throw new ClientError('Token de atualização não enviado.', 401)
 
     const {
       accessToken,
@@ -92,7 +114,7 @@ export class AuthController {
     const accessToken = request.cookies.accessToken
 
     if (!refreshToken) {
-      return reply.status(400).send({ message: 'Refresh token is missing' })
+      return reply.status(400).send({ message: 'Token de atualização ausente.' })
     }
 
     await this.authService.logout(refreshToken, accessToken)
@@ -100,7 +122,7 @@ export class AuthController {
     reply
       .clearCookie('accessToken')
       .clearCookie('refreshToken')
-      .send({ message: 'Logged out successfully' })
+      .send({ message: 'Sessão encerrada com sucesso.' })
   }
 
   async googleCallback(request: FastifyRequest, reply: FastifyReply) {
@@ -108,7 +130,7 @@ export class AuthController {
       const { code } = request.query as { code: string; state: string }
 
       if (!code) {
-        throw new ClientError('Authorization code missing', 400)
+        throw new ClientError('Código de autorização ausente.', 400)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +159,7 @@ export class AuthController {
 
           if (!response.ok) {
             const error = await response.text()
-            throw new ClientError(`Token exchange failed: ${error}`, 502)
+            throw new ClientError(`Falha na troca de token: ${error}`, 502)
           }
 
           return await response.json()
@@ -151,7 +173,7 @@ export class AuthController {
       )
 
       if (!res.ok) {
-        throw new ClientError('Failed to fetch user info', 502)
+        throw new ClientError('Falha ao buscar informações do usuário.', 502)
       }
 
       const profile = (await res.json()) as {
@@ -177,7 +199,7 @@ export class AuthController {
       const { code } = request.query as { code: string }
 
       if (!code) {
-        throw new ClientError('Authorization code missing', 400)
+        throw new ClientError('Código de autorização ausente.', 400)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,7 +224,7 @@ export class AuthController {
 
           if (!response.ok) {
             const error = await response.text()
-            throw new ClientError(`Token exchange failed: ${error}`, 502)
+            throw new ClientError(`Falha na troca de token: ${error}`, 502)
           }
 
           return await response.json()
@@ -215,7 +237,7 @@ export class AuthController {
       })
 
       if (!res.ok) {
-        throw new ClientError('Failed to fetch user info', 502)
+        throw new ClientError('Falha ao buscar informações do usuário.', 502)
       }
 
       const profile = (await res.json()) as {

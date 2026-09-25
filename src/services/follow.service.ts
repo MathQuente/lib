@@ -10,13 +10,13 @@ export class FollowService {
 
   private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
     return user
   }
 
   async follow(userId: string, targetId: string) {
     if (userId === targetId) {
-      throw new ClientError('You cannot follow yourself.', 400)
+      throw new ClientError('Você não pode seguir a si mesmo.', 400)
     }
 
     await this.requireUser(userId)
@@ -27,7 +27,7 @@ export class FollowService {
       targetId
     )
     if (alreadyFollowing) {
-      throw new ClientError('You already follow this user.', 409)
+      throw new ClientError('Você já segue este usuário.', 409)
     }
 
     await this.followRepository.follow(userId, targetId)

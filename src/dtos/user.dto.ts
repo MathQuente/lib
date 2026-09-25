@@ -8,6 +8,7 @@ export interface AddGameDTO {
   igdbId: number
   userId: string
   statusIds: number
+  completedAt?: Date
 }
 
 export interface UpdateUserDTO {

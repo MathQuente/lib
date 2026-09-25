@@ -105,7 +105,6 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/',
     {
-      preHandler: [app.authenticate],
       schema: {
         querystring: UserSchema.QueryStringSchema,
         response: {
@@ -296,6 +295,41 @@ export async function userRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => userController.updateUserGameHours(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/completedAt/:igdbId',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGameParamsSchema,
+        response: {
+          200: UserSchema.GetUserGameCompletedAtResponse,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) =>
+      userController.getUserGameCompletedAt(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().patch(
+    '/completedAt/:igdbId',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGameParamsSchema,
+        response: {
+          200: UserSchema.GetUserGameCompletedAtResponse,
+          400: ErrorSchemas.BadRequest,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) =>
+      userController.updateUserGameCompletedAt(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().get(

@@ -7,13 +7,21 @@ import {
   UserGameSortOrder
 } from '../types/user'
 
+const PLAYED_STATUS_ID = 1
+
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
+    const completedAt =
+      data.statusIds === PLAYED_STATUS_ID
+        ? (data.completedAt ?? new Date())
+        : undefined
+
     return prisma.userGame.create({
       data: {
         igdbId: data.igdbId,
         userId: data.userId,
-        userGamesStatusId: data.statusIds
+        userGamesStatusId: data.statusIds,
+        completedAt
       },
       select: { igdbId: true }
     })
@@ -77,6 +85,25 @@ export class UserRepository {
       select: { hoursPlayed: true }
     })
     return { stats }
+  }
+
+  async findUserGameForCompletedAt(igdbId: number, userId: string) {
+    return prisma.userGame.findUnique({
+      where: { userId_igdbId: { userId, igdbId } },
+      select: { completedAt: true, userGamesStatusId: true }
+    })
+  }
+
+  async updateUserGameCompletedAt(
+    igdbId: number,
+    userId: string,
+    completedAt: Date
+  ) {
+    return prisma.userGame.update({
+      where: { userId_igdbId: { userId, igdbId } },
+      data: { completedAt },
+      select: { completedAt: true }
+    })
   }
 
   async findUserGameStatusesForGames(userId: string, igdbIds: number[]) {
@@ -219,7 +246,11 @@ export class UserRepository {
           ? Prisma.sql`COALESCE(gc.release_date, 0) ${direction}`
           : sortBy === 'rating'
             ? Prisma.sql`COALESCE(r.value, -1) ${direction}`
-            : Prisma.sql`ug.created_at ${direction}`
+            : sortBy === 'hoursPlayed'
+              ? Prisma.sql`COALESCE(ugst.hours_played, 0) ${direction}`
+              : sortBy === 'completedAt'
+                ? Prisma.sql`COALESCE(ug.completed_at, ug.updated_at) ${direction}`
+                : Prisma.sql`ug.updated_at ${direction}`
 
     const statusFilter = filter
       ? Prisma.sql`AND ugs.status = ${filter}::"Status"`
@@ -319,7 +350,11 @@ export class UserRepository {
   async updateGameStatus(igdbId: number, userId: string, statusId: number) {
     return prisma.userGame.update({
       where: { userId_igdbId: { igdbId, userId } },
-      data: { userGamesStatusId: statusId, updatedAt: new Date() },
+      data: {
+        userGamesStatusId: statusId,
+        updatedAt: new Date(),
+        completedAt: statusId === PLAYED_STATUS_ID ? new Date() : undefined
+      },
       select: {
         igdbId: true,
         UserGamesStatus: { select: { id: true, status: true } }

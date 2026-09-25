@@ -79,9 +79,10 @@ model UserGame {
   igdbId            Int      @map("igdb_id")
   userId            String   @map("user_id")
   userGamesStatusId Int      @map("user_games_status_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  completedAt       DateTime? @map("completed_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   UserGameStats   UserGameStats?
   UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])

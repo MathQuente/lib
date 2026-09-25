@@ -1,16 +1,21 @@
 import { JWT } from '@fastify/jwt'
 import { AuthRepository } from '../repositories/auth.repository'
 import { CacheRepository } from '../repositories/cache.repository'
+import { EmailService } from './email.service'
 import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
 import { CreateUserDTO } from '../dtos/user.dto'
 import { generateFromEmail } from 'unique-username-generator'
 
+const PASSWORD_RESET_TTL_SECONDS = 60 * 60
+const passwordResetKey = (token: string) => `password-reset:${token}`
+
 export class AuthService {
   constructor(
     private authRepository: AuthRepository,
     private jwt: JWT,
-    private cacheRepository: CacheRepository
+    private cacheRepository: CacheRepository,
+    private emailService: EmailService = new EmailService()
   ) {}
 
   async generateTokens(userId: string) {
@@ -35,7 +40,7 @@ export class AuthService {
         !storedToken.isValid ||
         storedToken.expiresAt < new Date()
       ) {
-        throw new ClientError('invalid or expired refresh token', 401)
+        throw new ClientError('Sessão inválida ou expirada.', 401)
       }
 
       // Depois verifica a assinatura JWT
@@ -51,9 +56,9 @@ export class AuthService {
       }
       const { code, message } = error as { code?: string; message?: string }
       if (code === 'FAST_JWT_EXPIRED' || message?.includes('expired')) {
-        throw new ClientError('Refresh token expired', 401)
+        throw new ClientError('Sessão expirada.', 401)
       }
-      throw new ClientError('Invalid refresh token', 401)
+      throw new ClientError('Sessão inválida.', 401)
     }
   }
 
@@ -95,7 +100,7 @@ export class AuthService {
     const emailIsAlreadyUsed = await this.authRepository.findByEmail(data.email)
 
     if (emailIsAlreadyUsed) {
-      throw new ClientError('This email is already used')
+      throw new ClientError('Este email já está em uso.')
     }
 
     const passwordAfterHash = await bcrypt.hash(data.password, 10)
@@ -212,7 +217,7 @@ export class AuthService {
     const infoIsMatch = user && (await bcrypt.compare(password, user.password))
 
     if (!infoIsMatch) {
-      throw new ClientError('Email or password wrong')
+      throw new ClientError('Email ou senha incorretos.')
     }
 
     return {
@@ -221,6 +226,39 @@ export class AuthService {
         userName: user.userName
       }
     }
+  }
+
+  async requestPasswordReset(email: string) {
+    const user = await this.authRepository.findByEmail(email)
+
+    if (!user) return
+
+    const array = new Uint8Array(32)
+    crypto.getRandomValues(array)
+    const token = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+
+    await this.cacheRepository.set(
+      passwordResetKey(token),
+      user.id,
+      PASSWORD_RESET_TTL_SECONDS
+    )
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`
+    await this.emailService.sendPasswordResetEmail(user.email, resetUrl)
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const userId = (await this.cacheRepository.get(
+      passwordResetKey(token)
+    )) as string | null
+
+    if (!userId) {
+      throw new ClientError('Link de redefinição inválido ou expirado.', 400)
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+    await this.authRepository.updatePassword(userId, hashedPassword)
+    await this.cacheRepository.del(passwordResetKey(token))
   }
 
   async logout(refreshToken: string, accessToken?: string) {

@@ -14,7 +14,7 @@ export class ReviewService {
 
   private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
     return user
   }
 
@@ -29,11 +29,11 @@ export class ReviewService {
         userId
       )
       if (!userGame) {
-        throw new ClientError('Game not found in your library.', 404)
+        throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
       }
       if (userGame.UserGamesStatus?.id !== PLAYED_STATUS_ID) {
         throw new ClientError(
-          'You can only review a game marked as Played.',
+          'Você só pode escrever uma resenha de um jogo marcado como Jogado.',
           400
         )
       }
@@ -44,7 +44,7 @@ export class ReviewService {
       )
       if (!rating) {
         throw new ClientError(
-          'You need to rate this game before writing a review.',
+          'Você precisa avaliar este jogo antes de escrever uma resenha.',
           400
         )
       }
@@ -69,7 +69,7 @@ export class ReviewService {
     await this.requireUser(userId)
 
     const existing = await this.reviewRepository.findByUserGame(igdbId, userId)
-    if (!existing) throw new ClientError('Review not found.', 404)
+    if (!existing) throw new ClientError('Resenha não encontrada.', 404)
 
     await this.reviewRepository.delete(userId, igdbId)
   }

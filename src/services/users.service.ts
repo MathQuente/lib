@@ -24,7 +24,7 @@ export class UserService {
 
   private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
     return user
   }
 
@@ -36,12 +36,12 @@ export class UserService {
     await this.requireUser(userId)
 
     const gameExists = await this.gameCacheService.ensureCached(igdbId)
-    if (!gameExists) throw new ClientError('Game not found.', 404)
+    if (!gameExists) throw new ClientError('Jogo não encontrado.', 404)
 
     const existing = await this.userRepository.findUserGame(igdbId, userId)
 
     if (existing)
-      throw new ClientError('This game is already in your library', 409)
+      throw new ClientError('Este jogo já está na sua biblioteca.', 409)
 
     const { igdbId: addedId } = await this.userRepository.addGameToUserLibrary({
       igdbId,
@@ -140,8 +140,16 @@ export class UserService {
     pageIndex: number,
     filter: Status | undefined,
     query: string | undefined,
-    sortBy: 'gameName' | 'dateRelease' | 'rating' | 'dateAdded' = 'dateAdded',
-    sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' ? 'desc' : 'asc'
+    sortBy:
+      | 'gameName'
+      | 'dateRelease'
+      | 'rating'
+      | 'dateAdded'
+      | 'hoursPlayed'
+      | 'completedAt' = 'dateAdded',
+    sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' || sortBy === 'completedAt'
+      ? 'desc'
+      : 'asc'
   ) {
     await this.requireUser(userId)
 
@@ -191,7 +199,14 @@ export class UserService {
   async findPublicUserGames(userId: string) {
     await this.requireUser(userId)
 
-    const result = await this.findManyUserGames(userId, 0, undefined, undefined)
+    const result = await this.findManyUserGames(
+      userId,
+      0,
+      undefined,
+      undefined,
+      'completedAt',
+      'desc'
+    )
 
     const games = Object.fromEntries(
       Object.entries(result.games).map(([status, list]) => [
@@ -270,7 +285,7 @@ export class UserService {
     const existing = await this.userRepository.findUserGame(igdbId, userId)
 
     if (!existing)
-      throw new ClientError('This game is not in your library', 409)
+      throw new ClientError('Este jogo não está na sua biblioteca.', 409)
 
     const { igdbId: removedId } = await this.userRepository.removeGame(
       igdbId,
@@ -287,13 +302,13 @@ export class UserService {
   }
 
   async updateGame(igdbId: number, userId: string, statusId: number) {
-    if (!statusId) throw new ClientError('You need to pass your status', 400)
+    if (!statusId) throw new ClientError('Você precisa informar o status.', 400)
 
     await this.requireUser(userId)
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
-    if (!userGame) throw new ClientError('Game not found in your library.', 404)
+    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     const currentStatus = userGame.UserGamesStatus.id
 
@@ -396,6 +411,59 @@ export class UserService {
     return { hoursPlayed: stats?.hoursPlayed ? Number(stats.hoursPlayed) : 0 }
   }
 
+  async findUserGameCompletedAt(igdbId: number, userId: string) {
+    await this.requireUser(userId)
+
+    const userGame = await this.userRepository.findUserGameForCompletedAt(
+      igdbId,
+      userId
+    )
+    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+
+    return {
+      completedAt: userGame.completedAt
+        ? userGame.completedAt.toISOString().slice(0, 10)
+        : null
+    }
+  }
+
+  async updateUserGameCompletedAt(
+    userId: string,
+    igdbId: number,
+    completedAt: string
+  ) {
+    await this.requireUser(userId)
+
+    const userGame = await this.userRepository.findUserGameForCompletedAt(
+      igdbId,
+      userId
+    )
+    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+
+    if (userGame.userGamesStatusId !== PLAYED_STATUS_ID) {
+      throw new ClientError(
+        'Só é possível definir a data de finalização para jogos marcados como Jogado.',
+        400
+      )
+    }
+
+    const parsedDate = new Date(`${completedAt}T00:00:00.000Z`)
+    if (parsedDate.getTime() > Date.now()) {
+      throw new ClientError(
+        'A data de finalização não pode ser no futuro.',
+        400
+      )
+    }
+
+    const updated = await this.userRepository.updateUserGameCompletedAt(
+      igdbId,
+      userId,
+      parsedDate
+    )
+
+    return { completedAt: updated.completedAt!.toISOString().slice(0, 10) }
+  }
+
   async updateUserGameHours(
     userId: string,
     igdbId: number,
@@ -407,10 +475,10 @@ export class UserService {
       igdbId,
       userId
     )
-    if (!userGame) throw new ClientError('Game not found in your library.', 404)
+    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     if (userGame.UserGamesStatus?.status === Status.WISHLIST) {
-      throw new ClientError('Cannot set hours played for a wishlist game.', 400)
+      throw new ClientError('Não é possível definir horas jogadas para um jogo da lista de desejos.', 400)
     }
 
     const stats = await this.userRepository.upsertUserGameHours(

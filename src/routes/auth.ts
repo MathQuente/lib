@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/auth.controller'
 import { AuthRepository } from '../repositories/auth.repository'
 import { AuthService } from '../services/auth.service'
 import { CacheRepository } from '../repositories/cache.repository'
+import { EmailService } from '../services/email.service'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 
@@ -12,7 +13,13 @@ const oauthStateKey = (state: string) => `oauth-state:${state}`
 export async function authRoutes(app: FastifyInstance) {
   const authRepository = new AuthRepository()
   const cacheRepository = new CacheRepository()
-  const authService = new AuthService(authRepository, app.jwt, cacheRepository)
+  const emailService = new EmailService()
+  const authService = new AuthService(
+    authRepository,
+    app.jwt,
+    cacheRepository,
+    emailService
+  )
   const authController = new AuthController(authService)
 
   app.withTypeProvider<ZodTypeProvider>().post(
@@ -39,6 +46,32 @@ export async function authRoutes(app: FastifyInstance) {
       }
     },
     async (request, reply) => authController.loginHandler(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/forgot-password',
+    {
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.forgotPassword(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/reset-password',
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.resetPassword(request, reply)
   )
 
   app

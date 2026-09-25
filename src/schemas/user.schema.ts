@@ -45,7 +45,16 @@ export const QueryStringSchema = z.object({
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional()
     .catch(undefined),
-  sortBy: z.enum(['gameName', 'dateRelease', 'rating', 'dateAdded']).optional(),
+  sortBy: z
+    .enum([
+      'gameName',
+      'dateRelease',
+      'rating',
+      'dateAdded',
+      'hoursPlayed',
+      'completedAt'
+    ])
+    .optional(),
   sortOrder: z.enum(['asc', 'desc']).optional()
 })
 
@@ -75,6 +84,14 @@ export const UserGamePlayedCountUpdateBodySchema = z.object({
 
 export const UserGameHoursUpdateBodySchema = z.object({
   hoursPlayed: z.number().min(0).max(9999.99)
+})
+
+export const UserGameCompletedAtUpdateBodySchema = z.object({
+  completedAt: z.string().date()
+})
+
+export const GetUserGameCompletedAtResponse = z.object({
+  completedAt: z.string().nullable()
 })
 
 export const AddGameResponseSchema = z.object({

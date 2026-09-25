@@ -139,4 +139,11 @@ export class AuthRepository {
       }
     })
   }
+
+  async updatePassword(userId: string, hashedPassword: string) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    })
+  }
 }

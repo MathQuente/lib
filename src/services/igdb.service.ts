@@ -85,6 +85,10 @@ export class IGDBService {
     return `https:${url.replace('t_thumb', 't_cover_big')}`
   }
 
+  static formatScreenshotUrl(imageId: string, size: string): string {
+    return `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`
+  }
+
   static readonly INT4_MAX = 2_147_483_647
 
   static getParentGameId(g: IGDBGame): number | null {
@@ -135,7 +139,7 @@ export class IGDBService {
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
-      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name; limit 1;`
+      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name,screenshots.image_id,screenshots.width,screenshots.height,videos.video_id,videos.name; limit 1;`
     )
     return results[0] ?? null
   }
@@ -153,7 +157,7 @@ export class IGDBService {
     if (ids.length === 0) return []
     return this.request(
       'games',
-      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,parent_game,rating,follows; limit ${Math.min(ids.length, 500)};`
+      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows; limit ${Math.min(ids.length, 500)};`
     )
   }
 

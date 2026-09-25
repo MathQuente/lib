@@ -36,7 +36,13 @@ export const IGDBGameSchema = z.object({
     .optional(),
   status: z.string().optional(),
   completions: z.number().optional(),
-  hoursPlayed: z.number().optional()
+  hoursPlayed: z.number().optional(),
+  screenshots: z
+    .array(z.object({ thumbUrl: z.string(), fullUrl: z.string() }))
+    .optional(),
+  videos: z
+    .array(z.object({ videoId: z.string(), name: z.string() }))
+    .optional()
 })
 
 export const GameParamsSchema = z.object({

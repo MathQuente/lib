@@ -10,6 +10,8 @@ export interface SteamOwnedGame {
 export interface SteamAchievementSummary {
   achieved: number
   total: number
+  achievedApiNames: string[]
+  unlockTimesByName: Map<string, number>
 }
 
 export class SteamApiService {
@@ -102,7 +104,14 @@ export class SteamApiService {
     if (!response.ok) return null
 
     const data = (await response.json()) as {
-      playerstats?: { success?: boolean; achievements?: { achieved: number }[] }
+      playerstats?: {
+        success?: boolean
+        achievements?: {
+          apiname: string
+          achieved: number
+          unlocktime?: number
+        }[]
+      }
     }
 
     // `success: false` covers games with no achievement schema at all
@@ -112,9 +121,57 @@ export class SteamApiService {
       return null
     }
 
+    const achieved = achievements.filter(a => a.achieved === 1)
+
     return {
-      achieved: achievements.filter(a => a.achieved === 1).length,
-      total: achievements.length
+      achieved: achieved.length,
+      total: achievements.length,
+      achievedApiNames: achieved.map(a => a.apiname),
+      unlockTimesByName: new Map(
+        achieved.map(a => [a.apiname, a.unlocktime ?? 0])
+      )
     }
+  }
+
+  static async getGlobalAchievementPercentages(
+    appId: number
+  ): Promise<Map<string, number> | null> {
+    const url = `https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?key=${this.getApiKey()}&gameid=${appId}`
+    const response = await fetchWithTimeout(url)
+
+    if (!response.ok) return null
+
+    const data = (await response.json()) as {
+      achievementpercentages?: {
+        achievements?: { name: string; percent: number }[]
+      }
+    }
+
+    const achievements = data.achievementpercentages?.achievements
+    if (!achievements || achievements.length === 0) return null
+
+    return new Map(achievements.map(a => [a.name, a.percent]))
+  }
+
+  static async getAchievementSchema(
+    appId: number
+  ): Promise<Map<string, string> | null> {
+    const url = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=${this.getApiKey()}&appid=${appId}&l=english`
+    const response = await fetchWithTimeout(url)
+
+    if (!response.ok) return null
+
+    const data = (await response.json()) as {
+      game?: {
+        availableGameStats?: {
+          achievements?: { name: string; description?: string }[]
+        }
+      }
+    }
+
+    const achievements = data.game?.availableGameStats?.achievements
+    if (!achievements || achievements.length === 0) return null
+
+    return new Map(achievements.map(a => [a.name, a.description ?? '']))
   }
 }

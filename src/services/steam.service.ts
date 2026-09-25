@@ -3,7 +3,11 @@ import { ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
-import { SteamApiService, SteamOwnedGame } from './steam-api.service'
+import {
+  SteamApiService,
+  SteamAchievementSummary,
+  SteamOwnedGame
+} from './steam-api.service'
 import { IGDBGame } from '../types/igdb'
 import {
   steamImportQueue,
@@ -20,8 +24,69 @@ const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
 const IMPORT_COOLDOWN_MS = 60 * 60 * 1000
 
 const MIN_ACHIEVEMENTS_FOR_SIGNAL = 5
-const FINISHED_ACHIEVEMENT_RATIO = 0.9
 const ACHIEVEMENT_CHECK_CONCURRENCY = 10
+
+const RARE_ACHIEVEMENT_PERCENT = 5
+
+const MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL = 100
+
+const RATIO_THRESHOLDS: { maxTotal: number; ratio: number }[] = [
+  { maxTotal: 10, ratio: 0.9 },
+  { maxTotal: 30, ratio: 0.7 },
+  { maxTotal: 75, ratio: 0.4 },
+  { maxTotal: 150, ratio: 0.3 },
+  { maxTotal: Infinity, ratio: 0.15 }
+]
+
+function requiredRatioForTotal(total: number): number {
+  return RATIO_THRESHOLDS.find(t => total <= t.maxTotal)!.ratio
+}
+
+const COMPLETION_KEYWORD_PATTERN =
+  /\bending\b|\bfinal boss\b|\bcomplete(d)? the game\b|\bbeat the game\b|\bfinish(ed)? the (game|story|campaign)\b|\bcredits\b|\bepilogue\b/i
+
+function matchingCompletionKeywordNames(
+  achievedApiNames: string[],
+  schema: Map<string, string> | null
+): string[] {
+  if (!schema) return []
+  return achievedApiNames.filter(name => {
+    const description = schema.get(name)
+    return !!description && COMPLETION_KEYWORD_PATTERN.test(description)
+  })
+}
+
+function resolveCompletedAt(
+  achievements: SteamAchievementSummary,
+  matchedKeywordNames: string[],
+  matchedRareNames: string[]
+): Date {
+  const earliestOf = (names: string[]): number | null => {
+    const times = names
+      .map(name => achievements.unlockTimesByName.get(name) ?? 0)
+      .filter(time => time > 0)
+    return times.length > 0 ? Math.min(...times) : null
+  }
+
+  const keywordTime = earliestOf(matchedKeywordNames)
+  if (keywordTime !== null) return new Date(keywordTime * 1000)
+
+  const rareTime = earliestOf(matchedRareNames)
+  if (rareTime !== null) return new Date(rareTime * 1000)
+
+  const latestUnlock = achievements.achievedApiNames
+    .map(name => achievements.unlockTimesByName.get(name) ?? 0)
+    .filter(time => time > 0)
+  if (latestUnlock.length > 0) return new Date(Math.max(...latestUnlock) * 1000)
+
+  return new Date()
+}
+
+function hasSinglePlayerMode(game: IGDBGame): boolean {
+  const modes = game.game_modes?.map(m => m.name.toLowerCase())
+  if (!modes || modes.length === 0) return true
+  return modes.includes('single player')
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -52,7 +117,7 @@ export class SteamService {
 
   private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
     return user
   }
 
@@ -109,7 +174,7 @@ export class SteamService {
 
     if (!resolvedId) {
       throw new ClientError(
-        'Could not find a Steam profile for that link or ID.',
+        'Não foi possível encontrar um perfil da Steam com esse link ou ID.',
         400
       )
     }
@@ -122,7 +187,7 @@ export class SteamService {
         err.code === 'P2002'
       ) {
         throw new ClientError(
-          'This Steam profile is already linked to another account.',
+          'Este perfil da Steam já está vinculado a outra conta.',
           409
         )
       }
@@ -140,7 +205,7 @@ export class SteamService {
   async enqueueImport(userId: string) {
     const user = await this.requireUser(userId)
     if (!user.steamId) {
-      throw new ClientError('Connect your Steam profile first.', 400)
+      throw new ClientError('Conecte seu perfil da Steam primeiro.', 400)
     }
 
     const jobId = steamImportJobId(userId)
@@ -149,7 +214,7 @@ export class SteamService {
     if (existing) {
       const state = await existing.getState()
       if (state === 'waiting' || state === 'active' || state === 'delayed') {
-        throw new ClientError('A Steam import is already running.', 409)
+        throw new ClientError('Já existe uma importação da Steam em andamento.', 409)
       }
       if (state === 'completed' && existing.finishedOn) {
         const remainingMs =
@@ -157,7 +222,7 @@ export class SteamService {
         if (remainingMs > 0) {
           const remainingMinutes = Math.ceil(remainingMs / 60000)
           throw new ClientError(
-            `You can import again in ${remainingMinutes} minute(s).`,
+            `Você pode importar novamente em ${remainingMinutes} minuto(s).`,
             429
           )
         }
@@ -203,7 +268,7 @@ export class SteamService {
   ): Promise<SteamImportJobResult> {
     const user = await this.requireUser(userId)
     if (!user.steamId) {
-      throw new ClientError('Connect your Steam profile first.', 400)
+      throw new ClientError('Conecte seu perfil da Steam primeiro.', 400)
     }
     const steamId = user.steamId
 
@@ -214,7 +279,7 @@ export class SteamService {
 
     if (!ownedGames) {
       throw new ClientError(
-        'Could not access your Steam library — make sure your profile is public and try again.',
+        'Não foi possível acessar sua biblioteca da Steam — verifique se seu perfil está público e tente novamente.',
         400
       )
     }
@@ -277,20 +342,30 @@ export class SteamService {
     steamId: string,
     onItemDone: () => void
   ): Promise<SteamImportSectionResult> {
-    const achievementSummaries = await mapWithConcurrency(
+    const achievementData = await mapWithConcurrency(
       toImport,
       ACHIEVEMENT_CHECK_CONCURRENCY,
-      ({ item }) =>
-        item.playtime_forever > 0
-          ? SteamApiService.getPlayerAchievements(steamId, item.appid)
-          : Promise.resolve(null)
+      async ({ item, igdbGame }) => {
+        if (item.playtime_forever <= 0) return null
+        if (!hasSinglePlayerMode(igdbGame)) return null
+
+        const [achievements, globalPercentages, schema] = await Promise.all([
+          SteamApiService.getPlayerAchievements(steamId, item.appid),
+          SteamApiService.getGlobalAchievementPercentages(item.appid),
+          SteamApiService.getAchievementSchema(item.appid)
+        ])
+
+        return { achievements, globalPercentages, schema }
+      }
     )
 
     let imported = 0
 
     for (let i = 0; i < toImport.length; i++) {
       const { item: owned, igdbGame } = toImport[i]
-      const achievements = achievementSummaries[i]
+      const achievements = achievementData[i]?.achievements ?? null
+      const globalPercentages = achievementData[i]?.globalPercentages ?? null
+      const schema = achievementData[i]?.schema ?? null
 
       await this.gameCacheService.cacheMany([igdbGame])
 
@@ -300,10 +375,30 @@ export class SteamService {
         owned.playtime_forever > 0 &&
         secondsSinceLastPlayed <= RECENT_PLAY_THRESHOLD_SECONDS
 
-      const isFinished =
+      const matchedRareNames =
+        achievements != null &&
+        achievements.total <= MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL &&
+        globalPercentages != null
+          ? achievements.achievedApiNames.filter(name => {
+              const percent = globalPercentages.get(name)
+              return percent !== undefined && percent <= RARE_ACHIEVEMENT_PERCENT
+            })
+          : []
+      const hasRareAchievement = matchedRareNames.length > 0
+
+      const meetsRatioThreshold =
         achievements != null &&
         achievements.total >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
-        achievements.achieved / achievements.total >= FINISHED_ACHIEVEMENT_RATIO
+        achievements.achieved / achievements.total >=
+          requiredRatioForTotal(achievements.total)
+
+      const matchedKeywordNames = achievements
+        ? matchingCompletionKeywordNames(achievements.achievedApiNames, schema)
+        : []
+      const hasCompletionKeyword = matchedKeywordNames.length > 0
+
+      const isFinished =
+        hasRareAchievement || hasCompletionKeyword || meetsRatioThreshold
 
       const statusId = isFinished
         ? PLAYED_STATUS_ID
@@ -311,10 +406,16 @@ export class SteamService {
           ? PLAYING_STATUS_ID
           : BACKLOG_STATUS_ID
 
+      const completedAt =
+        isFinished && achievements
+          ? resolveCompletedAt(achievements, matchedKeywordNames, matchedRareNames)
+          : undefined
+
       await this.userRepository.addGameToUserLibrary({
         igdbId: igdbGame.id,
         userId,
-        statusIds: statusId
+        statusIds: statusId,
+        completedAt
       })
       await this.userRepository.createUserGameStats(userId, igdbGame.id)
       await this.userRepository.upsertUserGameHours(

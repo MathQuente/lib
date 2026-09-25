@@ -73,7 +73,14 @@ export class GameService {
       parentGameId,
       parentGame,
       releaseDates:
-        releaseDates && releaseDates.length > 0 ? releaseDates : undefined
+        releaseDates && releaseDates.length > 0 ? releaseDates : undefined,
+      screenshots: game.screenshots?.map(s => ({
+        thumbUrl: IGDBService.formatScreenshotUrl(s.image_id, 'screenshot_big'),
+        fullUrl: IGDBService.formatScreenshotUrl(s.image_id, '1080p')
+      })),
+      videos: game.videos
+        ?.filter(v => v.video_id)
+        .map(v => ({ videoId: v.video_id, name: v.name ?? 'Trailer' }))
     }
   }
 
@@ -156,7 +163,7 @@ export class GameService {
       game = await IGDBService.getGameById(igdbId)
 
       if (!game) {
-        throw new ClientError('Game not found.', 404)
+        throw new ClientError('Jogo não encontrado.', 404)
       }
 
       relatedGames = await IGDBService.getRelatedGames(igdbId)

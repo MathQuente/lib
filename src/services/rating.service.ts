@@ -15,7 +15,7 @@ export class RatingService {
 
   private async requireUser(userId: string) {
     const user = await this.userRepository.findUserById(userId)
-    if (!user) throw new ClientError('User not found.', 404)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
     return user
   }
 
@@ -23,11 +23,11 @@ export class RatingService {
     await this.requireUser(userId)
 
     const gameExists = await this.gameCacheService.ensureCached(igdbId)
-    if (!gameExists) throw new ClientError('Game not found.', 404)
+    if (!gameExists) throw new ClientError('Jogo não encontrado.', 404)
 
     const releaseDate = await this.gameCacheService.getReleaseDate(igdbId)
     if (releaseDate != null && releaseDate * 1000 > Date.now()) {
-      throw new ClientError('This game has not been released yet.', 400)
+      throw new ClientError('Este jogo ainda não foi lançado.', 400)
     }
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
@@ -76,7 +76,7 @@ export class RatingService {
     )
 
     if (!existingRating) {
-      throw new ClientError('Rating not found.', 404)
+      throw new ClientError('Avaliação não encontrada.', 404)
     }
 
     return this.ratingRepository.delete(igdbId, userId)

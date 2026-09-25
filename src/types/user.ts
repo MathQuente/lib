@@ -5,6 +5,8 @@ export type UserGameSortBy =
   | 'dateRelease'
   | 'rating'
   | 'dateAdded'
+  | 'hoursPlayed'
+  | 'completedAt'
 export type UserGameSortOrder = 'asc' | 'desc'
 
 export type PaginatedUserGameRow = {
