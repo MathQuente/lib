@@ -36,6 +36,8 @@ Table users {
   googleId String [unique]
   discordId String [unique]
   steamId String [unique]
+  psnAccountId String [unique]
+  psnOnlineId String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]
@@ -70,9 +72,26 @@ Table user_games {
   user users [not null]
   UserGameStats user_game_stats
   UserGamesStatus users_games_status [not null]
+  platforms user_game_platforms [not null]
 
   indexes {
     (userId, igdbId) [unique]
+  }
+}
+
+Table user_game_platforms {
+  id String [pk]
+  userGameId String [not null]
+  platform Platform [not null]
+  hoursPlayed Decimal
+  completions Int [not null, default: 0]
+  completedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  userGame user_games [not null]
+
+  indexes {
+    (userGameId, platform) [unique]
   }
 }
 
@@ -119,6 +138,16 @@ Table user_game_stats {
   userGame user_games [not null]
 }
 
+Enum Platform {
+  STEAM
+  PLAYSTATION
+  XBOX
+  NINTENDO
+  EPIC
+  GOG
+  OTHER
+}
+
 Enum Status {
   PLAYED
   PAUSED
@@ -138,6 +167,8 @@ Ref: follows.followingId > users.id [delete: Cascade]
 Ref: user_games.userId > users.id [delete: Cascade]
 
 Ref: user_games.userGamesStatusId > users_games_status.id
+
+Ref: user_game_platforms.userGameId > user_games.id [delete: Cascade]
 
 Ref: reviews.userId > users.id [delete: Cascade]
 

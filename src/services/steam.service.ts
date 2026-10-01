@@ -15,13 +15,15 @@ import {
   SteamImportJobResult,
   SteamImportSectionResult
 } from '../queues/steam-import.queue'
+import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
+import { UserGamePlatformService } from './user-game-platform.service'
+import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 
 const PLAYED_STATUS_ID = 1
 const PLAYING_STATUS_ID = 3
 const BACKLOG_STATUS_ID = 4
 const WISHLIST_STATUS_ID = 5
 const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
-const IMPORT_COOLDOWN_MS = 60 * 60 * 1000
 
 const MIN_ACHIEVEMENTS_FOR_SIGNAL = 5
 const ACHIEVEMENT_CHECK_CONCURRENCY = 10
@@ -112,7 +114,11 @@ async function mapWithConcurrency<T, R>(
 export class SteamService {
   constructor(
     private userRepository: UserRepository,
-    private gameCacheService: GameCacheService
+    private gameCacheService: GameCacheService,
+    private userGamePlatformService: UserGamePlatformService = new UserGamePlatformService(
+      new UserGamePlatformRepository(),
+      userRepository
+    )
   ) {}
 
   private async requireUser(userId: string) {
@@ -124,7 +130,8 @@ export class SteamService {
   private async resolveImportTargets<T extends { appid: number; name: string }>(
     items: T[],
     appIdToIgdb: Map<number, IGDBGame>,
-    userId: string
+    userId: string,
+    skipExisting: boolean
   ): Promise<{
     toImport: { item: T; igdbGame: IGDBGame }[]
     skipped: number
@@ -147,13 +154,15 @@ export class SteamService {
         continue
       }
 
-      const existing = await this.userRepository.findUserGame(
-        igdbGame.id,
-        userId
-      )
-      if (existing) {
-        skipped++
-        continue
+      if (skipExisting) {
+        const existing = await this.userRepository.findUserGame(
+          igdbGame.id,
+          userId
+        )
+        if (existing) {
+          skipped++
+          continue
+        }
       }
 
       queuedIgdbIds.add(igdbGame.id)
@@ -208,58 +217,19 @@ export class SteamService {
       throw new ClientError('Conecte seu perfil da Steam primeiro.', 400)
     }
 
-    const jobId = steamImportJobId(userId)
-    const existing = await steamImportQueue.getJob(jobId)
-
-    if (existing) {
-      const state = await existing.getState()
-      if (state === 'waiting' || state === 'active' || state === 'delayed') {
-        throw new ClientError('Já existe uma importação da Steam em andamento.', 409)
-      }
-      if (state === 'completed' && existing.finishedOn) {
-        const remainingMs =
-          existing.finishedOn + IMPORT_COOLDOWN_MS - Date.now()
-        if (remainingMs > 0) {
-          const remainingMinutes = Math.ceil(remainingMs / 60000)
-          throw new ClientError(
-            `Você pode importar novamente em ${remainingMinutes} minuto(s).`,
-            429
-          )
-        }
-      }
-      await existing.remove()
-    }
-
-    await steamImportQueue.add('import', { userId }, { jobId })
-    return { status: 'queued' as const }
+    return enqueueUniqueImport(
+      steamImportQueue,
+      steamImportJobId(userId),
+      { userId },
+      'Steam'
+    )
   }
 
   async getImportStatus(userId: string) {
-    const job = await steamImportQueue.getJob(steamImportJobId(userId))
-    if (!job) return { status: 'idle' as const }
-
-    const state = await job.getState()
-
-    if (state === 'completed') {
-      const cooldownUntil = job.finishedOn
-        ? job.finishedOn + IMPORT_COOLDOWN_MS
-        : undefined
-      return {
-        status: 'completed' as const,
-        result: job.returnvalue as SteamImportJobResult,
-        cooldownUntil:
-          cooldownUntil && cooldownUntil > Date.now()
-            ? cooldownUntil
-            : undefined
-      }
-    }
-    if (state === 'failed') {
-      return { status: 'failed' as const, error: job.failedReason }
-    }
-
-    const progress = typeof job.progress === 'number' ? job.progress : undefined
-
-    return { status: state as 'waiting' | 'active' | 'delayed', progress }
+    return getImportJobStatus<SteamImportJobResult>(
+      steamImportQueue,
+      steamImportJobId(userId)
+    )
   }
 
   async runImport(
@@ -299,12 +269,14 @@ export class SteamService {
     const ownedResolved = await this.resolveImportTargets(
       ownedGames,
       appIdToIgdb,
-      userId
+      userId,
+      false
     )
     const wishlistResolved = await this.resolveImportTargets(
       wishlistItems,
       appIdToIgdb,
-      userId
+      userId,
+      true
     )
 
     const total =
@@ -360,6 +332,7 @@ export class SteamService {
     )
 
     let imported = 0
+    let updated = 0
 
     for (let i = 0; i < toImport.length; i++) {
       const { item: owned, igdbGame } = toImport[i]
@@ -411,24 +384,24 @@ export class SteamService {
           ? resolveCompletedAt(achievements, matchedKeywordNames, matchedRareNames)
           : undefined
 
-      await this.userRepository.addGameToUserLibrary({
-        igdbId: igdbGame.id,
-        userId,
-        statusIds: statusId,
-        completedAt
-      })
-      await this.userRepository.createUserGameStats(userId, igdbGame.id)
-      await this.userRepository.upsertUserGameHours(
+      const outcome = await this.userGamePlatformService.importPlatform(
         userId,
         igdbGame.id,
-        Math.round((owned.playtime_forever / 60) * 100) / 100
+        'STEAM',
+        {
+          statusId,
+          hoursPlayed: Math.round((owned.playtime_forever / 60) * 100) / 100,
+          finished: isFinished,
+          completedAt
+        }
       )
 
-      imported++
+      if (outcome === 'imported') imported++
+      else updated++
       onItemDone()
     }
 
-    return { imported, skipped, notFound }
+    return { imported, updated, skipped, notFound }
   }
 
   private async importWishlist(
@@ -458,6 +431,6 @@ export class SteamService {
       onItemDone()
     }
 
-    return { imported, skipped, notFound }
+    return { imported, updated: 0, skipped, notFound }
   }
 }

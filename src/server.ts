@@ -12,11 +12,13 @@ import { gameRoutes } from './routes/game'
 import { ratingRoutes } from './routes/rating'
 import { reviewRoutes } from './routes/review'
 import { steamRoutes } from './routes/steam'
+import { psnRoutes } from './routes/psn'
 import { followRoutes } from './routes/follow'
 import { errorHandler } from './error-handler'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
 import { startSteamImportWorker } from './workers/steam-import.worker'
+import { startPsnImportWorker } from './workers/psn-import.worker'
 
 export class Server {
   private static app: FastifyInstance = fastify()
@@ -41,6 +43,7 @@ export class Server {
     await this.initRateLimit()
     this.initRoutes()
     startSteamImportWorker()
+    startPsnImportWorker()
 
     await this.app.listen({
       port: Server.port,
@@ -98,6 +101,7 @@ export class Server {
     this.app.register(ratingRoutes, { prefix: '/rating' })
     this.app.register(reviewRoutes, { prefix: '/reviews' })
     this.app.register(steamRoutes, { prefix: '/users/steam' })
+    this.app.register(psnRoutes, { prefix: '/users/psn' })
     this.app.register(userGameStatusRoutes, { prefix: '/status' })
     this.app.register(followRoutes, { prefix: '/follows' })
   }

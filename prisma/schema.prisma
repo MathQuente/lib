@@ -48,6 +48,8 @@ model User {
   googleId       String?        @unique @map("google_id")
   discordId      String?        @unique @map("discord_id")
   steamId        String?        @unique @map("steam_id")
+  psnAccountId   String?        @unique @map("psn_account_id")
+  psnOnlineId    String?        @map("psn_online_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @default(now()) @map("updated_at")
   userGames      UserGame[]
@@ -75,20 +77,47 @@ model Follow {
 }
 
 model UserGame {
-  id                String   @id @default(uuid())
-  igdbId            Int      @map("igdb_id")
-  userId            String   @map("user_id")
-  userGamesStatusId Int      @map("user_games_status_id")
+  id                String    @id @default(uuid())
+  igdbId            Int       @map("igdb_id")
+  userId            String    @map("user_id")
+  userGamesStatusId Int       @map("user_games_status_id")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   completedAt       DateTime? @map("completed_at")
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   UserGameStats   UserGameStats?
-  UserGamesStatus UserGamesStatus @relation(fields: [userGamesStatusId], references: [id])
+  UserGamesStatus UserGamesStatus    @relation(fields: [userGamesStatusId], references: [id])
+  platforms       UserGamePlatform[]
 
   @@unique([userId, igdbId])
   @@map("user_games")
+}
+
+enum Platform {
+  STEAM
+  PLAYSTATION
+  XBOX
+  NINTENDO
+  EPIC
+  GOG
+  OTHER
+}
+
+model UserGamePlatform {
+  id          String    @id @default(uuid())
+  userGameId  String    @map("user_game_id")
+  platform    Platform
+  hoursPlayed Decimal?  @map("hours_played") @db.Decimal(6, 2)
+  completions Int       @default(0)
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
+
+  @@unique([userGameId, platform])
+  @@map("user_game_platforms")
 }
 
 model UserGamesStatus {
@@ -108,12 +137,12 @@ enum Status {
 }
 
 model GameCache {
-  igdbId      Int      @id @map("igdb_id")
-  name        String
-  coverUrl    String?  @map("cover_url")
-  summary     String?
-  genres      String[]
-  platforms   String[]
+  igdbId           Int      @id @map("igdb_id")
+  name             String
+  coverUrl         String?  @map("cover_url")
+  summary          String?
+  genres           String[]
+  platforms        String[]
   releaseDate      Int?     @map("release_date")
   hypes            Int?     @map("hypes")
   totalRatingCount Int?     @map("total_rating_count")

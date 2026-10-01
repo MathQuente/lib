@@ -11,6 +11,9 @@ import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
 import { FollowRepository } from '../repositories/follow.repository'
 import { ErrorSchemas } from '../schemas/error.schema'
+import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { UserGamePlatformService } from '../services/user-game-platform.service'
+import { UserGamePlatformController } from '../controllers/user-game-platform.controller'
 
 export async function userRoutes(app: FastifyInstance) {
   const userRepository = new UserRepository()
@@ -25,6 +28,72 @@ export async function userRoutes(app: FastifyInstance) {
     followRepository
   )
   const userController = new UserController(userService)
+  const userGamePlatformService = new UserGamePlatformService(
+    new UserGamePlatformRepository(),
+    userRepository
+  )
+  const userGamePlatformController = new UserGamePlatformController(
+    userGamePlatformService
+  )
+
+  const platformResponses = {
+    200: UserSchema.UserGamePlatformsResponseSchema,
+    400: ErrorSchemas.BadRequest,
+    404: ErrorSchemas.NotFound,
+    500: ErrorSchemas.InternalServerError
+  }
+
+  app.withTypeProvider<ZodTypeProvider>().get(
+    '/platforms/:igdbId',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGameParamsSchema,
+        response: platformResponses
+      }
+    },
+    async (request, reply) =>
+      userGamePlatformController.getPlatforms(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().put(
+    '/platforms/:igdbId/:platform',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGamePlatformParamsSchema,
+        response: platformResponses
+      }
+    },
+    async (request, reply) =>
+      userGamePlatformController.addPlatform(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().patch(
+    '/platforms/:igdbId/:platform',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGamePlatformParamsSchema,
+        response: platformResponses
+      }
+    },
+    async (request, reply) =>
+      userGamePlatformController.updatePlatform(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().delete(
+    '/platforms/:igdbId/:platform',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGamePlatformParamsSchema,
+        response: platformResponses
+      }
+    },
+    async (request, reply) =>
+      userGamePlatformController.removePlatform(request, reply)
+  )
 
   app.withTypeProvider<ZodTypeProvider>().get(
     '/me',

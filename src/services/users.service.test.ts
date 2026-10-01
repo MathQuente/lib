@@ -175,7 +175,8 @@ describe('UserService.findManyUserGames', () => {
         releaseDate: 100,
         rating: 4,
         completions: 0,
-        hoursPlayed: 0
+        hoursPlayed: 0,
+        playedOn: []
       },
       {
         igdbId: 2,
@@ -186,7 +187,8 @@ describe('UserService.findManyUserGames', () => {
         releaseDate: 200,
         rating: null,
         completions: 0,
-        hoursPlayed: 0
+        hoursPlayed: 0,
+        playedOn: []
       }
     ]
     const userRepository = fakeUserRepository({
@@ -228,7 +230,8 @@ describe('UserService.findManyUserGames', () => {
         releaseDate: 100,
         rating: 4,
         completions: 0,
-        hoursPlayed: 0
+        hoursPlayed: 0,
+        playedOn: []
       },
       {
         igdbId: 99,
@@ -239,7 +242,8 @@ describe('UserService.findManyUserGames', () => {
         releaseDate: null,
         rating: null,
         completions: 0,
-        hoursPlayed: 0
+        hoursPlayed: 0,
+        playedOn: []
       }
     ]
     const userRepository = fakeUserRepository({
@@ -297,7 +301,8 @@ describe('UserService.findManyUserGames', () => {
         releaseDate: null,
         rating: null,
         completions: 0,
-        hoursPlayed: 0
+        hoursPlayed: 0,
+        playedOn: []
       }
     ]
     const userRepository = fakeUserRepository({
@@ -405,7 +410,7 @@ describe('UserService.updateGame', () => {
 })
 
 describe('UserService.findById', () => {
-  it('returns the full profile, without steamId, including follow counts', async () => {
+  it('returns the full profile, without linked accounts, including follow counts', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
@@ -413,6 +418,7 @@ describe('UserService.findById', () => {
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
         steamId: '12345',
+        psnOnlineId: 'psn-user',
         _count: { userGames: 3 }
       }),
       countUserGames: vi
@@ -444,11 +450,12 @@ describe('UserService.findById', () => {
       followingCount: 5
     })
     expect(user).not.toHaveProperty('steamId')
+    expect(user).not.toHaveProperty('psnOnlineId')
   })
 })
 
 describe('UserService.findMe', () => {
-  it('returns the full self profile, including steamId and follow counts', async () => {
+  it('returns the full self profile, including linked accounts and follow counts', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
@@ -456,6 +463,7 @@ describe('UserService.findMe', () => {
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
         steamId: '12345',
+        psnOnlineId: 'psn-user',
         _count: { userGames: 3 }
       }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
@@ -481,6 +489,7 @@ describe('UserService.findMe', () => {
       gamesAmount: 3,
       totalHoursPlayed: 12.5,
       steamId: '12345',
+      psnOnlineId: 'psn-user',
       followersCount: 2,
       followingCount: 5
     })

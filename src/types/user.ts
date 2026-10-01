@@ -19,4 +19,5 @@ export type PaginatedUserGameRow = {
   rating: number | null
   completions: number
   hoursPlayed: number
+  playedOn: string[]
 }

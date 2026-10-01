@@ -1,11 +1,14 @@
 import z from 'zod'
 
-export const ConnectSteamBodySchema = z.object({
-  profileInput: z.string().min(1)
+export const ConnectPsnBodySchema = z.object({
+  onlineId: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{3,16}$/, 'ID da PSN inválido.')
 })
 
-export const ConnectSteamResponseSchema = z.object({
-  steamId: z.string()
+export const ConnectPsnResponseSchema = z.object({
+  psnOnlineId: z.string()
 })
 
 export const DisconnectResponseSchema = z.void()
@@ -14,7 +17,7 @@ export const StartImportResponseSchema = z.object({
   status: z.literal('queued')
 })
 
-const SteamImportSectionResultSchema = z.object({
+const ImportSectionResultSchema = z.object({
   imported: z.number(),
   updated: z.number(),
   skipped: z.number(),
@@ -33,8 +36,7 @@ export const ImportStatusResponseSchema = z.object({
   progress: z.number().optional(),
   result: z
     .object({
-      library: SteamImportSectionResultSchema,
-      wishlist: SteamImportSectionResultSchema
+      library: ImportSectionResultSchema
     })
     .optional(),
   error: z.string().optional(),

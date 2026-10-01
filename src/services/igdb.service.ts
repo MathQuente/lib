@@ -164,39 +164,40 @@ export class IGDBService {
   // external_games.category is deprecated (always empty). The current
   // field is external_game_source, a reference into external_game_sources
   // — id 1 there is "Steam" (confirmed by querying that endpoint directly).
-  private static readonly STEAM_EXTERNAL_GAME_SOURCE = 1
+  static readonly STEAM_EXTERNAL_GAME_SOURCE = 1
+  static readonly PSN_EXTERNAL_GAME_SOURCE = 36
   private static readonly EXTERNAL_GAMES_BATCH_SIZE = 500
 
   // `external_games` is a reverse multi-relation on `games` — it can't be
   // filtered via `where external_games.uid = (...)` on the `games`
   // endpoint. IGDB requires querying the `external_games` endpoint
   // directly for the uid->game id mapping, then fetching those games.
-  static async getGamesBySteamAppIds(
-    appIds: number[]
-  ): Promise<{ appId: number; game: IGDBGame }[]> {
-    if (appIds.length === 0) return []
+  static async getGamesByExternalIds(
+    uids: string[],
+    source: number
+  ): Promise<{ uid: string; game: IGDBGame }[]> {
+    if (uids.length === 0) return []
 
-    const chunks: number[][] = []
-    for (let i = 0; i < appIds.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
-      chunks.push(appIds.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE))
+    const chunks: string[][] = []
+    for (let i = 0; i < uids.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      chunks.push(uids.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE))
     }
 
     const externalGamesResults = await Promise.all(
       chunks.map(chunk =>
         this.request<{ uid: string; game: number }[]>(
           'external_games',
-          `where uid = (${chunk.map(id => `"${id}"`).join(',')}) & external_game_source = ${this.STEAM_EXTERNAL_GAME_SOURCE}; fields uid,game; limit ${chunk.length};`
+          `where uid = (${chunk.map(id => `"${id}"`).join(',')}) & external_game_source = ${source}; fields uid,game; limit ${chunk.length};`
         )
       )
     )
 
-    const appIdToIgdbId = new Map<number, number>()
+    const uidToIgdbId = new Map<string, number>()
     for (const row of externalGamesResults.flat()) {
-      const appId = Number(row.uid)
-      if (!appIdToIgdbId.has(appId)) appIdToIgdbId.set(appId, row.game)
+      if (!uidToIgdbId.has(row.uid)) uidToIgdbId.set(row.uid, row.game)
     }
 
-    const igdbIds = [...new Set(appIdToIgdbId.values())]
+    const igdbIds = [...new Set(uidToIgdbId.values())]
     const igdbIdChunks: number[][] = []
     for (let i = 0; i < igdbIds.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
       igdbIdChunks.push(igdbIds.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE))
@@ -206,13 +207,23 @@ export class IGDBService {
     ).flat()
     const gamesById = new Map(games.map(g => [g.id, g]))
 
-    const results: { appId: number; game: IGDBGame }[] = []
-    for (const [appId, igdbId] of appIdToIgdbId) {
+    const results: { uid: string; game: IGDBGame }[] = []
+    for (const [uid, igdbId] of uidToIgdbId) {
       const game = gamesById.get(igdbId)
-      if (game) results.push({ appId, game })
+      if (game) results.push({ uid, game })
     }
 
     return results
+  }
+
+  static async getGamesBySteamAppIds(
+    appIds: number[]
+  ): Promise<{ appId: number; game: IGDBGame }[]> {
+    const results = await this.getGamesByExternalIds(
+      appIds.map(String),
+      this.STEAM_EXTERNAL_GAME_SOURCE
+    )
+    return results.map(({ uid, game }) => ({ appId: Number(uid), game }))
   }
 
   static async getRecentlyReleasedGames(limit = 6): Promise<IGDBGame[]> {

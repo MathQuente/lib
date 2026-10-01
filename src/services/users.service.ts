@@ -7,10 +7,13 @@ import { FollowRepository } from '../repositories/follow.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
 import { GameCacheService } from './game-cache.service'
+import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { randomInt } from 'crypto'
 
 const PLAYED_STATUS_ID = 1
 const WISHLIST_STATUS_ID = 5
+const EDIT_BY_PLATFORM_MESSAGE =
+  'Este jogo tem plataformas cadastradas. Edite os valores por plataforma.'
 
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
@@ -19,7 +22,8 @@ export class UserService {
     private userRepository: UserRepository,
     private ratingRepository: RatingRepository,
     private gameCacheService: GameCacheService,
-    private followRepository: FollowRepository
+    private followRepository: FollowRepository,
+    private platformRepository: UserGamePlatformRepository = new UserGamePlatformRepository()
   ) {}
 
   private async requireUser(userId: string) {
@@ -77,6 +81,7 @@ export class UserService {
         gamesAmount: user._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
         steamId: user.steamId,
+        psnOnlineId: user.psnOnlineId,
         followersCount,
         followingCount
       }
@@ -257,6 +262,7 @@ export class UserService {
             rating: r.rating,
             completions: r.completions,
             hoursPlayed: r.hoursPlayed,
+            playedOn: r.playedOn ?? [],
             status: r.status as string
           }
         }
@@ -273,6 +279,7 @@ export class UserService {
           rating: r.rating,
           completions: r.completions,
           hoursPlayed: r.hoursPlayed,
+          playedOn: r.playedOn ?? [],
           status: r.status as string
         }
       })
@@ -311,6 +318,7 @@ export class UserService {
     if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     const currentStatus = userGame.UserGamesStatus.id
+    const hasPlatforms = (userGame._count?.platforms ?? 0) > 0
 
     if (statusId === WISHLIST_STATUS_ID) {
       // Wishlist means "haven't played it" — an existing rating would be a
@@ -320,6 +328,29 @@ export class UserService {
         userId
       )
       if (rating) await this.ratingRepository.delete(igdbId, userId)
+    }
+
+    if (hasPlatforms && statusId !== currentStatus) {
+      const { igdbId: updatedId, UserGamesStatus } =
+        await this.userRepository.updateGameStatus(igdbId, userId, statusId)
+
+      if (statusId === PLAYED_STATUS_ID) {
+        await this.platformRepository.markSinglePlatformCompleted(
+          userGame.id,
+          new Date()
+        )
+      }
+
+      const { stats } = await this.userRepository.findUserGameStats(
+        igdbId,
+        userId
+      )
+
+      return {
+        igdbId: updatedId,
+        userGameStatus: UserGamesStatus,
+        playedCountUpdated: stats?.completions ?? 0
+      }
     }
 
     if (currentStatus === PLAYED_STATUS_ID && statusId !== PLAYED_STATUS_ID) {
@@ -391,6 +422,11 @@ export class UserService {
   ) {
     await this.requireUser(userId)
 
+    const userGame = await this.userRepository.findUserGame(igdbId, userId)
+    if ((userGame?._count?.platforms ?? 0) > 0) {
+      throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
+    }
+
     const userGameStats = await this.userRepository.updateUserGamePlayedCount(
       userId,
       igdbId,
@@ -440,6 +476,10 @@ export class UserService {
     )
     if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
+    if ((userGame._count?.platforms ?? 0) > 0) {
+      throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
+    }
+
     if (userGame.userGamesStatusId !== PLAYED_STATUS_ID) {
       throw new ClientError(
         'Só é possível definir a data de finalização para jogos marcados como Jogado.',
@@ -476,6 +516,10 @@ export class UserService {
       userId
     )
     if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+
+    if ((userGame._count?.platforms ?? 0) > 0) {
+      throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
+    }
 
     if (userGame.UserGamesStatus?.status === Status.WISHLIST) {
       throw new ClientError('Não é possível definir horas jogadas para um jogo da lista de desejos.', 400)

@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq'
 import { bullConnection } from './connection'
+import { ImportSectionResult } from './import-job'
 
 export const STEAM_IMPORT_QUEUE_NAME = 'steam-import'
 
@@ -18,11 +19,7 @@ export interface SteamImportJobData {
   userId: string
 }
 
-export interface SteamImportSectionResult {
-  imported: number
-  skipped: number
-  notFound: string[]
-}
+export type SteamImportSectionResult = ImportSectionResult
 
 export interface SteamImportJobResult {
   library: SteamImportSectionResult

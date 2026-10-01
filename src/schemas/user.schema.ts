@@ -33,6 +33,7 @@ export const GetMeResponseSchema = z.object({
     gamesAmount: z.number(),
     totalHoursPlayed: z.number(),
     steamId: z.string().nullable(),
+    psnOnlineId: z.string().nullable(),
     followersCount: z.number(),
     followingCount: z.number()
   })
@@ -128,6 +129,7 @@ const UserGameEntrySchema = z.object({
   rating: z.number().nullable(),
   completions: z.number(),
   hoursPlayed: z.number(),
+  playedOn: z.array(z.string()),
   status: z.string()
 })
 
@@ -188,4 +190,45 @@ export const GetGamesToDisplayResponseSchema = z.object({
     .nullable()
     .optional(),
   message: z.string()
+})
+
+export const PlatformEnumSchema = z.enum([
+  'STEAM',
+  'PLAYSTATION',
+  'XBOX',
+  'NINTENDO',
+  'EPIC',
+  'GOG',
+  'OTHER'
+])
+
+export const UserGamePlatformParamsSchema = z.object({
+  igdbId: z.coerce.number().int(),
+  platform: PlatformEnumSchema
+})
+
+export const UserGamePlatformUpdateBodySchema = z
+  .object({
+    hoursPlayed: z.number().min(0).max(9999.99).nullable().optional(),
+    completions: z.number().int().min(0).max(999).optional(),
+    completedAt: z.string().date().nullable().optional()
+  })
+  .refine(body => Object.keys(body).length > 0, {
+    message: 'Informe ao menos um campo para atualizar.'
+  })
+
+export const UserGamePlatformsResponseSchema = z.object({
+  platforms: z.array(
+    z.object({
+      platform: PlatformEnumSchema,
+      hoursPlayed: z.number().nullable(),
+      completions: z.number(),
+      completedAt: z.string().nullable()
+    })
+  ),
+  totals: z.object({
+    hoursPlayed: z.number(),
+    completions: z.number(),
+    completedAt: z.string().nullable()
+  })
 })

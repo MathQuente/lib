@@ -9,6 +9,10 @@ import {
 
 const PLAYED_STATUS_ID = 1
 
+const NOT_WISHLIST = {
+  UserGamesStatus: { status: { not: Status.WISHLIST } }
+} satisfies Prisma.UserGameWhereInput
+
 export class UserRepository {
   async addGameToUserLibrary(data: AddGameDTO) {
     const completedAt =
@@ -90,7 +94,11 @@ export class UserRepository {
   async findUserGameForCompletedAt(igdbId: number, userId: string) {
     return prisma.userGame.findUnique({
       where: { userId_igdbId: { userId, igdbId } },
-      select: { completedAt: true, userGamesStatusId: true }
+      select: {
+        completedAt: true,
+        userGamesStatusId: true,
+        _count: { select: { platforms: true } }
+      }
     })
   }
 
@@ -147,7 +155,7 @@ export class UserRepository {
   async countUserGames(userId: string) {
     return prisma.user.findUnique({
       where: { id: userId },
-      select: { _count: { select: { userGames: true } } }
+      select: { _count: { select: { userGames: { where: NOT_WISHLIST } } } }
     })
   }
 
@@ -168,7 +176,9 @@ export class UserRepository {
         userName: true,
         profilePicture: true,
         steamId: true,
-        _count: { select: { userGames: true } }
+        psnAccountId: true,
+        psnOnlineId: true,
+        _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
     })
   }
@@ -181,11 +191,26 @@ export class UserRepository {
     })
   }
 
+  async setPsnAccount(
+    userId: string,
+    account: { accountId: string; onlineId: string } | null
+  ) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        psnAccountId: account?.accountId ?? null,
+        psnOnlineId: account?.onlineId ?? null
+      },
+      select: { psnAccountId: true, psnOnlineId: true }
+    })
+  }
+
   async findUserGameStatus(igdbId: number, userId: string) {
     return prisma.userGame.findUnique({
       where: { userId_igdbId: { igdbId, userId } },
       select: {
-        UserGamesStatus: { select: { id: true, status: true } }
+        UserGamesStatus: { select: { id: true, status: true } },
+        _count: { select: { platforms: true } }
       }
     })
   }
@@ -194,8 +219,10 @@ export class UserRepository {
     return prisma.userGame.findUnique({
       where: { userId_igdbId: { igdbId, userId } },
       select: {
+        id: true,
         igdbId: true,
-        UserGamesStatus: { select: { id: true } }
+        UserGamesStatus: { select: { id: true } },
+        _count: { select: { platforms: true } }
       }
     })
   }
@@ -275,7 +302,13 @@ export class UserRepository {
         gc.release_date               AS "releaseDate",
         r.value                       AS "rating",
         COALESCE(ugst.completions, 0) AS "completions",
-        COALESCE(ugst.hours_played, 0)::float AS "hoursPlayed"
+        COALESCE(ugst.hours_played, 0)::float AS "hoursPlayed",
+        COALESCE(
+          (SELECT array_agg(ugp.platform::text ORDER BY ugp.platform)
+           FROM user_game_platforms ugp
+           WHERE ugp.user_game_id = ug.id),
+          '{}'
+        )                             AS "playedOn"
       FROM user_games ug
       JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
       LEFT JOIN games_cache gc ON gc.igdb_id = ug.igdb_id
@@ -313,7 +346,7 @@ export class UserRepository {
         profilePicture: true,
         userBanner: true,
         userName: true,
-        _count: { select: { userGames: true } }
+        _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
     })
   }

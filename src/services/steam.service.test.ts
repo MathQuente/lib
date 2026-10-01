@@ -6,6 +6,10 @@ import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { ClientError } from '../errors/client-error'
 import { steamImportQueue } from '../queues/steam-import.queue'
+import {
+  fakePlatformService,
+  FakePlatformRepository
+} from '../test-utils/fake-platform-service'
 
 function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
@@ -25,6 +29,14 @@ function fakeGameCacheService(
   } as unknown as GameCacheService
 }
 
+let lastPlatformRepository: FakePlatformRepository
+
+function platformServiceFor(userRepository: UserRepository) {
+  const fake = fakePlatformService(userRepository)
+  lastPlatformRepository = fake.platformRepository
+  return fake.service
+}
+
 beforeEach(() => {
   vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(null)
 })
@@ -38,7 +50,11 @@ describe('SteamService.connectSteam', () => {
     const setSteamId = vi.fn().mockResolvedValue({ steamId: '76561197960287930' })
     const resolveVanityUrl = vi.spyOn(SteamApiService, 'resolveVanityUrl')
     const userRepository = fakeUserRepository({ setSteamId })
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     const result = await service.connectSteam('user-1', '76561197960287930')
 
@@ -53,7 +69,11 @@ describe('SteamService.connectSteam', () => {
     )
     const setSteamId = vi.fn().mockResolvedValue({ steamId: '76561197960287930' })
     const userRepository = fakeUserRepository({ setSteamId })
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     const result = await service.connectSteam(
       'user-1',
@@ -67,7 +87,11 @@ describe('SteamService.connectSteam', () => {
   it('throws when the vanity URL cannot be resolved', async () => {
     vi.spyOn(SteamApiService, 'resolveVanityUrl').mockResolvedValue(null)
     const userRepository = fakeUserRepository()
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await expect(
       service.connectSteam('user-1', 'nonexistent-vanity')
@@ -80,7 +104,11 @@ describe('SteamService.enqueueImport', () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1', steamId: null })
     })
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await expect(service.enqueueImport('user-1')).rejects.toThrow(ClientError)
   })
@@ -94,7 +122,11 @@ describe('SteamService.enqueueImport', () => {
     vi.spyOn(steamImportQueue, 'getJob').mockResolvedValue({
       getState: vi.fn().mockResolvedValue('active')
     } as never)
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await expect(service.enqueueImport('user-1')).rejects.toThrow(ClientError)
   })
@@ -105,7 +137,7 @@ describe('SteamService.runImport', () => {
     vi.spyOn(SteamApiService, 'getWishlist').mockResolvedValue([])
   })
 
-  it('imports matched games, skips existing ones, and lists unmatched by name', async () => {
+  it('imports matched games, updates existing ones, and lists unmatched by name', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi
         .fn()
@@ -144,17 +176,22 @@ describe('SteamService.runImport', () => {
       null
     )
 
-    const service = new SteamService(userRepository, gameCacheService)
+    const service = new SteamService(
+      userRepository,
+      gameCacheService,
+      platformServiceFor(userRepository)
+    )
 
     const result = await service.runImport('user-1')
 
     expect(result).toEqual({
       library: {
         imported: 2,
-        skipped: 1,
+        updated: 1,
+        skipped: 0,
         notFound: ['Obscure Unmatched Game']
       },
-      wishlist: { imported: 0, skipped: 0, notFound: [] }
+      wishlist: { imported: 0, updated: 0, skipped: 0, notFound: [] }
     })
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 1,
@@ -166,10 +203,10 @@ describe('SteamService.runImport', () => {
       userId: 'user-1',
       statusIds: 3
     })
-    expect(userRepository.upsertUserGameHours).toHaveBeenCalledWith(
-      'user-1',
-      2,
-      2
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-2',
+      'STEAM',
+      expect.objectContaining({ hoursPlayed: 2 })
     )
   })
 
@@ -201,7 +238,11 @@ describe('SteamService.runImport', () => {
       null
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -244,7 +285,11 @@ describe('SteamService.runImport', () => {
       null
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -288,7 +333,11 @@ describe('SteamService.runImport', () => {
       null
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -337,7 +386,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -387,7 +440,11 @@ describe('SteamService.runImport', () => {
       'getGlobalAchievementPercentages'
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -445,7 +502,11 @@ describe('SteamService.runImport', () => {
       'getGlobalAchievementPercentages'
     ).mockResolvedValue(null)
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -509,7 +570,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -577,7 +642,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -642,7 +711,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -705,7 +778,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -766,7 +843,11 @@ describe('SteamService.runImport', () => {
       ])
     )
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await service.runImport('user-1')
 
@@ -797,20 +878,29 @@ describe('SteamService.runImport', () => {
       { appId: 1091500, game: { id: 3, name: "Cyberpunk 2077" } }
     ] as never)
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     const result = await service.runImport('user-1')
 
     expect(result).toEqual({
-      library: { imported: 0, skipped: 0, notFound: [] },
-      wishlist: { imported: 1, skipped: 0, notFound: ['App 999999'] }
+      library: { imported: 0, updated: 0, skipped: 0, notFound: [] },
+      wishlist: {
+        imported: 1,
+        updated: 0,
+        skipped: 0,
+        notFound: ['App 999999']
+      }
     })
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 3,
       userId: 'user-1',
       statusIds: 5
     })
-    expect(userRepository.upsertUserGameHours).not.toHaveBeenCalled()
+    expect(lastPlatformRepository.savePlatform).not.toHaveBeenCalled()
   })
 
   it('skips a wishlist item already present in the library under another status', async () => {
@@ -831,11 +921,20 @@ describe('SteamService.runImport', () => {
       { appId: 1091500, game: { id: 3, name: "Cyberpunk 2077" } }
     ] as never)
 
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     const result = await service.runImport('user-1')
 
-    expect(result.wishlist).toEqual({ imported: 0, skipped: 1, notFound: [] })
+    expect(result.wishlist).toEqual({
+      imported: 0,
+      updated: 0,
+      skipped: 1,
+      notFound: []
+    })
   })
 
   it('throws when the Steam profile is private or invalid', async () => {
@@ -845,7 +944,11 @@ describe('SteamService.runImport', () => {
         .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' })
     })
     vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue(null)
-    const service = new SteamService(userRepository, fakeGameCacheService())
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
 
     await expect(service.runImport('user-1')).rejects.toThrow(ClientError)
   })
