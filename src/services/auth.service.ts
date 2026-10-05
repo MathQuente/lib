@@ -10,6 +10,13 @@ import { generateFromEmail } from 'unique-username-generator'
 const PASSWORD_RESET_TTL_SECONDS = 60 * 60
 const passwordResetKey = (token: string) => `password-reset:${token}`
 
+const ACCESS_TOKEN_TTL_SECONDS = 60 * 15
+export const sessionsRevokedAtKey = (userId: string) =>
+  `sessions-revoked-at:${userId}`
+
+const UNVERIFIED_PROVIDER_EMAIL_MESSAGE =
+  'O email dessa conta não foi verificado pelo provedor.'
+
 export class AuthService {
   constructor(
     private authRepository: AuthRepository,
@@ -123,9 +130,25 @@ export class AuthService {
     }
   }
 
+  private async takeOverUnverifiedAccount(userId: string) {
+    const hashedPassword = await bcrypt.hash(crypto.randomUUID(), 10)
+    await this.authRepository.updatePassword(userId, hashedPassword)
+    await this.revokeAllSessions(userId)
+  }
+
+  async revokeAllSessions(userId: string) {
+    await this.authRepository.deleteTokensByUserId(userId)
+    await this.cacheRepository.set(
+      sessionsRevokedAtKey(userId),
+      Math.floor(Date.now() / 1000),
+      ACCESS_TOKEN_TTL_SECONDS
+    )
+  }
+
   async loginWithGoogle(profile: {
     sub: string
     email: string
+    email_verified?: boolean
     name: string
     picture: string
   }) {
@@ -133,13 +156,21 @@ export class AuthService {
     let user = await this.authRepository.findUserByGoogleId(profile.sub)
 
     if (!user) {
-      // Se não encontrou por googleId, busca por email
-      user = await this.authRepository.findByEmail(profile.email)
+      if (!profile.email || profile.email_verified !== true) {
+        throw new ClientError(UNVERIFIED_PROVIDER_EMAIL_MESSAGE, 403)
+      }
 
-      if (user) {
+      // Se não encontrou por googleId, busca por email
+      const existing = await this.authRepository.findByEmail(profile.email)
+
+      if (existing) {
+        if (!existing.discordId) {
+          await this.takeOverUnverifiedAccount(existing.id)
+        }
+
         // Usuário existe com esse email, vincula o Google ID
         user = await this.authRepository.linkGoogle(
-          user.id,
+          existing.id,
           profile.sub,
           profile.picture
         )
@@ -178,6 +209,7 @@ export class AuthService {
   async loginWithDiscord(discordUser: {
     id: string
     email: string
+    verified?: boolean
     username: string
     avatar: string | null
   }) {
@@ -188,9 +220,15 @@ export class AuthService {
       : null
 
     if (!user) {
+      if (!discordUser.email || discordUser.verified !== true) {
+        throw new ClientError(UNVERIFIED_PROVIDER_EMAIL_MESSAGE, 403)
+      }
+
       user = await this.authRepository.findByEmail(discordUser.email)
 
       if (user) {
+        if (!user.googleId) await this.takeOverUnverifiedAccount(user.id)
+
         user = await this.authRepository.linkDiscord(
           user.id,
           discordUser.id,
@@ -244,7 +282,17 @@ export class AuthService {
     )
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`
-    await this.emailService.sendPasswordResetEmail(user.email, resetUrl)
+
+    try {
+      await this.emailService.sendPasswordResetEmail(user.email, resetUrl)
+    } catch (err) {
+      console.error('[PasswordReset] email delivery failed', {
+        error: err instanceof Error ? err.message : 'unknown error'
+      })
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[PasswordReset] dev reset link:', resetUrl)
+      }
+    }
   }
 
   async resetPassword(token: string, newPassword: string) {
@@ -259,9 +307,10 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPassword, 10)
     await this.authRepository.updatePassword(userId, hashedPassword)
     await this.cacheRepository.del(passwordResetKey(token))
+    await this.revokeAllSessions(userId)
   }
 
-  async logout(refreshToken: string, accessToken?: string) {
+  async logout(refreshToken?: string, accessToken?: string) {
     if (refreshToken) {
       await this.authRepository.invalidateToken(refreshToken)
     }

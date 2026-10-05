@@ -135,7 +135,9 @@ export async function authRoutes(app: FastifyInstance) {
     if (query.error) {
       console.error('❌ Erro do Google:', query.error)
       return reply.redirect(
-        process.env.FRONTEND_URL + '/auth?error=' + query.error
+        process.env.FRONTEND_URL +
+          '/auth?error=' +
+          (query.error === 'access_denied' ? 'access_denied' : 'oauth_failed')
       )
     }
 
@@ -212,7 +214,9 @@ export async function authRoutes(app: FastifyInstance) {
     if (query.error) {
       console.error('❌ Erro do Discord:', query.error)
       return reply.redirect(
-        process.env.FRONTEND_URL + '/auth?error=' + query.error
+        process.env.FRONTEND_URL +
+          '/auth?error=' +
+          (query.error === 'access_denied' ? 'access_denied' : 'oauth_failed')
       )
     }
 

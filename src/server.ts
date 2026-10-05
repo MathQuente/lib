@@ -1,4 +1,5 @@
 import fastify, { FastifyInstance } from 'fastify'
+import fastifyHelmet from '@fastify/helmet'
 import fastifyRateLimit from '@fastify/rate-limit'
 import { redis } from './database/redis'
 import {
@@ -22,8 +23,17 @@ import { startSteamImportWorker } from './workers/steam-import.worker'
 import { startPsnImportWorker } from './workers/psn-import.worker'
 import { startXboxImportWorker } from './workers/xbox-import.worker'
 
+function parseTrustProxy(value: string | undefined): boolean | number | string {
+  if (!value || value === 'false') return false
+  if (value === 'true') return true
+  if (/^\d+$/.test(value)) return Number(value)
+  return value
+}
+
 export class Server {
-  private static app: FastifyInstance = fastify()
+  private static app: FastifyInstance = fastify({
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY) as boolean | string
+  })
   private static port: number = Number(process.env.PORT) || 3333
   private static host: string = '0.0.0.0'
 
@@ -38,6 +48,7 @@ export class Server {
   public static async start() {
     this.setupZodTypeProvider()
     this.initErrorHandler()
+    await this.initSecurityHeaders()
 
     Jwt.initSetup(this.app)
 
@@ -122,7 +133,24 @@ export class Server {
     })
   }
 
+  private static async initSecurityHeaders() {
+    await this.app.register(fastifyHelmet)
+
+    this.app.addHook('onSend', async (request, reply) => {
+      const isSessionBound =
+        request.url.startsWith('/auth') ||
+        Boolean(request.cookies?.accessToken || request.cookies?.refreshToken)
+
+      if (isSessionBound && !reply.hasHeader('Cache-Control')) {
+        reply.header('Cache-Control', 'no-store')
+      }
+    })
+  }
+
   private static initErrorHandler() {
     this.app.setErrorHandler(errorHandler)
+    this.app.setNotFoundHandler((_request, reply) =>
+      reply.status(404).send({ message: 'Not found' })
+    )
   }
 }

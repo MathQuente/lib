@@ -34,8 +34,14 @@ export class AuthController {
     provider: string,
     error: unknown
   ) {
-    console.error(`${provider} OAuth Error:`, error)
-    return reply.redirect(process.env.FRONTEND_URL + '/auth?error=oauth_failed')
+    console.error(`${provider} OAuth Error:`, {
+      error: error instanceof Error ? error.message : 'unknown error'
+    })
+    const code =
+      error instanceof ClientError && error.statusCode === 403
+        ? 'email_not_verified'
+        : 'oauth_failed'
+    return reply.redirect(process.env.FRONTEND_URL + '/auth?error=' + code)
   }
 
   async createUser(request: FastifyRequest, reply: FastifyReply) {
@@ -113,15 +119,13 @@ export class AuthController {
     const refreshToken = request.cookies.refreshToken
     const accessToken = request.cookies.accessToken
 
-    if (!refreshToken) {
-      return reply.status(400).send({ message: 'Token de atualização ausente.' })
+    if (refreshToken || accessToken) {
+      await this.authService.logout(refreshToken, accessToken)
     }
 
-    await this.authService.logout(refreshToken, accessToken)
-
     reply
-      .clearCookie('accessToken')
-      .clearCookie('refreshToken')
+      .clearCookie('accessToken', { path: '/' })
+      .clearCookie('refreshToken', { path: '/' })
       .send({ message: 'Sessão encerrada com sucesso.' })
   }
 
@@ -158,8 +162,10 @@ export class AuthController {
           })
 
           if (!response.ok) {
-            const error = await response.text()
-            throw new ClientError(`Falha na troca de token: ${error}`, 502)
+            throw new ClientError(
+              `Falha na troca de token (status ${response.status})`,
+              502
+            )
           }
 
           return await response.json()
@@ -179,6 +185,7 @@ export class AuthController {
       const profile = (await res.json()) as {
         sub: string
         email: string
+        email_verified?: boolean
         name: string
         picture: string
       }
@@ -223,8 +230,10 @@ export class AuthController {
           })
 
           if (!response.ok) {
-            const error = await response.text()
-            throw new ClientError(`Falha na troca de token: ${error}`, 502)
+            throw new ClientError(
+              `Falha na troca de token (status ${response.status})`,
+              502
+            )
           }
 
           return await response.json()
@@ -243,6 +252,7 @@ export class AuthController {
       const profile = (await res.json()) as {
         id: string
         email: string
+        verified?: boolean
         username: string
         avatar: string
       }

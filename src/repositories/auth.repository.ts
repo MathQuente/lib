@@ -126,10 +126,14 @@ export class AuthRepository {
   }
 
   async invalidateToken(token: string) {
-    await prisma.refreshToken.update({
+    await prisma.refreshToken.updateMany({
       where: { token: token },
       data: { isValid: false }
     })
+  }
+
+  async deleteTokensByUserId(userId: string) {
+    await prisma.refreshToken.deleteMany({ where: { userId } })
   }
 
   async findToken(token: string) {
