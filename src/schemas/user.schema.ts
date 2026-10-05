@@ -41,8 +41,8 @@ export const GetMeResponseSchema = z.object({
 })
 
 export const QueryStringSchema = z.object({
-  pageIndex: z.coerce.number().default(0),
-  query: z.string().optional(),
+  pageIndex: z.coerce.number().int().min(0).max(10000).default(0),
+  query: z.string().max(100).optional(),
   filter: z
     .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST'])
     .optional()
@@ -77,11 +77,11 @@ export const UserGameParamsSchema = z.object({
 })
 
 export const UserGameBodySchema = z.object({
-  statusId: z.number()
+  statusId: z.number().int().min(1).max(5)
 })
 
 export const UserGamePlayedCountUpdateBodySchema = z.object({
-  incrementValue: z.number().int()
+  incrementValue: z.number().int().min(-1).max(1)
 })
 
 export const UserGameHoursUpdateBodySchema = z.object({
@@ -151,11 +151,26 @@ export const GetAllUserGamesResponseSchema = z.object({
   total: z.number()
 })
 
+const ALLOWED_IMAGE_HOSTS = new Set([
+  'res.cloudinary.com',
+  'lh3.googleusercontent.com',
+  'cdn.discordapp.com'
+])
+
+const ImageUrlSchema = z
+  .string()
+  .max(2048)
+  .url()
+  .refine(value => {
+    const url = new URL(value)
+    return url.protocol === 'https:' && ALLOWED_IMAGE_HOSTS.has(url.hostname)
+  }, 'URL de imagem não permitida.')
+
 export const UpdateUserBodySchema = z
   .object({
-    userName: z.string().nullable(),
-    profilePicture: z.string().nullable(),
-    userBanner: z.string().nullable()
+    userName: z.string().trim().min(1).max(30).nullable(),
+    profilePicture: ImageUrlSchema.nullable(),
+    userBanner: ImageUrlSchema.nullable()
   })
   .partial()
 
@@ -166,11 +181,6 @@ export const UpdateUserGameStatusResponseSchema = z.object({
     status: z.string()
   }),
   playedCountUpdated: z.number()
-})
-
-export const UserBodySchema = z.object({
-  email: z.string().email().min(1, 'Email is a required field.'),
-  password: z.string().min(6, 'Password required at least 6 characters.')
 })
 
 export const GetUserGameStatsResponse = z.object({

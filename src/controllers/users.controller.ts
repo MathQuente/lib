@@ -2,9 +2,17 @@ import { FastifyReply, FastifyRequest } from 'fastify'
 import { UserService } from '../services/users.service'
 import * as UserSchema from '../schemas/user.schema'
 import { ClientError } from '../errors/client-error'
+import { CacheRepository } from '../repositories/cache.repository'
+
+const IDEMPOTENCY_TTL_SECONDS = 60
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
+const IDEMPOTENCY_PENDING = 'pending'
 
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private cacheRepository: CacheRepository = new CacheRepository()
+  ) {}
 
   async addGameToUserLibrary(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
@@ -166,11 +174,46 @@ export class UserController {
     const { incrementValue } =
       UserSchema.UserGamePlayedCountUpdateBodySchema.parse(request.body)
 
-    const { playedCount } = await this.userService.updateUserGamePlayedCount(
-      userId,
-      igdbId,
-      incrementValue
-    )
+    const header = request.headers['idempotency-key']
+    const idempotencyKey =
+      typeof header === 'string' && IDEMPOTENCY_KEY_PATTERN.test(header)
+        ? `idempotency:${userId}:played-count:${igdbId}:${header}`
+        : null
+
+    if (idempotencyKey) {
+      const acquired = await this.cacheRepository.setIfAbsent(
+        idempotencyKey,
+        IDEMPOTENCY_PENDING,
+        IDEMPOTENCY_TTL_SECONDS
+      )
+      if (!acquired) {
+        const previous = await this.cacheRepository.get(idempotencyKey)
+        if (previous === IDEMPOTENCY_PENDING || previous === null) {
+          throw new ClientError('Esta alteração já está sendo processada.', 409)
+        }
+        return reply.status(200).send(previous)
+      }
+    }
+
+    let playedCount: number
+    try {
+      ;({ playedCount } = await this.userService.updateUserGamePlayedCount(
+        userId,
+        igdbId,
+        incrementValue
+      ))
+    } catch (err) {
+      if (idempotencyKey) await this.cacheRepository.del(idempotencyKey)
+      throw err
+    }
+
+    if (idempotencyKey) {
+      await this.cacheRepository.set(
+        idempotencyKey,
+        { playedCount },
+        IDEMPOTENCY_TTL_SECONDS
+      )
+    }
 
     return reply.status(200).send({ playedCount })
   }

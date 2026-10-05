@@ -1,6 +1,7 @@
 import { Status } from '@prisma/client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
+import { isUniqueViolation } from '../utils/prisma-errors'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { FollowRepository } from '../repositories/follow.repository'
@@ -47,11 +48,19 @@ export class UserService {
     if (existing)
       throw new ClientError('Este jogo já está na sua biblioteca.', 409)
 
-    const { igdbId: addedId } = await this.userRepository.addGameToUserLibrary({
-      igdbId,
-      statusIds,
-      userId
-    })
+    let addedId: number
+    try {
+      ;({ igdbId: addedId } = await this.userRepository.addGameToUserLibrary({
+        igdbId,
+        statusIds,
+        userId
+      }))
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new ClientError('Este jogo já está na sua biblioteca.', 409)
+      }
+      throw err
+    }
 
     await this.userRepository.createUserGameStats(userId, igdbId)
 

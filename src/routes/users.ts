@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 
 import * as UserSchema from '../schemas/user.schema'
@@ -11,6 +11,7 @@ import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
 import { FollowRepository } from '../repositories/follow.repository'
 import { ErrorSchemas } from '../schemas/error.schema'
+import { RecentAuthService } from '../services/recent-auth.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { UserGamePlatformService } from '../services/user-game-platform.service'
 import { UserGamePlatformController } from '../controllers/user-game-platform.controller'
@@ -28,6 +29,19 @@ export async function userRoutes(app: FastifyInstance) {
     followRepository
   )
   const userController = new UserController(userService)
+  const recentAuthService = new RecentAuthService()
+
+  const requireRecentAuth = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    if (!(await recentAuthService.isRecent(request.user.userId))) {
+      return reply.status(403).send({
+        status: 'reauth_required',
+        message: 'Entre novamente para confirmar esta ação.'
+      })
+    }
+  }
   const userGamePlatformService = new UserGamePlatformService(
     new UserGamePlatformRepository(),
     userRepository
@@ -288,7 +302,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().delete(
     '',
     {
-      preHandler: [app.authenticate],
+      preHandler: [app.authenticate, requireRecentAuth],
       schema: {
         response: {
           200: UserSchema.DeleteUserResponseSchema,

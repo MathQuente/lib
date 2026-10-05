@@ -1,6 +1,7 @@
 import { ClientError } from '../errors/client-error'
 import { FollowRepository } from '../repositories/follow.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { isUniqueViolation } from '../utils/prisma-errors'
 
 export class FollowService {
   constructor(
@@ -30,7 +31,14 @@ export class FollowService {
       throw new ClientError('Você já segue este usuário.', 409)
     }
 
-    await this.followRepository.follow(userId, targetId)
+    try {
+      await this.followRepository.follow(userId, targetId)
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new ClientError('Você já segue este usuário.', 409)
+      }
+      throw err
+    }
   }
 
   async unfollow(userId: string, targetId: string) {

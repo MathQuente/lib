@@ -9,6 +9,8 @@ import * as GameSchema from '../schemas/game.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
 import { CacheRepository } from '../repositories/cache.repository'
 
+const IGDB_ROUTE_RATE_LIMIT = { max: 120, timeWindow: '1 minute' }
+
 export async function gameRoutes(app: FastifyInstance) {
   const ratingRepository = new RatingRepository()
   const gameCacheRepository = new GameCacheRepository()
@@ -25,6 +27,7 @@ export async function gameRoutes(app: FastifyInstance) {
     '/featured',
     {
       preHandler: [app.tryAuthenticate],
+      config: { rateLimit: IGDB_ROUTE_RATE_LIMIT },
       schema: {
         response: {
           200: GameSchema.GetFeaturedGamesResponseSchema,
@@ -39,6 +42,7 @@ export async function gameRoutes(app: FastifyInstance) {
     '/comingSoon',
     {
       preHandler: [app.tryAuthenticate],
+      config: { rateLimit: IGDB_ROUTE_RATE_LIMIT },
       schema: {
         querystring: GameSchema.ComingSoonQueryStringSchema,
         response: {
@@ -54,6 +58,7 @@ export async function gameRoutes(app: FastifyInstance) {
     '/similarGames/:igdbId',
     {
       preHandler: [app.tryAuthenticate],
+      config: { rateLimit: IGDB_ROUTE_RATE_LIMIT },
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {
@@ -70,6 +75,7 @@ export async function gameRoutes(app: FastifyInstance) {
     '/',
     {
       preHandler: [app.tryAuthenticate],
+      config: { rateLimit: IGDB_ROUTE_RATE_LIMIT },
       schema: {
         querystring: GameSchema.GameQueryStringSchema,
         response: {
