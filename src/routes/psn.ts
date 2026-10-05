@@ -25,12 +25,30 @@ export async function psnRoutes(app: FastifyInstance) {
   )
   const psnController = new PsnController(psnService)
 
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/verification',
+    {
+      preHandler: [app.authenticate],
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+      schema: {
+        body: PsnSchema.ConnectPsnBodySchema,
+        response: {
+          200: PsnSchema.StartPsnVerificationResponseSchema,
+          400: ErrorSchemas.BadRequest,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => psnController.startVerification(request, reply)
+  )
+
   app.withTypeProvider<ZodTypeProvider>().patch(
     '/',
     {
       preHandler: [app.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
-        body: PsnSchema.ConnectPsnBodySchema,
         response: {
           200: PsnSchema.ConnectPsnResponseSchema,
           400: ErrorSchemas.BadRequest,

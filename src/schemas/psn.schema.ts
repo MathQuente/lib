@@ -7,6 +7,12 @@ export const ConnectPsnBodySchema = z.object({
     .regex(/^[A-Za-z0-9_-]{3,16}$/, 'ID da PSN inválido.')
 })
 
+export const StartPsnVerificationResponseSchema = z.object({
+  psnOnlineId: z.string(),
+  code: z.string(),
+  expiresInSeconds: z.number()
+})
+
 export const ConnectPsnResponseSchema = z.object({
   psnOnlineId: z.string()
 })

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   getProfileFromUserName,
+  getTitleTrophies,
+  getUserTrophiesEarnedForTitle,
   getUserPlayedGames,
   getUserTrophiesForSpecificTitle
 } from 'psn-api'
@@ -14,6 +16,8 @@ import { normalizeGameName } from '../utils/normalize-game-name'
 
 vi.mock('psn-api', () => ({
   getProfileFromUserName: vi.fn(),
+  getTitleTrophies: vi.fn(),
+  getUserTrophiesEarnedForTitle: vi.fn(),
   getUserPlayedGames: vi.fn(),
   getUserTitles: vi.fn(),
   getUserTrophiesForSpecificTitle: vi.fn()
@@ -78,7 +82,11 @@ describe('PsnApiService.findProfile', () => {
     const result = await new PsnApiService(auth).findProfile('someone')
 
     expect(auth.invalidateAccessToken).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ accountId: '1', onlineId: 'someone' })
+    expect(result).toEqual({
+      accountId: '1',
+      onlineId: 'someone',
+      aboutMe: ''
+    })
   })
 })
 
@@ -156,7 +164,10 @@ describe('PsnApiService.getTrophySummariesByTitleId', () => {
     const trophyTitle = {
       trophyTitleName: 'Good',
       progress: 100,
-      earnedTrophies: { platinum: 1 },
+      earnedTrophies: { bronze: 30, silver: 10, gold: 4, platinum: 1 },
+      definedTrophies: { bronze: 30, silver: 10, gold: 4, platinum: 1 },
+      npCommunicationId: 'NPWR12345_00',
+      npServiceName: 'trophy2',
       lastUpdatedDateTime: '2025-05-05T00:00:00Z'
     }
     vi.mocked(getUserTrophiesForSpecificTitle).mockImplementation(
@@ -180,8 +191,58 @@ describe('PsnApiService.getTrophySummariesByTitleId', () => {
     expect(result.get('GOOD_00')).toEqual({
       progress: 100,
       hasPlatinum: true,
-      lastTrophyAt: new Date('2025-05-05T00:00:00Z')
+      lastTrophyAt: new Date('2025-05-05T00:00:00Z'),
+      earned: 45,
+      total: 45,
+      npCommunicationId: 'NPWR12345_00',
+      npServiceName: 'trophy2'
     })
     expect(result.has('BAD_00')).toBe(false)
+  })
+})
+
+describe('PsnApiService.getEarnedTrophies', () => {
+  it('joins trophy texts with the trophies the player earned', async () => {
+    vi.mocked(getTitleTrophies).mockResolvedValue({
+      trophies: [
+        { trophyId: 0, trophyDetail: 'Earn all trophies' },
+        { trophyId: 1, trophyDetail: 'Watch the credits roll' },
+        { trophyId: 2, trophyDetail: 'Collect 10 feathers' }
+      ]
+    } as never)
+    vi.mocked(getUserTrophiesEarnedForTitle).mockResolvedValue({
+      trophies: [
+        { trophyId: 0, earned: false, trophyEarnedRate: '1.2' },
+        {
+          trophyId: 1,
+          earned: true,
+          earnedDateTime: '2024-02-02T20:00:00Z',
+          trophyEarnedRate: '31.5'
+        },
+        { trophyId: 2, earned: true }
+      ]
+    } as never)
+
+    const result = await new PsnApiService(fakeAuth()).getEarnedTrophies('acc', {
+      npCommunicationId: 'NPWR12345_00',
+      npServiceName: 'trophy2'
+    })
+
+    expect(result).toEqual([
+      {
+        detail: 'Watch the credits roll',
+        earnedAt: new Date('2024-02-02T20:00:00Z'),
+        earnedRate: 31.5
+      },
+      { detail: 'Collect 10 feathers', earnedAt: null, earnedRate: null }
+    ])
+    expect(vi.mocked(getTitleTrophies).mock.calls[0].slice(1)).toEqual([
+      'NPWR12345_00',
+      'all',
+      {
+        npServiceName: 'trophy2',
+        headerOverrides: { 'Accept-Language': 'en-US' }
+      }
+    ])
   })
 })

@@ -17,9 +17,19 @@ export interface XboxProfile {
 export interface XboxTitle {
   titleId: string
   name: string
+  devices: string[]
   pfn: string | null
   lastPlayedAt: Date | null
   achievementProgress: number
+  achievementsEarned: number
+  achievementsTotal: number
+  gamerscoreEarned: number
+  gamerscoreTotal: number
+}
+
+export interface XboxUnlockedAchievement {
+  description: string
+  unlockedAt: Date
 }
 
 export class XboxApiError extends Error {
@@ -43,8 +53,20 @@ interface OpenXblTitle {
   name?: string
   pfn?: string | null
   devices?: string[] | null
-  achievement?: { progressPercentage?: number } | null
+  achievement?: {
+    progressPercentage?: number
+    currentAchievements?: number
+    totalAchievements?: number
+    currentGamerscore?: number
+    totalGamerscore?: number
+  } | null
   titleHistory?: { lastTimePlayed?: string } | null
+}
+
+interface OpenXblAchievement {
+  progressState?: string
+  description?: string
+  progression?: { timeUnlocked?: string } | null
 }
 
 interface OpenXblStat {
@@ -124,14 +146,39 @@ export class XboxApiService {
       games.push({
         titleId: title.titleId,
         name: title.name,
+        devices: title.devices ?? [],
         pfn: title.pfn ?? null,
         lastPlayedAt: title.titleHistory?.lastTimePlayed
           ? new Date(title.titleHistory.lastTimePlayed)
           : null,
-        achievementProgress: title.achievement?.progressPercentage ?? 0
+        achievementProgress: title.achievement?.progressPercentage ?? 0,
+        achievementsEarned: title.achievement?.currentAchievements ?? 0,
+        achievementsTotal: title.achievement?.totalAchievements ?? 0,
+        gamerscoreEarned: title.achievement?.currentGamerscore ?? 0,
+        gamerscoreTotal: title.achievement?.totalGamerscore ?? 0
       })
     }
     return games
+  }
+
+  async getUnlockedAchievements(
+    xuid: string,
+    titleId: string
+  ): Promise<XboxUnlockedAchievement[]> {
+    const { achievements } = await this.request<{
+      achievements?: OpenXblAchievement[]
+    }>(
+      `/achievements/player/${encodeURIComponent(xuid)}/${encodeURIComponent(titleId)}`
+    )
+
+    return (achievements ?? []).flatMap(achievement => {
+      if (achievement.progressState !== 'Achieved') return []
+      const unlockedAt = new Date(achievement.progression?.timeUnlocked ?? '')
+      if (Number.isNaN(unlockedAt.getTime()) || unlockedAt.getFullYear() < 2005) {
+        return []
+      }
+      return [{ description: achievement.description ?? '', unlockedAt }]
+    })
   }
 
   async getMinutesPlayed(

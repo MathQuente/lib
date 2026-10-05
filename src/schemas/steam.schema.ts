@@ -1,11 +1,7 @@
 import z from 'zod'
 
-export const ConnectSteamBodySchema = z.object({
-  profileInput: z.string().min(1)
-})
-
-export const ConnectSteamResponseSchema = z.object({
-  steamId: z.string()
+export const StartSteamLinkResponseSchema = z.object({
+  url: z.string().url()
 })
 
 export const DisconnectResponseSchema = z.void()

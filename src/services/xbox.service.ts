@@ -13,6 +13,11 @@ import {
 import { IGDBGame } from '../types/igdb'
 import { normalizeGameName } from '../utils/normalize-game-name'
 import {
+  canInferCompletion,
+  COMPLETION_KEYWORD_PATTERN,
+  meetsCompletionRatio
+} from '../utils/completion-heuristics'
+import {
   xboxImportQueue,
   xboxImportJobId,
   XboxImportJobResult
@@ -129,6 +134,67 @@ export function pickNameMatch(
   return ranked[0]?.game ?? null
 }
 
+const MAX_COMPLETION_DATE_LOOKUPS = 20
+
+const IGDB_PLATFORM_BY_DEVICE: Record<string, string> = {
+  Xbox: 'Xbox',
+  Xbox360: 'Xbox 360',
+  XboxOne: 'Xbox One',
+  XboxSeries: 'Xbox Series X|S',
+  PC: 'PC (Microsoft Windows)'
+}
+
+export function runsOnTitleDevices(game: IGDBGame, devices: string[]): boolean {
+  const platforms = game.platforms?.map(p => p.name)
+  if (!platforms || platforms.length === 0) return true
+
+  const consoles = devices.filter(d => d !== 'PC')
+  const wanted = (consoles.length > 0 ? consoles : devices).flatMap(
+    d => IGDB_PLATFORM_BY_DEVICE[d] ?? []
+  )
+  if (wanted.length === 0) return true
+
+  return wanted.some(platform => platforms.includes(platform))
+}
+
+function completionDateFrom(
+  achievements: { description: string; unlockedAt: Date }[]
+): Date | undefined {
+  if (achievements.length === 0) return undefined
+  const times = (list: typeof achievements) =>
+    list.map(a => a.unlockedAt.getTime())
+
+  const story = achievements.filter(a =>
+    COMPLETION_KEYWORD_PATTERN.test(a.description)
+  )
+  return story.length > 0
+    ? new Date(Math.min(...times(story)))
+    : new Date(Math.max(...times(achievements)))
+}
+
+const BASE_GAME_GAMERSCORE = 1000
+
+function looksFinished(title: XboxTitle, igdbGame: IGDBGame): boolean {
+  if (title.achievementProgress >= 100) return true
+  if (!canInferCompletion(igdbGame)) return false
+
+  const earned = title.achievementsEarned
+  if (earned <= 0) return false
+
+  if (title.achievementsTotal > 0) {
+    return meetsCompletionRatio(earned, title.achievementsTotal)
+  }
+
+  if (title.gamerscoreEarned <= 0 || title.gamerscoreTotal <= 0) return false
+  const share = Math.min(
+    1,
+    title.gamerscoreEarned /
+      Math.min(title.gamerscoreTotal, BASE_GAME_GAMERSCORE)
+  )
+  const estimatedTotal = Math.round(earned / share)
+  return meetsCompletionRatio(share * estimatedTotal, estimatedTotal)
+}
+
 export class XboxService {
   constructor(
     private userRepository: UserRepository,
@@ -149,30 +215,11 @@ export class XboxService {
     return user
   }
 
-  async connectXbox(userId: string, gamertagInput: string) {
+  async connectXbox(userId: string, verifiedProfile: XboxProfile) {
     await this.requireUser(userId)
 
-    let profile: XboxProfile | null
     try {
-      profile = await this.xboxApiService.findProfile(gamertagInput.trim())
-    } catch (err) {
-      if (err instanceof XboxApiError) {
-        console.error('[Xbox] profile lookup failed', { error: err.message })
-        if (err.status === 429) throw new ClientError(RATE_LIMITED_MESSAGE, 503)
-        throw new ClientError(UNAVAILABLE_MESSAGE, 502)
-      }
-      throw err
-    }
-
-    if (!profile) {
-      throw new ClientError(
-        'Não foi possível encontrar um perfil do Xbox com essa gamertag.',
-        400
-      )
-    }
-
-    try {
-      await this.userRepository.setXboxAccount(userId, profile)
+      await this.userRepository.setXboxAccount(userId, verifiedProfile)
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -186,7 +233,7 @@ export class XboxService {
       throw err
     }
 
-    return { xboxGamertag: profile.gamertag }
+    return { xboxGamertag: verifiedProfile.gamertag }
   }
 
   async disconnectXbox(userId: string) {
@@ -286,6 +333,15 @@ export class XboxService {
       user.xboxXuid,
       toImport.flatMap(game => game.titleIds)
     )
+    const finishedTitles = toImport
+      .filter(game => looksFinished(game.mostCompleted, game.igdbGame))
+      .map(game => game.mostCompleted)
+    const completedAtByTitleId = await this.loadCompletionDates(
+      user.xboxXuid,
+      finishedTitles
+    )
+    const finishedTitleIds = new Set(finishedTitles.map(t => t.titleId))
+
     const total = toImport.length
     let imported = 0
     let updated = 0
@@ -293,7 +349,7 @@ export class XboxService {
 
     for (const { igdbGame, titleIds, lastPlayedAt, mostCompleted } of toImport) {
       const minutes = titleIds.flatMap(id => minutesByTitleId.get(id) ?? [])
-      const isFinished = mostCompleted.achievementProgress >= 100
+      const isFinished = finishedTitleIds.has(mostCompleted.titleId)
       const isRecent =
         !!lastPlayedAt &&
         now - lastPlayedAt.getTime() <= RECENT_PLAY_THRESHOLD_MS
@@ -317,7 +373,9 @@ export class XboxService {
               : undefined,
           finished: isFinished,
           completedAt: isFinished
-            ? (mostCompleted.lastPlayedAt ?? undefined)
+            ? (completedAtByTitleId.get(mostCompleted.titleId) ??
+              mostCompleted.lastPlayedAt ??
+              undefined)
             : undefined
         }
       )
@@ -330,6 +388,30 @@ export class XboxService {
     onProgress?.(100)
 
     return { library: { imported, updated, skipped, notFound } }
+  }
+
+  private async loadCompletionDates(xuid: string, titles: XboxTitle[]) {
+    const dates = new Map<string, Date>()
+
+    for (const title of titles.slice(0, MAX_COMPLETION_DATE_LOOKUPS)) {
+      try {
+        const achievements = await this.xboxApiService.getUnlockedAchievements(
+          xuid,
+          title.titleId
+        )
+        const completedAt = completionDateFrom(achievements)
+        if (completedAt) dates.set(title.titleId, completedAt)
+      } catch (err) {
+        if (!(err instanceof XboxApiError)) throw err
+        console.warn(
+          '[Xbox] achievement dates lookup failed, using last played dates',
+          { error: err.message }
+        )
+        break
+      }
+    }
+
+    return dates
   }
 
   private async loadMinutesPlayed(xuid: string, titleIds: string[]) {
@@ -366,20 +448,28 @@ export class XboxService {
     }
 
     for (const title of unmatched) {
-      const igdbGame = await this.findByName(title.name)
+      const igdbGame = await this.findByName(title.name, title.devices)
       if (igdbGame) result.set(title.titleId, igdbGame)
     }
 
     return result
   }
 
-  private async findByName(name: string): Promise<IGDBGame | null> {
-    const candidates = await this.searchByName(name)
+  private async findByName(
+    name: string,
+    devices: string[]
+  ): Promise<IGDBGame | null> {
+    const search = async (term: string) =>
+      (await this.searchByName(term)).filter(game =>
+        runsOnTitleDevices(game, devices)
+      )
+
+    const candidates = await search(name)
     const exact = pickNameMatch(name, candidates)
     if (exact) return exact
 
     for (const variant of nameVariants(name)) {
-      const match = pickNameMatch(variant, await this.searchByName(variant))
+      const match = pickNameMatch(variant, await search(variant))
       if (match) return match
     }
 

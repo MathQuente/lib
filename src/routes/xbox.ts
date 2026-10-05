@@ -20,24 +20,29 @@ export async function xboxRoutes(app: FastifyInstance) {
   )
   const xboxController = new XboxController(xboxService)
 
-  app.withTypeProvider<ZodTypeProvider>().patch(
-    '/',
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/oauth',
     {
       preHandler: [app.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
-        body: XboxSchema.ConnectXboxBodySchema,
         response: {
-          200: XboxSchema.ConnectXboxResponseSchema,
-          400: ErrorSchemas.BadRequest,
-          404: ErrorSchemas.NotFound,
-          409: ErrorSchemas.BadRequest,
+          200: XboxSchema.StartXboxLinkResponseSchema,
           500: ErrorSchemas.InternalServerError,
-          502: ErrorSchemas.InternalServerError,
           503: ErrorSchemas.InternalServerError
         }
       }
     },
-    async (request, reply) => xboxController.connect(request, reply)
+    async (request, reply) => xboxController.startLink(request, reply)
+  )
+
+  app.get(
+    '/oauth/callback',
+    {
+      preHandler: [app.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+    },
+    async (request, reply) => xboxController.linkCallback(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(

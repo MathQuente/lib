@@ -4,6 +4,7 @@ import {
   nameVariants,
   pickNameMatch,
   pickSubtitleMatch,
+  runsOnTitleDevices,
   XboxService
 } from './xbox.service'
 import { XboxApiError, XboxApiService, XboxTitle } from './xbox-api.service'
@@ -46,6 +47,7 @@ function fakeXboxApi(overrides: Partial<XboxApiService> = {}): XboxApiService {
     getTitleHistory: vi.fn().mockResolvedValue([]),
     resolveProductIds: vi.fn().mockResolvedValue(new Map()),
     getMinutesPlayed: vi.fn().mockResolvedValue(new Map()),
+    getUnlockedAchievements: vi.fn().mockResolvedValue([]),
     ...overrides
   } as unknown as XboxApiService
 }
@@ -54,9 +56,14 @@ function title(overrides: Partial<XboxTitle>): XboxTitle {
   return {
     titleId: '1',
     name: 'Game',
+    devices: ['XboxOne'],
     pfn: 'pfn-1',
     lastPlayedAt: new Date(Date.now() - 365 * DAY_MS),
     achievementProgress: 0,
+    achievementsEarned: 0,
+    achievementsTotal: 0,
+    gamerscoreEarned: 0,
+    gamerscoreTotal: 0,
     ...overrides
   }
 }
@@ -186,6 +193,40 @@ describe('pickNameMatch', () => {
   })
 })
 
+describe('runsOnTitleDevices', () => {
+  const on = (...names: string[]) =>
+    igdb(1, { platforms: names.map(name => ({ name })) })
+
+  it('rejects a game that never came out for the consoles the title runs on', () => {
+    expect(
+      runsOnTitleDevices(on('PC (Microsoft Windows)', 'Mac'), [
+        'PC',
+        'XboxOne',
+        'XboxSeries'
+      ])
+    ).toBe(false)
+  })
+
+  it('accepts a game released for one of the title consoles', () => {
+    expect(
+      runsOnTitleDevices(on('PlayStation 4', 'Xbox One'), ['XboxOne', 'XboxSeries'])
+    ).toBe(true)
+    expect(
+      runsOnTitleDevices(on('Xbox 360'), ['Xbox360', 'XboxOne'])
+    ).toBe(true)
+  })
+
+  it('falls back to PC for PC-only titles', () => {
+    expect(runsOnTitleDevices(on('PC (Microsoft Windows)'), ['PC'])).toBe(true)
+    expect(runsOnTitleDevices(on('Xbox 360'), ['PC'])).toBe(false)
+  })
+
+  it('accepts when either side has no platform information', () => {
+    expect(runsOnTitleDevices(igdb(1), ['XboxOne'])).toBe(true)
+    expect(runsOnTitleDevices(on('Xbox One'), [])).toBe(true)
+  })
+})
+
 describe('nameVariants', () => {
   it.each([
     ['COD: Black Ops II', ['Call of Duty: Black Ops II']],
@@ -228,37 +269,21 @@ describe('pickSubtitleMatch', () => {
 })
 
 describe('XboxService.connectXbox', () => {
-  it('saves the xuid and gamertag returned by Xbox', async () => {
+  const verifiedProfile = { xuid: '99', gamertag: 'Player' }
+
+  it('saves the verified xuid and gamertag', async () => {
     const setXboxAccount = vi.fn().mockResolvedValue(null)
-    const xboxApi = fakeXboxApi({
-      findProfile: vi.fn().mockResolvedValue({ xuid: '99', gamertag: 'Player' })
-    })
+    const xboxApi = fakeXboxApi()
     const service = new XboxService(
       fakeUserRepository({ setXboxAccount }),
       fakeGameCacheService(),
       xboxApi
     )
 
-    const result = await service.connectXbox('user-1', ' player ')
+    const result = await service.connectXbox('user-1', verifiedProfile)
 
-    expect(xboxApi.findProfile).toHaveBeenCalledWith('player')
-    expect(setXboxAccount).toHaveBeenCalledWith('user-1', {
-      xuid: '99',
-      gamertag: 'Player'
-    })
+    expect(setXboxAccount).toHaveBeenCalledWith('user-1', verifiedProfile)
     expect(result).toEqual({ xboxGamertag: 'Player' })
-  })
-
-  it('rejects with 400 when the gamertag does not exist', async () => {
-    const service = new XboxService(
-      fakeUserRepository(),
-      fakeGameCacheService(),
-      fakeXboxApi({ findProfile: vi.fn().mockResolvedValue(null) })
-    )
-
-    await expect(service.connectXbox('user-1', 'ghost')).rejects.toMatchObject({
-      statusCode: 400
-    })
   })
 
   it('rejects with 409 when the profile is linked to another account', async () => {
@@ -271,40 +296,13 @@ describe('XboxService.connectXbox', () => {
     const service = new XboxService(
       fakeUserRepository({ setXboxAccount }),
       fakeGameCacheService(),
-      fakeXboxApi({
-        findProfile: vi.fn().mockResolvedValue({ xuid: '99', gamertag: 'Player' })
-      })
+      fakeXboxApi()
     )
 
-    await expect(service.connectXbox('user-1', 'Player')).rejects.toMatchObject({
-      statusCode: 409
-    })
+    await expect(
+      service.connectXbox('user-1', verifiedProfile)
+    ).rejects.toMatchObject({ statusCode: 409 })
   })
-
-  it.each([
-    [500, 502],
-    [429, 503]
-  ])(
-    'hides an upstream %i behind a generic %i error',
-    async (upstreamStatus, statusCode) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const service = new XboxService(
-        fakeUserRepository(),
-        fakeGameCacheService(),
-        fakeXboxApi({
-          findProfile: vi
-            .fn()
-            .mockRejectedValue(new XboxApiError('raw upstream', upstreamStatus))
-        })
-      )
-
-      const error = await service.connectXbox('user-1', 'Player').catch(e => e)
-
-      expect(error).toBeInstanceOf(ClientError)
-      expect(error.statusCode).toBe(statusCode)
-      expect(error.message).not.toContain('raw upstream')
-    }
-  )
 
   it('rejects with 404 when the user does not exist', async () => {
     const service = new XboxService(
@@ -313,9 +311,9 @@ describe('XboxService.connectXbox', () => {
       fakeXboxApi()
     )
 
-    await expect(service.connectXbox('user-1', 'Player')).rejects.toMatchObject({
-      statusCode: 404
-    })
+    await expect(
+      service.connectXbox('user-1', verifiedProfile)
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 
@@ -636,6 +634,215 @@ describe('XboxService.runImport', () => {
       'ug-10',
       'XBOX',
       { hoursPlayed: undefined, completions: 1, completedAt: lastPlayedAt }
+    )
+  })
+
+  it.each([
+    [
+      'the reported total says the share fits a game of that size',
+      { achievementProgress: 42, achievementsEarned: 22, achievementsTotal: 50 },
+      1
+    ],
+    [
+      'Xbox omits the total and the gamerscore share fits the game size',
+      {
+        achievementProgress: 55,
+        achievementsEarned: 40,
+        gamerscoreEarned: 555,
+        gamerscoreTotal: 1000
+      },
+      1
+    ],
+    [
+      'DLC inflates the total gamerscore but the base game share is high',
+      {
+        achievementProgress: 16,
+        achievementsEarned: 24,
+        gamerscoreEarned: 655,
+        gamerscoreTotal: 4000
+      },
+      1
+    ],
+    [
+      'the gamerscore share is too small for a short achievement list',
+      {
+        achievementProgress: 57,
+        achievementsEarned: 12,
+        gamerscoreEarned: 580,
+        gamerscoreTotal: 1000
+      },
+      4
+    ],
+    [
+      'only a small share of achievements was earned',
+      { achievementProgress: 10, achievementsEarned: 5, achievementsTotal: 50 },
+      4
+    ],
+    [
+      'no achievement was earned',
+      { achievementProgress: 0, achievementsEarned: 0, achievementsTotal: 50 },
+      4
+    ]
+  ])('infers completion below 100%% when %s', async (_name, progress, statusId) => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([title(progress)]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+    })
+    mockExternal([['9AAA', 10]])
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ statusIds: statusId })
+    )
+  })
+
+  it('does not infer completion for sports and racing games', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({
+          achievementProgress: 57,
+          achievementsEarned: 17,
+          gamerscoreEarned: 575,
+          gamerscoreTotal: 1000
+        })
+      ]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+    })
+    vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+      { uid: '9AAA', game: igdb(10, { genres: [{ name: 'Sport' }] }) }
+    ])
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ statusIds: 4 })
+    )
+    expect(xboxApi.getUnlockedAchievements).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'the first achievement that describes the ending',
+      [
+        { description: 'Kill 500 monsters', unlockedAt: new Date('2017-08-05T00:00:00Z') },
+        { description: 'Watch the credits', unlockedAt: new Date('2016-12-29T00:00:00Z') }
+      ],
+      new Date('2016-12-29T00:00:00Z')
+    ],
+    [
+      'the last achievement earned when none describes the ending',
+      [
+        { description: 'Kill 500 monsters', unlockedAt: new Date('2017-08-05T00:00:00Z') },
+        { description: 'Craft 5 items', unlockedAt: new Date('2016-12-28T00:00:00Z') }
+      ],
+      new Date('2017-08-05T00:00:00Z')
+    ],
+    ['the last played date when no unlock dates are known', [], new Date('2025-06-21T00:00:00Z')]
+  ])('dates a finished title by %s', async (_name, achievements, expected) => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({
+          achievementProgress: 100,
+          lastPlayedAt: new Date('2025-06-21T00:00:00Z')
+        })
+      ]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getUnlockedAchievements: vi.fn().mockResolvedValue(achievements)
+    })
+    mockExternal([['9AAA', 10]])
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(xboxApi.getUnlockedAchievements).toHaveBeenCalledWith('xuid-1', '1')
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ statusIds: 1, completedAt: expected })
+    )
+  })
+
+  it('still imports a finished title when the achievement dates lookup fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const lastPlayedAt = new Date('2025-06-21T00:00:00Z')
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi
+        .fn()
+        .mockResolvedValue([title({ achievementProgress: 100, lastPlayedAt })]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getUnlockedAchievements: vi
+        .fn()
+        .mockRejectedValue(new XboxApiError('rate limited', 429))
+    })
+    mockExternal([['9AAA', 10]])
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ statusIds: 1, completedAt: lastPlayedAt })
+    )
+  })
+
+  it('does not match a title by name to a game from another console generation', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({
+          name: 'Call of Duty®',
+          pfn: null,
+          devices: ['PC', 'XboxOne', 'XboxSeries']
+        })
+      ])
+    })
+    mockExternal([])
+    mockSearch({
+      'Call of Duty®': [
+        igdb(621, {
+          name: 'Call of Duty',
+          platforms: [{ name: 'PC (Microsoft Windows)' }, { name: 'Mac' }]
+        })
+      ]
+    })
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(userRepository.addGameToUserLibrary).not.toHaveBeenCalled()
+    expect(result.library.notFound).toEqual(['Call of Duty®'])
+  })
+
+  it('does not infer completion for multiplayer-only titles', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({
+          achievementProgress: 42,
+          achievementsEarned: 22,
+          achievementsTotal: 50
+        })
+      ]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+    })
+    vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+      {
+        uid: '9AAA',
+        game: igdb(10, {
+          game_modes: [{ name: 'Multiplayer' }]
+        } as Partial<IGDBGame>)
+      }
+    ])
+    const userRepository = fakeUserRepository()
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ statusIds: 4 })
     )
   })
 

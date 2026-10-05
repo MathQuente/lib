@@ -1,14 +1,7 @@
 import z from 'zod'
 
-export const ConnectXboxBodySchema = z.object({
-  gamertag: z
-    .string()
-    .trim()
-    .regex(/^[\p{L}\p{N} ]{1,15}(#\d{1,6})?$/u, 'Gamertag inválida.')
-})
-
-export const ConnectXboxResponseSchema = z.object({
-  xboxGamertag: z.string()
+export const StartXboxLinkResponseSchema = z.object({
+  url: z.string().url()
 })
 
 export const DisconnectResponseSchema = z.void()

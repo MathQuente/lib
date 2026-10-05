@@ -5,11 +5,19 @@ import * as PsnSchema from '../schemas/psn.schema'
 export class PsnController {
   constructor(private psnService: PsnService) {}
 
-  async connect(request: FastifyRequest, reply: FastifyReply) {
+  async startVerification(request: FastifyRequest, reply: FastifyReply) {
     const { onlineId } = PsnSchema.ConnectPsnBodySchema.parse(request.body)
     const userId = request.user.userId
 
-    const result = await this.psnService.connectPsn(userId, onlineId)
+    const result = await this.psnService.startPsnVerification(userId, onlineId)
+
+    return reply.status(200).send(result)
+  }
+
+  async connect(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user.userId
+
+    const result = await this.psnService.connectPsn(userId)
 
     return reply.status(200).send(result)
   }

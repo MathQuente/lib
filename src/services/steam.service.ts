@@ -10,6 +10,13 @@ import {
 } from './steam-api.service'
 import { IGDBGame } from '../types/igdb'
 import {
+  COMPLETION_KEYWORD_PATTERN,
+  canInferCompletion,
+  MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
+  meetsCompletionRatio,
+  RARE_ACHIEVEMENT_PERCENT
+} from '../utils/completion-heuristics'
+import {
   steamImportQueue,
   steamImportJobId,
   SteamImportJobResult,
@@ -26,27 +33,7 @@ const BACKLOG_STATUS_ID = 4
 const WISHLIST_STATUS_ID = 5
 const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
 
-const MIN_ACHIEVEMENTS_FOR_SIGNAL = 5
 const ACHIEVEMENT_CHECK_CONCURRENCY = 10
-
-const RARE_ACHIEVEMENT_PERCENT = 5
-
-const MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL = 100
-
-const RATIO_THRESHOLDS: { maxTotal: number; ratio: number }[] = [
-  { maxTotal: 10, ratio: 0.9 },
-  { maxTotal: 30, ratio: 0.7 },
-  { maxTotal: 75, ratio: 0.4 },
-  { maxTotal: 150, ratio: 0.3 },
-  { maxTotal: Infinity, ratio: 0.15 }
-]
-
-function requiredRatioForTotal(total: number): number {
-  return RATIO_THRESHOLDS.find(t => total <= t.maxTotal)!.ratio
-}
-
-const COMPLETION_KEYWORD_PATTERN =
-  /\bending\b|\bfinal boss\b|\bcomplete(d)? the game\b|\bbeat the game\b|\bfinish(ed)? the (game|story|campaign)\b|\bcredits\b|\bepilogue\b/i
 
 function matchingCompletionKeywordNames(
   achievedApiNames: string[],
@@ -83,12 +70,6 @@ function resolveCompletedAt(
   if (latestUnlock.length > 0) return new Date(Math.max(...latestUnlock) * 1000)
 
   return new Date()
-}
-
-function hasSinglePlayerMode(game: IGDBGame): boolean {
-  const modes = game.game_modes?.map(m => m.name.toLowerCase())
-  if (!modes || modes.length === 0) return true
-  return modes.includes('single player')
 }
 
 export class SteamService {
@@ -152,24 +133,11 @@ export class SteamService {
     return { toImport, skipped, notFound }
   }
 
-  async connectSteam(userId: string, profileInput: string) {
+  async connectSteam(userId: string, verifiedSteamId: string) {
     await this.requireUser(userId)
 
-    const { steamId64, vanity } =
-      SteamApiService.parseProfileInput(profileInput)
-    const resolvedId =
-      steamId64 ??
-      (vanity ? await SteamApiService.resolveVanityUrl(vanity) : null)
-
-    if (!resolvedId) {
-      throw new ClientError(
-        'Não foi possível encontrar um perfil da Steam com esse link ou ID.',
-        400
-      )
-    }
-
     try {
-      await this.userRepository.setSteamId(userId, resolvedId)
+      await this.userRepository.setSteamId(userId, verifiedSteamId)
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -183,7 +151,7 @@ export class SteamService {
       throw err
     }
 
-    return { steamId: resolvedId }
+    return { steamId: verifiedSteamId }
   }
 
   async disconnectSteam(userId: string) {
@@ -299,7 +267,7 @@ export class SteamService {
       ACHIEVEMENT_CHECK_CONCURRENCY,
       async ({ item, igdbGame }) => {
         if (item.playtime_forever <= 0) return null
-        if (!hasSinglePlayerMode(igdbGame)) return null
+        if (!canInferCompletion(igdbGame)) return null
 
         const [achievements, globalPercentages, schema] = await Promise.all([
           SteamApiService.getPlayerAchievements(steamId, item.appid),
@@ -341,9 +309,7 @@ export class SteamService {
 
       const meetsRatioThreshold =
         achievements != null &&
-        achievements.total >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
-        achievements.achieved / achievements.total >=
-          requiredRatioForTotal(achievements.total)
+        meetsCompletionRatio(achievements.achieved, achievements.total)
 
       const matchedKeywordNames = achievements
         ? matchingCompletionKeywordNames(achievements.achievedApiNames, schema)

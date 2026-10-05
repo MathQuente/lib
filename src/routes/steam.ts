@@ -15,21 +15,28 @@ export async function steamRoutes(app: FastifyInstance) {
   const steamService = new SteamService(userRepository, gameCacheService)
   const steamController = new SteamController(steamService)
 
-  app.withTypeProvider<ZodTypeProvider>().patch(
-    '/',
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/openid',
     {
       preHandler: [app.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
-        body: SteamSchema.ConnectSteamBodySchema,
         response: {
-          200: SteamSchema.ConnectSteamResponseSchema,
-          400: ErrorSchemas.BadRequest,
-          404: ErrorSchemas.NotFound,
+          200: SteamSchema.StartSteamLinkResponseSchema,
           500: ErrorSchemas.InternalServerError
         }
       }
     },
-    async (request, reply) => steamController.connect(request, reply)
+    async (request, reply) => steamController.startLink(request, reply)
+  )
+
+  app.get(
+    '/openid/callback',
+    {
+      preHandler: [app.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+    },
+    async (request, reply) => steamController.linkCallback(request, reply)
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(

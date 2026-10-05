@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { Prisma } from '@prisma/client'
 import { SteamService } from './steam.service'
 import { SteamApiService } from './steam-api.service'
 import { IGDBService } from './igdb.service'
@@ -46,9 +47,8 @@ afterEach(() => {
 })
 
 describe('SteamService.connectSteam', () => {
-  it('saves a raw SteamID64 as-is, without resolving', async () => {
+  it('saves the verified SteamID64', async () => {
     const setSteamId = vi.fn().mockResolvedValue({ steamId: '76561197960287930' })
-    const resolveVanityUrl = vi.spyOn(SteamApiService, 'resolveVanityUrl')
     const userRepository = fakeUserRepository({ setSteamId })
     const service = new SteamService(
       userRepository,
@@ -59,34 +59,17 @@ describe('SteamService.connectSteam', () => {
     const result = await service.connectSteam('user-1', '76561197960287930')
 
     expect(setSteamId).toHaveBeenCalledWith('user-1', '76561197960287930')
-    expect(resolveVanityUrl).not.toHaveBeenCalled()
     expect(result).toEqual({ steamId: '76561197960287930' })
   })
 
-  it('resolves a vanity URL before saving', async () => {
-    vi.spyOn(SteamApiService, 'resolveVanityUrl').mockResolvedValue(
-      '76561197960287930'
-    )
-    const setSteamId = vi.fn().mockResolvedValue({ steamId: '76561197960287930' })
-    const userRepository = fakeUserRepository({ setSteamId })
-    const service = new SteamService(
-      userRepository,
-      fakeGameCacheService(),
-      platformServiceFor(userRepository)
-    )
-
-    const result = await service.connectSteam(
-      'user-1',
-      'https://steamcommunity.com/id/someVanityName'
-    )
-
-    expect(setSteamId).toHaveBeenCalledWith('user-1', '76561197960287930')
-    expect(result).toEqual({ steamId: '76561197960287930' })
-  })
-
-  it('throws when the vanity URL cannot be resolved', async () => {
-    vi.spyOn(SteamApiService, 'resolveVanityUrl').mockResolvedValue(null)
-    const userRepository = fakeUserRepository()
+  it('throws 409 when the Steam account is linked to another user', async () => {
+    const duplicate = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'test'
+    })
+    const userRepository = fakeUserRepository({
+      setSteamId: vi.fn().mockRejectedValue(duplicate)
+    })
     const service = new SteamService(
       userRepository,
       fakeGameCacheService(),
@@ -94,8 +77,8 @@ describe('SteamService.connectSteam', () => {
     )
 
     await expect(
-      service.connectSteam('user-1', 'nonexistent-vanity')
-    ).rejects.toThrow(ClientError)
+      service.connectSteam('user-1', '76561197960287930')
+    ).rejects.toMatchObject({ statusCode: 409 })
   })
 })
 

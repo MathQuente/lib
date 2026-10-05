@@ -2,7 +2,9 @@ import {
   AuthorizationPayload,
   getProfileFromUserName,
   getUserPlayedGames,
+  getTitleTrophies,
   getUserTitles,
+  getUserTrophiesEarnedForTitle,
   getUserTrophiesForSpecificTitle,
   TrophyTitle,
   UserTrophiesBySpecificTitleResponse
@@ -27,6 +29,16 @@ export interface PsnTrophySummary {
   progress: number
   hasPlatinum: boolean
   lastTrophyAt: Date | null
+  earned: number
+  total: number
+  npCommunicationId: string
+  npServiceName: 'trophy' | 'trophy2'
+}
+
+export interface PsnEarnedTrophy {
+  detail: string
+  earnedAt: Date | null
+  earnedRate: number | null
 }
 
 export class PsnApiError extends Error {
@@ -51,13 +63,28 @@ export function parseIsoDurationToMinutes(duration: string | undefined): number 
   )
 }
 
+function countTrophies(
+  counts: Partial<Record<'bronze' | 'silver' | 'gold' | 'platinum', number>> | undefined
+) {
+  return (
+    (counts?.bronze ?? 0) +
+    (counts?.silver ?? 0) +
+    (counts?.gold ?? 0) +
+    (counts?.platinum ?? 0)
+  )
+}
+
 function toTrophySummary(title: TrophyTitle): PsnTrophySummary {
   return {
     progress: title.progress,
     hasPlatinum: (title.earnedTrophies?.platinum ?? 0) > 0,
     lastTrophyAt: title.lastUpdatedDateTime
       ? new Date(title.lastUpdatedDateTime)
-      : null
+      : null,
+    earned: countTrophies(title.earnedTrophies),
+    total: countTrophies(title.definedTrophies),
+    npCommunicationId: title.npCommunicationId,
+    npServiceName: title.npServiceName
   }
 }
 
@@ -96,12 +123,16 @@ export class PsnApiService {
 
   async findProfile(
     onlineId: string
-  ): Promise<{ accountId: string; onlineId: string } | null> {
+  ): Promise<{ accountId: string; onlineId: string; aboutMe: string } | null> {
     try {
       const { profile } = await this.call(auth =>
         getProfileFromUserName(auth, onlineId)
       )
-      return { accountId: profile.accountId, onlineId: profile.onlineId }
+      return {
+        accountId: profile.accountId,
+        onlineId: profile.onlineId,
+        aboutMe: profile.aboutMe ?? ''
+      }
     } catch (err) {
       if (err instanceof PsnApiError && /not found/i.test(err.message)) {
         return null
@@ -191,6 +222,48 @@ export class PsnApiService {
     }
 
     return summaries
+  }
+
+  async getEarnedTrophies(
+    accountId: string,
+    summary: Pick<PsnTrophySummary, 'npCommunicationId' | 'npServiceName'>
+  ): Promise<PsnEarnedTrophy[]> {
+    const options = {
+      npServiceName: summary.npServiceName,
+      headerOverrides: { 'Accept-Language': 'en-US' }
+    }
+    const [definitions, progress] = await Promise.all([
+      this.call(auth =>
+        getTitleTrophies(auth, summary.npCommunicationId, 'all', options)
+      ),
+      this.call(auth =>
+        getUserTrophiesEarnedForTitle(
+          auth,
+          accountId,
+          summary.npCommunicationId,
+          'all',
+          options
+        )
+      )
+    ])
+
+    const detailById = new Map(
+      (definitions.trophies ?? []).map(t => [t.trophyId, t.trophyDetail ?? ''])
+    )
+
+    return (progress.trophies ?? [])
+      .filter(t => t.earned)
+      .map(t => {
+        const rate = Number(t.trophyEarnedRate)
+        return {
+          detail: detailById.get(t.trophyId) ?? '',
+          earnedAt: t.earnedDateTime ? new Date(t.earnedDateTime) : null,
+          earnedRate:
+            t.trophyEarnedRate !== undefined && Number.isFinite(rate)
+              ? rate
+              : null
+        }
+      })
   }
 
   private async fetchSpecificTitles(

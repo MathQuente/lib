@@ -104,6 +104,49 @@ describe('XboxApiService.findProfile', () => {
   })
 })
 
+describe('XboxApiService.getUnlockedAchievements', () => {
+  it('returns earned achievements with a real unlock date', async () => {
+    fetchMock.mockResolvedValue(
+      json({
+        content: {
+          achievements: [
+            {
+              progressState: 'Achieved',
+              description: 'Kill Diablo.',
+              progression: { timeUnlocked: '2016-12-29T03:00:00.000Z' }
+            },
+            {
+              progressState: 'NotStarted',
+              description: 'Reach level 70.',
+              progression: { timeUnlocked: '0001-01-01T00:00:00.000Z' }
+            },
+            {
+              progressState: 'Achieved',
+              description: 'No date known.',
+              progression: { timeUnlocked: '0001-01-01T00:00:00.000Z' }
+            }
+          ]
+        }
+      })
+    )
+
+    const result = await new XboxApiService().getUnlockedAchievements(
+      '123',
+      '2117764661'
+    )
+
+    expect(result).toEqual([
+      {
+        description: 'Kill Diablo.',
+        unlockedAt: new Date('2016-12-29T03:00:00.000Z')
+      }
+    ])
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://xbl.io/api/v2/achievements/player/123/2117764661'
+    )
+  })
+})
+
 describe('XboxApiService.getTitleHistory', () => {
   it('maps titles and drops the ones that only ran on Win32', async () => {
     fetchMock.mockResolvedValue(
@@ -115,7 +158,13 @@ describe('XboxApiService.getTitleHistory', () => {
               name: 'Halo 4',
               pfn: null,
               devices: ['Xbox360', 'XboxOne'],
-              achievement: { progressPercentage: 100 },
+              achievement: {
+                progressPercentage: 100,
+                currentAchievements: 49,
+                totalAchievements: 49,
+                currentGamerscore: 1000,
+                totalGamerscore: 1000
+              },
               titleHistory: { lastTimePlayed: '2025-06-30T02:44:56.000Z' }
             },
             {
@@ -136,16 +185,26 @@ describe('XboxApiService.getTitleHistory', () => {
       {
         titleId: '10',
         name: 'Halo 4',
+        devices: ['Xbox360', 'XboxOne'],
         pfn: null,
         lastPlayedAt: new Date('2025-06-30T02:44:56.000Z'),
-        achievementProgress: 100
+        achievementProgress: 100,
+        achievementsEarned: 49,
+        achievementsTotal: 49,
+        gamerscoreEarned: 1000,
+        gamerscoreTotal: 1000
       },
       {
         titleId: '20',
         name: 'Balatro',
+        devices: ['PC', 'XboxSeries'],
         pfn: 'PlayStack.Balatro_3wcqaesafpzfy',
         lastPlayedAt: null,
-        achievementProgress: 0
+        achievementProgress: 0,
+        achievementsEarned: 0,
+        achievementsTotal: 0,
+        gamerscoreEarned: 0,
+        gamerscoreTotal: 0
       }
     ])
   })
