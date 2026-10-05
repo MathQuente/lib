@@ -8,6 +8,7 @@ import {
   UserTrophiesBySpecificTitleResponse
 } from 'psn-api'
 import { PsnAuthService } from './psn-auth.service'
+import { normalizeGameName } from '../utils/normalize-game-name'
 
 const PLAYED_GAMES_PAGE_SIZE = 200
 const TROPHY_TITLES_PAGE_SIZE = 800
@@ -48,16 +49,6 @@ export function parseIsoDurationToMinutes(duration: string | undefined): number 
     Number(minutes ?? 0) +
     Math.round(Number(seconds ?? 0) / 60)
   )
-}
-
-export function normalizeGameName(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[™®©]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
 }
 
 function toTrophySummary(title: TrophyTitle): PsnTrophySummary {

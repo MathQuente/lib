@@ -82,6 +82,7 @@ export class UserService {
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
         steamId: user.steamId,
         psnOnlineId: user.psnOnlineId,
+        xboxGamertag: user.xboxGamertag,
         followersCount,
         followingCount
       }

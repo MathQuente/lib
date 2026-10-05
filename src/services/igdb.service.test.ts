@@ -92,3 +92,30 @@ describe('IGDBService.getGamesBySteamAppIds', () => {
     expect(result).toEqual([{ appId: 440, game: game(10) }])
   })
 })
+
+describe('IGDBService.searchGamesByName', () => {
+  it('searches the cleaned name restricted to the given platforms', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([game(1)])
+
+    const result = await IGDBService.searchGamesByName('Far Cry® 4 "GOTY";', [12, 49])
+
+    expect(result).toEqual([game(1)])
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(
+        /^search "Far Cry 4 GOTY"; .*where platforms = \(12,49\); limit 10;$/
+      )
+    )
+  })
+
+  it('returns empty without calling IGDB when nothing is left to search', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([])
+
+    expect(await IGDBService.searchGamesByName('™', [12])).toEqual([])
+    expect(request).not.toHaveBeenCalled()
+  })
+})

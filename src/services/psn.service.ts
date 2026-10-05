@@ -4,13 +4,13 @@ import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
 import {
-  normalizeGameName,
   PsnApiError,
   PsnApiService,
   PsnPlayedGame,
   PsnTrophySummary
 } from './psn-api.service'
 import { IGDBGame } from '../types/igdb'
+import { normalizeGameName } from '../utils/normalize-game-name'
 import {
   psnImportQueue,
   psnImportJobId,

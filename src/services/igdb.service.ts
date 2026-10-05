@@ -166,6 +166,8 @@ export class IGDBService {
   // — id 1 there is "Steam" (confirmed by querying that endpoint directly).
   static readonly STEAM_EXTERNAL_GAME_SOURCE = 1
   static readonly PSN_EXTERNAL_GAME_SOURCE = 36
+  static readonly XBOX_EXTERNAL_GAME_SOURCE = 11
+  static readonly XBOX_SEARCH_PLATFORM_IDS = [11, 12, 49, 169, 6]
   private static readonly EXTERNAL_GAMES_BATCH_SIZE = 500
 
   // `external_games` is a reverse multi-relation on `games` — it can't be
@@ -214,6 +216,18 @@ export class IGDBService {
     }
 
     return results
+  }
+
+  static async searchGamesByName(
+    name: string,
+    platformIds: number[]
+  ): Promise<IGDBGame[]> {
+    const term = name.replace(/[™®©"\\;]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!term) return []
+    return this.request(
+      'games',
+      `search "${term}"; fields id,name,alternative_names.name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,total_rating_count; where platforms = (${platformIds.join(',')}); limit 10;`
+    )
   }
 
   static async getGamesBySteamAppIds(

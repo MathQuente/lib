@@ -38,6 +38,8 @@ Table users {
   steamId String [unique]
   psnAccountId String [unique]
   psnOnlineId String
+  xboxXuid String [unique]
+  xboxGamertag String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]

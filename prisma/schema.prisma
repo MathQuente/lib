@@ -50,6 +50,8 @@ model User {
   steamId        String?        @unique @map("steam_id")
   psnAccountId   String?        @unique @map("psn_account_id")
   psnOnlineId    String?        @map("psn_online_id")
+  xboxXuid       String?        @unique @map("xbox_xuid")
+  xboxGamertag   String?        @map("xbox_gamertag")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @default(now()) @map("updated_at")
   userGames      UserGame[]

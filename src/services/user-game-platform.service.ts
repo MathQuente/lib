@@ -19,7 +19,7 @@ const STATUS_RANK: Record<number, number> = {
 
 export interface ImportedPlatformData {
   statusId: number
-  hoursPlayed: number
+  hoursPlayed?: number
   finished: boolean
   completedAt?: Date
 }

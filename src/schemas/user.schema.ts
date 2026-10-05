@@ -34,6 +34,7 @@ export const GetMeResponseSchema = z.object({
     totalHoursPlayed: z.number(),
     steamId: z.string().nullable(),
     psnOnlineId: z.string().nullable(),
+    xboxGamertag: z.string().nullable(),
     followersCount: z.number(),
     followingCount: z.number()
   })

@@ -5,12 +5,12 @@ import {
   getUserTrophiesForSpecificTitle
 } from 'psn-api'
 import {
-  normalizeGameName,
   parseIsoDurationToMinutes,
   PsnApiError,
   PsnApiService
 } from './psn-api.service'
 import { PsnAuthService } from './psn-auth.service'
+import { normalizeGameName } from '../utils/normalize-game-name'
 
 vi.mock('psn-api', () => ({
   getProfileFromUserName: vi.fn(),

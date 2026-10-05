@@ -12,6 +12,7 @@ export interface IGDBGame {
   genres?: { name: string }[]
   platforms?: { name: string }[]
   game_modes?: { name: string }[]
+  alternative_names?: { name: string }[]
   first_release_date?: number
   category?: number
   game_type?: number

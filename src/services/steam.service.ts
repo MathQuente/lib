@@ -18,6 +18,7 @@ import {
 import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { mapWithConcurrency } from '../utils/map-with-concurrency'
 
 const PLAYED_STATUS_ID = 1
 const PLAYING_STATUS_ID = 3
@@ -88,27 +89,6 @@ function hasSinglePlayerMode(game: IGDBGame): boolean {
   const modes = game.game_modes?.map(m => m.name.toLowerCase())
   if (!modes || modes.length === 0) return true
   return modes.includes('single player')
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let nextIndex = 0
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const current = nextIndex++
-      results[current] = await fn(items[current])
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker)
-  )
-  return results
 }
 
 export class SteamService {

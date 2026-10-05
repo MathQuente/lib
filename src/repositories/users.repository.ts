@@ -178,6 +178,8 @@ export class UserRepository {
         steamId: true,
         psnAccountId: true,
         psnOnlineId: true,
+        xboxXuid: true,
+        xboxGamertag: true,
         _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
     })
@@ -202,6 +204,20 @@ export class UserRepository {
         psnOnlineId: account?.onlineId ?? null
       },
       select: { psnAccountId: true, psnOnlineId: true }
+    })
+  }
+
+  async setXboxAccount(
+    userId: string,
+    account: { xuid: string; gamertag: string } | null
+  ) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        xboxXuid: account?.xuid ?? null,
+        xboxGamertag: account?.gamertag ?? null
+      },
+      select: { xboxXuid: true, xboxGamertag: true }
     })
   }
 
