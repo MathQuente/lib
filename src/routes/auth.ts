@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { AuthController } from '../controllers/auth.controller'
 import { AuthRepository } from '../repositories/auth.repository'
 import { AuthService } from '../services/auth.service'
@@ -9,6 +9,33 @@ import crypto from 'crypto'
 
 const OAUTH_STATE_TTL_SECONDS = 600
 const oauthStateKey = (state: string) => `oauth-state:${state}`
+const OAUTH_STATE_COOKIE = 'oauth_state'
+
+function setOAuthStateCookie(reply: FastifyReply, state: string) {
+  reply.setCookie(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: OAUTH_STATE_TTL_SECONDS
+  })
+}
+
+function matchesOAuthStateCookie(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  state: string
+): boolean {
+  const cookieState = request.cookies[OAUTH_STATE_COOKIE] ?? ''
+  reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/' })
+
+  const expected = Buffer.from(state)
+  const received = Buffer.from(cookieState)
+  return (
+    expected.length === received.length &&
+    crypto.timingSafeEqual(expected, received)
+  )
+}
 
 export async function authRoutes(app: FastifyInstance) {
   const authRepository = new AuthRepository()
@@ -74,6 +101,19 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => authController.resetPassword(request, reply)
   )
 
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/reset-password/validate',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.validateResetToken(request, reply)
+  )
+
   app
     .withTypeProvider<ZodTypeProvider>()
     .post('/refresh', async (request, reply) =>
@@ -99,6 +139,7 @@ export async function authRoutes(app: FastifyInstance) {
       // Gera state manualmente
       const state = crypto.randomBytes(16).toString('hex')
       await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
+      setOAuthStateCookie(reply, state)
 
       // Constrói a URL manualmente
       const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -149,6 +190,13 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
+    if (!matchesOAuthStateCookie(request, reply, stateFromQuery)) {
+      console.error('❌ State não pertence a este navegador')
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=invalid_state'
+      )
+    }
+
     const cachedState = await cacheRepository.get(oauthStateKey(stateFromQuery))
     if (!cachedState) {
       console.error('❌ State inválido ou expirado')
@@ -182,6 +230,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       const state = crypto.randomBytes(16).toString('hex')
       await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
+      setOAuthStateCookie(reply, state)
 
       const baseUrl = 'https://discord.com/api/oauth2/authorize'
       const params = new URLSearchParams({
@@ -222,6 +271,13 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (!stateFromQuery) {
       console.error('❌ State inválido')
+      return reply.redirect(
+        process.env.FRONTEND_URL + '/auth?error=invalid_state'
+      )
+    }
+
+    if (!matchesOAuthStateCookie(request, reply, stateFromQuery)) {
+      console.error('❌ State não pertence a este navegador')
       return reply.redirect(
         process.env.FRONTEND_URL + '/auth?error=invalid_state'
       )
