@@ -14,7 +14,7 @@ generator dbml {
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  tokenHash String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
   isValid   Boolean  @default(true)

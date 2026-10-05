@@ -4,7 +4,7 @@
 
 Table refresh_token {
   id String [pk]
-  token String [unique, not null]
+  tokenHash String [unique, not null]
   expiresAt DateTime [not null]
   createdAt DateTime [default: `now()`, not null]
   isValid Boolean [not null, default: true]

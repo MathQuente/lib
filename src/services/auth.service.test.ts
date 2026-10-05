@@ -21,7 +21,24 @@ function fakeAuthRepository(
   return { ...overrides } as unknown as AuthRepository
 }
 
-const fakeCacheRepository = {} as unknown as CacheRepository
+function fakeCache(stored: unknown = null) {
+  return {
+    get: vi.fn().mockResolvedValue(stored),
+    getdel: vi.fn().mockResolvedValue(stored),
+    set: vi.fn().mockResolvedValue(undefined),
+    setIfAbsent: vi.fn().mockResolvedValue(true),
+    increment: vi.fn().mockResolvedValue(1),
+    del: vi.fn().mockResolvedValue(undefined)
+  } as unknown as CacheRepository & {
+    get: ReturnType<typeof vi.fn>
+    getdel: ReturnType<typeof vi.fn>
+    set: ReturnType<typeof vi.fn>
+    increment: ReturnType<typeof vi.fn>
+    del: ReturnType<typeof vi.fn>
+  }
+}
+
+const fakeCacheRepository = fakeCache()
 
 describe('AuthService.validateUser', () => {
   it('throws ClientError when the user does not exist', async () => {
@@ -196,13 +213,7 @@ describe('AuthService.createUser', () => {
   })
 })
 
-function recordingCache(stored: unknown = null) {
-  return {
-    get: vi.fn().mockResolvedValue(stored),
-    set: vi.fn().mockResolvedValue(undefined),
-    del: vi.fn().mockResolvedValue(undefined)
-  } as unknown as CacheRepository & { set: ReturnType<typeof vi.fn> }
-}
+const recordingCache = fakeCache
 
 describe('AuthService.loginWithGoogle', () => {
   const profile = {
@@ -348,5 +359,151 @@ describe('AuthService.requestPasswordReset', () => {
       expect.any(Number)
     )
     vi.restoreAllMocks()
+  })
+})
+
+describe('AuthService.validateUser throttling', () => {
+  it('counts a failed login against the email', async () => {
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail: vi.fn().mockResolvedValue(null) }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(service.validateUser('A@a.com', 'wrong')).rejects.toMatchObject(
+      { statusCode: 400 }
+    )
+    expect(cache.increment).toHaveBeenCalledWith(
+      expect.stringMatching(/^login-failures:[0-9a-f]{64}$/),
+      expect.any(Number)
+    )
+  })
+
+  it('blocks the email after too many failures without checking the password', async () => {
+    const findByEmail = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      fakeCache(10)
+    )
+
+    await expect(
+      service.validateUser('a@a.com', 'correct-password')
+    ).rejects.toMatchObject({ statusCode: 429 })
+    expect(findByEmail).not.toHaveBeenCalled()
+  })
+
+  it('clears the failure count and marks a recent login on success', async () => {
+    const hashed = await bcrypt.hash('correct-password', 4)
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: '1', userName: 'x', password: hashed })
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await service.validateUser('a@a.com', 'correct-password')
+
+    expect(cache.del).toHaveBeenCalledWith(
+      expect.stringMatching(/^login-failures:/)
+    )
+    expect(cache.set).toHaveBeenCalledWith(
+      'recent-auth:1',
+      true,
+      expect.any(Number)
+    )
+  })
+})
+
+describe('AuthService password reset tokens', () => {
+  it('stores the reset token as a hash, never in clear', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const cache = fakeCache()
+    let sentUrl = ''
+    const emailService = {
+      sendPasswordResetEmail: vi.fn(async (_to: string, url: string) => {
+        sentUrl = url
+      })
+    } as unknown as EmailService
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
+      }),
+      fakeJwt(),
+      cache,
+      emailService
+    )
+
+    await service.requestPasswordReset('a@a.com')
+
+    const token = new URL(sentUrl).searchParams.get('token') as string
+    const resetCall = cache.set.mock.calls.find(([key]) =>
+      String(key).startsWith('password-reset:')
+    )
+    expect(resetCall?.[0]).toMatch(/^password-reset:[0-9a-f]{64}$/)
+    expect(resetCall?.[0]).not.toContain(token)
+    vi.restoreAllMocks()
+  })
+
+  it('stops sending after too many requests for the same email', async () => {
+    const cache = fakeCache()
+    cache.increment.mockResolvedValue(4)
+    const emailService = {
+      sendPasswordResetEmail: vi.fn()
+    } as unknown as EmailService
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
+      }),
+      fakeJwt(),
+      cache,
+      emailService
+    )
+
+    await service.requestPasswordReset('a@a.com')
+
+    expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled()
+  })
+
+  it('consumes the reset token atomically and rejects a reused one', async () => {
+    const cache = fakeCache(null)
+    const updatePassword = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({ updatePassword }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(
+      service.resetPassword('used-token', 'new-password-1')
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(cache.getdel).toHaveBeenCalledTimes(1)
+    expect(updatePassword).not.toHaveBeenCalled()
+  })
+})
+
+describe('AuthService.isPasswordResetTokenValid', () => {
+  it('reports a stored token as valid without consuming it', async () => {
+    const cache = fakeCache('user-1')
+    const service = new AuthService(fakeAuthRepository(), fakeJwt(), cache)
+
+    expect(await service.isPasswordResetTokenValid('token')).toBe(true)
+    expect(cache.getdel).not.toHaveBeenCalled()
+    expect(cache.del).not.toHaveBeenCalled()
+  })
+
+  it('reports an unknown or used token as invalid', async () => {
+    const service = new AuthService(
+      fakeAuthRepository(),
+      fakeJwt(),
+      fakeCache(null)
+    )
+
+    expect(await service.isPasswordResetTokenValid('token')).toBe(false)
   })
 })

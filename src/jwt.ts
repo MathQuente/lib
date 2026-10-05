@@ -3,11 +3,29 @@ import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
 import fastifyCors from '@fastify/cors'
 import { AuthRepository } from './repositories/auth.repository'
-import { AuthService, sessionsRevokedAtKey } from './services/auth.service'
+import {
+  AuthService,
+  revokedAccessTokenKey,
+  sessionsRevokedAtKey
+} from './services/auth.service'
 import { CacheRepository } from './repositories/cache.repository'
 
 const authRepository = new AuthRepository()
 const cacheRepository = new CacheRepository()
+
+async function isSessionRevoked(request: FastifyRequest): Promise<boolean> {
+  const accessToken = request.cookies.accessToken
+  if (!accessToken) return false
+
+  const revokedToken = await cacheRepository.get(
+    revokedAccessTokenKey(accessToken)
+  )
+  if (revokedToken !== null) return true
+
+  const { userId, iat } = request.user as { userId: string; iat?: number }
+  const revokedAt = await cacheRepository.get(sessionsRevokedAtKey(userId))
+  return typeof revokedAt === 'number' && (iat ?? 0) < revokedAt
+}
 
 export class Jwt {
   private static getSecret(): string {
@@ -57,33 +75,25 @@ export class Jwt {
         try {
           await request.jwtVerify()
 
-          const accessToken = request.cookies.accessToken
-          if (accessToken) {
-            try {
-              const isRevoked = await cacheRepository.get(
-                `revoked:${accessToken}`
-              )
-              if (isRevoked !== null) {
-                return response.status(401).send({ status: 'unauthorized' })
-              }
+          let revoked: boolean
+          try {
+            revoked = await isSessionRevoked(request)
+          } catch (revocationCheckError) {
+            console.error('Revocation check failed:', {
+              error:
+                revocationCheckError instanceof Error
+                  ? revocationCheckError.message
+                  : 'unknown error'
+            })
+            return response.status(503).send({ status: 'unavailable' })
+          }
 
-              const { userId, iat } = request.user as {
-                userId: string
-                iat?: number
-              }
-              const revokedAt = await cacheRepository.get(
-                sessionsRevokedAtKey(userId)
-              )
-              if (typeof revokedAt === 'number' && (iat ?? 0) < revokedAt) {
-                return response
-                  .clearCookie('accessToken', { path: '/' })
-                  .clearCookie('refreshToken', { path: '/' })
-                  .status(401)
-                  .send({ status: 'unauthorized' })
-              }
-            } catch (revocationCheckError) {
-              console.error('Revocation check failed:', revocationCheckError)
-            }
+          if (revoked) {
+            return response
+              .clearCookie('accessToken', { path: '/' })
+              .clearCookie('refreshToken', { path: '/' })
+              .status(401)
+              .send({ status: 'unauthorized' })
           }
         } catch (error) {
           const code = (error as { code?: string }).code
@@ -140,7 +150,14 @@ export class Jwt {
         await request.jwtVerify()
       } catch {
         // anonymous — proceed without request.user
+        return
       }
+
+      try {
+        if (!(await isSessionRevoked(request))) return
+      } catch {}
+
+      ;(request as { user?: unknown }).user = undefined
     })
   }
 

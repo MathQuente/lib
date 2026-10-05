@@ -1,5 +1,6 @@
 import { prisma } from '../database/db'
 import { CreateUserDTO } from '../dtos/user.dto'
+import { hashToken } from '../utils/hash-token'
 
 export class AuthRepository {
   async saveToken(token: string, userId: string, expiresAt: Date) {
@@ -14,7 +15,7 @@ export class AuthRepository {
       }),
       prisma.refreshToken.create({
         data: {
-          token: token,
+          tokenHash: hashToken(token),
           userId: userId,
           expiresAt: expiresAt,
           isValid: true
@@ -127,7 +128,7 @@ export class AuthRepository {
 
   async invalidateToken(token: string) {
     await prisma.refreshToken.updateMany({
-      where: { token: token },
+      where: { tokenHash: hashToken(token) },
       data: { isValid: false }
     })
   }
@@ -139,7 +140,7 @@ export class AuthRepository {
   async findToken(token: string) {
     return prisma.refreshToken.findUnique({
       where: {
-        token
+        tokenHash: hashToken(token)
       }
     })
   }

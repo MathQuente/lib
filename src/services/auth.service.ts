@@ -6,9 +6,33 @@ import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
 import { CreateUserDTO } from '../dtos/user.dto'
 import { generateFromEmail } from 'unique-username-generator'
+import { hashToken } from '../utils/hash-token'
+import { RecentAuthService } from './recent-auth.service'
+
+const BCRYPT_COST = 12
 
 const PASSWORD_RESET_TTL_SECONDS = 60 * 60
-const passwordResetKey = (token: string) => `password-reset:${token}`
+const passwordResetKey = (token: string) =>
+  `password-reset:${hashToken(token)}`
+
+const MAX_RESET_REQUESTS_PER_HOUR = 3
+const RESET_REQUESTS_WINDOW_SECONDS = 60 * 60
+const passwordResetRequestsKey = (email: string) =>
+  `password-reset-requests:${hashToken(email.toLowerCase())}`
+
+const MAX_LOGIN_FAILURES = 10
+const LOGIN_FAILURES_WINDOW_SECONDS = 15 * 60
+const loginFailuresKey = (email: string) =>
+  `login-failures:${hashToken(email.toLowerCase())}`
+
+export const revokedAccessTokenKey = (accessToken: string) =>
+  `revoked:${hashToken(accessToken)}`
+
+let dummyPasswordHash: Promise<string> | undefined
+function getDummyPasswordHash() {
+  dummyPasswordHash ??= bcrypt.hash(crypto.randomUUID(), BCRYPT_COST)
+  return dummyPasswordHash
+}
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 15
 export const sessionsRevokedAtKey = (userId: string) =>
@@ -22,7 +46,10 @@ export class AuthService {
     private authRepository: AuthRepository,
     private jwt: JWT,
     private cacheRepository: CacheRepository,
-    private emailService: EmailService = new EmailService()
+    private emailService: EmailService = new EmailService(),
+    private recentAuthService: RecentAuthService = new RecentAuthService(
+      cacheRepository
+    )
   ) {}
 
   async generateTokens(userId: string) {
@@ -110,7 +137,7 @@ export class AuthService {
       throw new ClientError('Este email já está em uso.')
     }
 
-    const passwordAfterHash = await bcrypt.hash(data.password, 10)
+    const passwordAfterHash = await bcrypt.hash(data.password, BCRYPT_COST)
     const userNameGenerated = generateFromEmail(data.email, 4)
 
     const user = await this.authRepository.createUser({
@@ -120,6 +147,7 @@ export class AuthService {
     })
 
     const { accessToken, refreshToken } = await this.generateTokens(user.id)
+    await this.recentAuthService.mark(user.id)
 
     return {
       accessToken,
@@ -131,7 +159,7 @@ export class AuthService {
   }
 
   private async takeOverUnverifiedAccount(userId: string) {
-    const hashedPassword = await bcrypt.hash(crypto.randomUUID(), 10)
+    const hashedPassword = await bcrypt.hash(crypto.randomUUID(), BCRYPT_COST)
     await this.authRepository.updatePassword(userId, hashedPassword)
     await this.revokeAllSessions(userId)
   }
@@ -180,7 +208,7 @@ export class AuthService {
         const randomPassword = Array.from(array, byte =>
           byte.toString(16).padStart(2, '0')
         ).join('')
-        const hashedPassword = await bcrypt.hash(randomPassword, 10)
+        const hashedPassword = await bcrypt.hash(randomPassword, BCRYPT_COST)
 
         const created = await this.authRepository.createUserWithGoogle({
           email: profile.email,
@@ -202,6 +230,7 @@ export class AuthService {
     const { accessToken, refreshToken, expiresAt } = await this.generateTokens(
       user.id
     )
+    await this.recentAuthService.mark(user.id)
 
     return { user, accessToken, refreshToken, expiresAt }
   }
@@ -235,7 +264,10 @@ export class AuthService {
           profilePicture
         )
       } else {
-        const hashedPassword = await bcrypt.hash(crypto.randomUUID(), 10)
+        const hashedPassword = await bcrypt.hash(
+          crypto.randomUUID(),
+          BCRYPT_COST
+        )
         user = await this.authRepository.createWithDiscord({
           email: discordUser.email,
           userName: `${discordUser.username}`,
@@ -246,17 +278,38 @@ export class AuthService {
       }
     }
 
-    return this.generateTokens(user.id)
+    const tokens = await this.generateTokens(user.id)
+    await this.recentAuthService.mark(user.id)
+    return tokens
   }
 
   async validateUser(email: string, password: string) {
+    const failuresKey = loginFailuresKey(email)
+    const failures = await this.cacheRepository.get(failuresKey)
+    if (typeof failures === 'number' && failures >= MAX_LOGIN_FAILURES) {
+      throw new ClientError(
+        'Muitas tentativas de login. Tente novamente mais tarde.',
+        429
+      )
+    }
+
     const user = await this.authRepository.findByEmail(email, true)
 
-    const infoIsMatch = user && (await bcrypt.compare(password, user.password))
+    const infoIsMatch = await bcrypt.compare(
+      password,
+      user?.password ?? (await getDummyPasswordHash())
+    )
 
-    if (!infoIsMatch) {
+    if (!user || !infoIsMatch) {
+      await this.cacheRepository.increment(
+        failuresKey,
+        LOGIN_FAILURES_WINDOW_SECONDS
+      )
       throw new ClientError('Email ou senha incorretos.')
     }
+
+    await this.cacheRepository.del(failuresKey)
+    await this.recentAuthService.mark(user.id)
 
     return {
       user: {
@@ -270,6 +323,12 @@ export class AuthService {
     const user = await this.authRepository.findByEmail(email)
 
     if (!user) return
+
+    const requests = await this.cacheRepository.increment(
+      passwordResetRequestsKey(email),
+      RESET_REQUESTS_WINDOW_SECONDS
+    )
+    if (requests > MAX_RESET_REQUESTS_PER_HOUR) return
 
     const array = new Uint8Array(32)
     crypto.getRandomValues(array)
@@ -295,8 +354,12 @@ export class AuthService {
     }
   }
 
+  async isPasswordResetTokenValid(token: string): Promise<boolean> {
+    return (await this.cacheRepository.get(passwordResetKey(token))) !== null
+  }
+
   async resetPassword(token: string, newPassword: string) {
-    const userId = (await this.cacheRepository.get(
+    const userId = (await this.cacheRepository.getdel(
       passwordResetKey(token)
     )) as string | null
 
@@ -304,9 +367,8 @@ export class AuthService {
       throw new ClientError('Link de redefinição inválido ou expirado.', 400)
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10)
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST)
     await this.authRepository.updatePassword(userId, hashedPassword)
-    await this.cacheRepository.del(passwordResetKey(token))
     await this.revokeAllSessions(userId)
   }
 
@@ -322,7 +384,7 @@ export class AuthService {
 
         if (ttlSeconds > 0) {
           await this.cacheRepository.set(
-            `revoked:${accessToken}`,
+            revokedAccessTokenKey(accessToken),
             true,
             ttlSeconds
           )

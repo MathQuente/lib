@@ -1,6 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthService } from '../services/auth.service'
-import * as UserSchema from '../schemas/user.schema'
 import * as AuthSchema from '../schemas/auth.schema'
 import { ClientError } from '../errors/client-error'
 
@@ -45,7 +44,7 @@ export class AuthController {
   }
 
   async createUser(request: FastifyRequest, reply: FastifyReply) {
-    const data = UserSchema.UserBodySchema.parse(request.body)
+    const data = AuthSchema.RegisterBodySchema.parse(request.body)
 
     const { accessToken, refreshToken, user } =
       await this.authService.createUser(data)
@@ -54,7 +53,7 @@ export class AuthController {
   }
 
   async loginHandler(request: FastifyRequest, reply: FastifyReply) {
-    const { email, password } = UserSchema.UserBodySchema.parse(request.body)
+    const { email, password } = AuthSchema.LoginBodySchema.parse(request.body)
 
     const { user } = await this.authService.validateUser(email, password)
 
@@ -74,6 +73,14 @@ export class AuthController {
       message:
         'Se existir uma conta com esse email, um link de redefinição foi enviado.'
     })
+  }
+
+  async validateResetToken(request: FastifyRequest, reply: FastifyReply) {
+    const { token } = AuthSchema.ResetTokenBodySchema.parse(request.body)
+
+    const valid = await this.authService.isPasswordResetTokenValid(token)
+
+    return reply.status(200).send({ valid })
   }
 
   async resetPassword(request: FastifyRequest, reply: FastifyReply) {
