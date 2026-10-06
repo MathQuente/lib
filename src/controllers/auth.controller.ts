@@ -2,31 +2,10 @@ import { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthService } from '../services/auth.service'
 import * as AuthSchema from '../schemas/auth.schema'
 import { ClientError } from '../errors/client-error'
+import { clearAuthCookies, setAuthCookies } from '../utils/auth-cookies'
 
 export class AuthController {
   constructor(private authService: AuthService) {}
-
-  private setAuthCookies(
-    reply: FastifyReply,
-    accessToken: string,
-    refreshToken: string
-  ) {
-    return reply
-      .setCookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 15
-      })
-      .setCookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7
-      })
-  }
 
   private redirectWithOAuthError(
     reply: FastifyReply,
@@ -49,7 +28,7 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.createUser(data)
 
-    this.setAuthCookies(reply, accessToken, refreshToken).send({ user })
+    setAuthCookies(reply, accessToken, refreshToken).send({ user })
   }
 
   async loginHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -61,7 +40,7 @@ export class AuthController {
       user.id
     )
 
-    this.setAuthCookies(reply, accessToken, refreshToken).send({ user })
+    setAuthCookies(reply, accessToken, refreshToken).send({ user })
   }
 
   async forgotPassword(request: FastifyRequest, reply: FastifyReply) {
@@ -104,22 +83,9 @@ export class AuthController {
       expiresAt
     } = await this.authService.refreshTokens(refreshToken)
 
-    reply
-      .setCookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 15
-      })
-      .setCookie('refreshToken', newRefreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        expires: expiresAt
-      })
-      .send({ message: 'Tokens atualizados' })
+    setAuthCookies(reply, accessToken, newRefreshToken, expiresAt).send({
+      message: 'Tokens atualizados'
+    })
   }
 
   async logoutHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -130,10 +96,7 @@ export class AuthController {
       await this.authService.logout(refreshToken, accessToken)
     }
 
-    reply
-      .clearCookie('accessToken', { path: '/' })
-      .clearCookie('refreshToken', { path: '/' })
-      .send({ message: 'Sessão encerrada com sucesso.' })
+    clearAuthCookies(reply).send({ message: 'Sessão encerrada com sucesso.' })
   }
 
   async googleCallback(request: FastifyRequest, reply: FastifyReply) {
@@ -200,7 +163,7 @@ export class AuthController {
       const { accessToken, refreshToken } =
         await this.authService.loginWithGoogle(profile)
 
-      this.setAuthCookies(reply, accessToken, refreshToken).redirect(
+      setAuthCookies(reply, accessToken, refreshToken).redirect(
         process.env.FRONTEND_URL + '/'
       )
     } catch (error) {
@@ -267,7 +230,7 @@ export class AuthController {
       const { accessToken, refreshToken } =
         await this.authService.loginWithDiscord(profile)
 
-      this.setAuthCookies(reply, accessToken, refreshToken).redirect(
+      setAuthCookies(reply, accessToken, refreshToken).redirect(
         process.env.FRONTEND_URL + '/'
       )
     } catch (error) {

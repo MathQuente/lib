@@ -9,6 +9,9 @@ import {
   sessionsRevokedAtKey
 } from './services/auth.service'
 import { CacheRepository } from './repositories/cache.repository'
+import { clearAuthCookies, setAccessTokenCookie } from './utils/auth-cookies'
+
+const MIN_SECRET_LENGTH = 32
 
 const authRepository = new AuthRepository()
 const cacheRepository = new CacheRepository()
@@ -32,6 +35,11 @@ export class Jwt {
     const secret = process.env.SECRET_JWT_KEY
     if (!secret) {
       throw new Error('SECRET_JWT_KEY environment variable is required')
+    }
+    if (secret.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `SECRET_JWT_KEY must have at least ${MIN_SECRET_LENGTH} characters`
+      )
     }
     return secret
   }
@@ -64,7 +72,8 @@ export class Jwt {
 
     fastify.register(fastifyCors, {
       origin: process.env.FRONTEND_URL,
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
     })
   }
 
@@ -74,6 +83,10 @@ export class Jwt {
       async (request: FastifyRequest, response: FastifyReply) => {
         try {
           await request.jwtVerify()
+
+          if (request.user.tokenType === 'refresh') {
+            return response.status(401).send({ status: 'unauthorized' })
+          }
 
           let revoked: boolean
           try {
@@ -89,9 +102,7 @@ export class Jwt {
           }
 
           if (revoked) {
-            return response
-              .clearCookie('accessToken', { path: '/' })
-              .clearCookie('refreshToken', { path: '/' })
+            return clearAuthCookies(response)
               .status(401)
               .send({ status: 'unauthorized' })
           }
@@ -114,27 +125,28 @@ export class Jwt {
                 await authService.isRefreshTokenActive(refreshToken)
 
               if (!userId) {
-                throw new Error('Refresh token is not active')
+                return clearAuthCookies(response)
+                  .status(401)
+                  .send({ status: 'unauthorized' })
               }
 
-              const newAccessToken = fastify.jwt.sign({ userId })
-
-              response.setCookie('accessToken', newAccessToken, {
-                httpOnly: true,
-                secure: true,
-                sameSite: 'lax',
-                path: '/',
-                maxAge: 60 * 15
+              const newAccessToken = fastify.jwt.sign({
+                userId,
+                tokenType: 'access'
               })
+
+              setAccessTokenCookie(response, newAccessToken)
 
               request.cookies.accessToken = newAccessToken
 
               await request.jwtVerify()
             } catch (error) {
-              console.error('Refresh Error:', error)
-              response.clearCookie('accessToken', { path: '/' })
-              response.clearCookie('refreshToken', { path: '/' })
-              return response.status(401).send({ status: 'unauthorized' })
+              console.error('Refresh Error:', {
+                error: error instanceof Error ? error.message : 'unknown error'
+              })
+              return clearAuthCookies(response)
+                .status(401)
+                .send({ status: 'unauthorized' })
             }
           } else {
             return response.status(401).send({ status: 'unauthorized' })
@@ -154,7 +166,8 @@ export class Jwt {
       }
 
       try {
-        if (!(await isSessionRevoked(request))) return
+        const isAccessToken = request.user.tokenType !== 'refresh'
+        if (isAccessToken && !(await isSessionRevoked(request))) return
       } catch {}
 
       ;(request as { user?: unknown }).user = undefined
@@ -162,16 +175,6 @@ export class Jwt {
   }
 
   public static registerCookiePlugin = (fastify: FastifyInstance) => {
-    fastify.register(fastifyCookie, {
-      hook: 'onRequest',
-      parseOptions: {
-        path: '/',
-        httpOnly: false,
-        maxAge: 60 * 60 * 24,
-        secure: true,
-        sameSite: 'none',
-        signed: false
-      }
-    })
+    fastify.register(fastifyCookie, { hook: 'onRequest' })
   }
 }

@@ -6,6 +6,7 @@ import { CacheRepository } from '../repositories/cache.repository'
 import { EmailService } from '../services/email.service'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
+import { BASE_COOKIE_OPTIONS } from '../utils/auth-cookies'
 
 const OAUTH_STATE_TTL_SECONDS = 600
 const oauthStateKey = (state: string) => `oauth-state:${state}`
@@ -13,10 +14,7 @@ const OAUTH_STATE_COOKIE = 'oauth_state'
 
 function setOAuthStateCookie(reply: FastifyReply, state: string) {
   reply.setCookie(OAUTH_STATE_COOKIE, state, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    path: '/',
+    ...BASE_COOKIE_OPTIONS,
     maxAge: OAUTH_STATE_TTL_SECONDS
   })
 }
@@ -27,7 +25,7 @@ function matchesOAuthStateCookie(
   state: string
 ): boolean {
   const cookieState = request.cookies[OAUTH_STATE_COOKIE] ?? ''
-  reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/' })
+  reply.clearCookie(OAUTH_STATE_COOKIE, BASE_COOKIE_OPTIONS)
 
   const expected = Buffer.from(state)
   const received = Buffer.from(cookieState)

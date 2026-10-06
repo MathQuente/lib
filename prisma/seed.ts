@@ -1,8 +1,9 @@
 import { prisma } from '../src/database/db'
 import bcrypt from 'bcrypt'
+import { getSeedPassword } from '../src/utils/seed-password'
 
 async function main() {
-  const passwordHash = await bcrypt.hash('123456', 10)
+  const passwordHash = await bcrypt.hash(getSeedPassword(), 12)
   const user = await prisma.user.upsert({
     where: { email: 'test@gmail.com' },
     update: {

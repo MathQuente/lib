@@ -53,9 +53,15 @@ export class AuthService {
   ) {}
 
   async generateTokens(userId: string) {
-    const accessToken = this.jwt.sign({ userId }, { expiresIn: '15m' })
+    const accessToken = this.jwt.sign(
+      { userId, tokenType: 'access' },
+      { expiresIn: '15m' }
+    )
 
-    const refreshToken = this.jwt.sign({ userId }, { expiresIn: '7d' })
+    const refreshToken = this.jwt.sign(
+      { userId, tokenType: 'refresh' },
+      { expiresIn: '7d' }
+    )
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
@@ -78,7 +84,13 @@ export class AuthService {
       }
 
       // Depois verifica a assinatura JWT
-      const decoded = this.jwt.verify(refreshToken) as { userId: string }
+      const decoded = this.jwt.verify(refreshToken) as {
+        userId: string
+        tokenType?: string
+      }
+      if (decoded.tokenType === 'access') {
+        throw new ClientError('Sessão inválida.', 401)
+      }
 
       // Remove o token usado (rotação de tokens)
       await this.authRepository.invalidateToken(refreshToken)
@@ -111,8 +123,11 @@ export class AuthService {
     }
 
     try {
-      const decoded = this.jwt.verify(refreshToken) as { userId: string }
-      return decoded.userId
+      const decoded = this.jwt.verify(refreshToken) as {
+        userId: string
+        tokenType?: string
+      }
+      return decoded.tokenType === 'access' ? null : decoded.userId
     } catch {
       return null
     }

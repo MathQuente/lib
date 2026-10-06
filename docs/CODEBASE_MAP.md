@@ -220,7 +220,7 @@ Exception: OAuth callback routes self-handle errors (redirect to frontend with `
 3. **In-memory IGDB token cache** (`IGDBService` static fields) is process-local, not Redis — the one caching layer that didn't migrate when everything else moved to Redis (OAuth CSRF state did migrate).
 4. **`tsconfig.json`'s `include`** references a root `fastify.d.ts` that doesn't exist (actual file: `src/types/fastify.d.ts`) — harmless since `src` is already included, but a stale/misleading entry.
 5. **No `build`/`start` script** — dev-only via `tsx watch`; no compiled-`dist` pipeline defined despite `dist` being eslint-ignored.
-6. **`test-igdb.mjs`** at repo root is an ad-hoc standalone script, not wired into npm scripts — manual IGDB OAuth sanity-check tool, not part of the app.
+6. **`test-igdb.mjs`** is a local-only, git-ignored ad-hoc script for checking IGDB OAuth by hand; it is not part of the app or the repository.
 7. **Rating a game auto-adds it to the library as PLAYED** if not already owned (`RatingService.createRating`) — rating implies ownership+completion in this app's model; not obvious from the endpoint name alone.
 8. **`UserGameStatusService.itemsPerPage`** field is dead/unused — no pagination logic references it.
 9. **Manual OAuth flow bypasses `@fastify/oauth2`'s own helpers** for both Google and Discord (hand-rolled state/CSRF via Redis, manual authorize URL, manual fetch fallback for token exchange) — the plugin is registered but only partially used (`getNewAccessTokenUsingRefreshToken` is the one plugin method actually called, as a first attempt before the manual fallback).

@@ -1,8 +1,9 @@
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
 import { prisma } from '../src/database/db'
+import { getSeedPassword } from '../src/utils/seed-password'
 
-const MATHQUENTE_ID = '6642b677-b7da-4f84-818a-2776174444b9'
+const FOLLOW_USER_ID = process.env.SEED_FOLLOW_USER_ID
 const PLAYED = 1
 const PLAYING = 3
 const BACKLOG = 4
@@ -32,7 +33,7 @@ const PLANS: TestUserPlan[] = [
 ]
 
 async function main() {
-  const passwordHash = await bcrypt.hash('123456', 10)
+  const passwordHash = await bcrypt.hash(getSeedPassword(), 12)
 
   const games = await prisma.gameCache.findMany({
     take: 200,
@@ -57,7 +58,7 @@ async function main() {
   for (const plan of PLANS) {
     const user = await prisma.user.upsert({
       where: { email: plan.email },
-      update: { userName: plan.userName },
+      update: { userName: plan.userName, password: passwordHash },
       create: {
         email: plan.email,
         userName: plan.userName,
@@ -114,19 +115,21 @@ async function main() {
       }
     }
 
-    await prisma.follow.upsert({
-      where: {
-        followerId_followingId: {
-          followerId: user.id,
-          followingId: MATHQUENTE_ID
-        }
-      },
-      update: {},
-      create: { followerId: user.id, followingId: MATHQUENTE_ID }
-    })
+    if (FOLLOW_USER_ID) {
+      await prisma.follow.upsert({
+        where: {
+          followerId_followingId: {
+            followerId: user.id,
+            followingId: FOLLOW_USER_ID
+          }
+        },
+        update: {},
+        create: { followerId: user.id, followingId: FOLLOW_USER_ID }
+      })
+    }
   }
 
-  console.log('\nDone. Login password for all test users: 123456')
+  console.log('\nDone. All test users share the seed password.')
 }
 
 main()

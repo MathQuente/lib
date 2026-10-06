@@ -371,9 +371,9 @@ describe('AuthService.validateUser throttling', () => {
       cache
     )
 
-    await expect(service.validateUser('A@a.com', 'wrong')).rejects.toMatchObject(
-      { statusCode: 400 }
-    )
+    await expect(
+      service.validateUser('A@a.com', 'wrong')
+    ).rejects.toMatchObject({ statusCode: 400 })
     expect(cache.increment).toHaveBeenCalledWith(
       expect.stringMatching(/^login-failures:[0-9a-f]{64}$/),
       expect.any(Number)
@@ -432,7 +432,9 @@ describe('AuthService password reset tokens', () => {
     } as unknown as EmailService
     const service = new AuthService(
       fakeAuthRepository({
-        findByEmail: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
       }),
       fakeJwt(),
       cache,
@@ -458,7 +460,9 @@ describe('AuthService password reset tokens', () => {
     } as unknown as EmailService
     const service = new AuthService(
       fakeAuthRepository({
-        findByEmail: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
       }),
       fakeJwt(),
       cache,
@@ -505,5 +509,62 @@ describe('AuthService.isPasswordResetTokenValid', () => {
     )
 
     expect(await service.isPasswordResetTokenValid('token')).toBe(false)
+  })
+})
+
+describe('AuthService token types', () => {
+  const activeToken = {
+    isValid: true,
+    expiresAt: new Date(Date.now() + 60_000)
+  }
+
+  it('signs the access and refresh tokens with different types', async () => {
+    const sign = vi.fn(() => 'signed-token')
+    const service = new AuthService(
+      fakeAuthRepository({ saveToken: vi.fn() }),
+      fakeJwt({ sign } as Partial<JWT>),
+      fakeCache()
+    )
+
+    await service.generateTokens('user-1')
+
+    expect(sign).toHaveBeenCalledWith(
+      { userId: 'user-1', tokenType: 'access' },
+      expect.anything()
+    )
+    expect(sign).toHaveBeenCalledWith(
+      { userId: 'user-1', tokenType: 'refresh' },
+      expect.anything()
+    )
+  })
+
+  it('does not accept an access token as a refresh token', async () => {
+    const invalidateToken = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findToken: vi.fn().mockResolvedValue(activeToken),
+        invalidateToken
+      }),
+      fakeJwt({
+        verify: vi.fn(() => ({ userId: 'user-1', tokenType: 'access' }))
+      } as Partial<JWT>),
+      fakeCache()
+    )
+
+    await expect(
+      service.validateRefreshToken('some-token')
+    ).rejects.toMatchObject({ statusCode: 401 })
+    expect(await service.isRefreshTokenActive('some-token')).toBeNull()
+    expect(invalidateToken).not.toHaveBeenCalled()
+  })
+
+  it('still accepts a refresh token issued before token types existed', async () => {
+    const service = new AuthService(
+      fakeAuthRepository({ findToken: vi.fn().mockResolvedValue(activeToken) }),
+      fakeJwt({ verify: vi.fn(() => ({ userId: 'user-1' })) } as Partial<JWT>),
+      fakeCache()
+    )
+
+    expect(await service.isRefreshTokenActive('some-token')).toBe('user-1')
   })
 })
