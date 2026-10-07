@@ -550,30 +550,11 @@ export class UserService {
 
     const userGames = await this.userRepository.findManyGamesOfUser({ userId })
 
-    const playingIds = userGames
-      .filter(ug => ug.status === Status.PLAYING)
-      .map(ug => ug.igdbId)
-
     const backlogIds = userGames
       .filter(ug => ug.status === Status.BACKLOG)
       .map(ug => ug.igdbId)
 
     const ownedIds = new Set(userGames.map(ug => ug.igdbId))
-
-    if (playingIds.length > 0) {
-      const pickedId = playingIds[randomInt(playingIds.length)]
-      const game = await IGDBService.getGameById(pickedId)
-      return {
-        game: game
-          ? {
-              igdbId: game.id,
-              name: game.name,
-              coverUrl: IGDBService.formatCoverUrl(game.cover?.url)
-            }
-          : null,
-        message: 'Por que não terminar o que já começou?'
-      }
-    }
 
     if (backlogIds.length > 0) {
       const pickedId = backlogIds[randomInt(backlogIds.length)]
