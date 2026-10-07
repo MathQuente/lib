@@ -18,6 +18,7 @@ const EDIT_BY_PLATFORM_MESSAGE =
 
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
+  private readonly USER_GAMES_PER_PAGE = 40
 
   constructor(
     private userRepository: UserRepository,
@@ -174,8 +175,8 @@ export class UserService {
       query,
       sortBy,
       sortOrder,
-      skip: filter ? pageIndex * this.ITEMS_PER_PAGE : undefined,
-      take: filter ? this.ITEMS_PER_PAGE : undefined
+      skip: filter ? pageIndex * this.USER_GAMES_PER_PAGE : undefined,
+      take: filter ? this.USER_GAMES_PER_PAGE : undefined
     })
 
     const enriched = await this.fillMissingGameCacheEntries(rows)
