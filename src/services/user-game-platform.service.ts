@@ -19,8 +19,10 @@ const STATUS_RANK: Record<number, number> = {
 
 export interface ImportedPlatformData {
   statusId: number
+  activityStatusId: number
   hoursPlayed?: number
   finished: boolean
+  confirmedFinished: boolean
   completedAt?: Date
 }
 
@@ -179,6 +181,7 @@ export class UserGamePlatformService {
       userId
     )
     const isNew = !userGame
+    const countsAsCompletion = isNew ? data.finished : data.confirmedFinished
 
     if (!userGame) {
       await this.userRepository.addGameToUserLibrary({
@@ -189,11 +192,20 @@ export class UserGamePlatformService {
       })
       await this.userRepository.createUserGameStats(userId, igdbId, 0)
       userGame = await this.requireUserGame(igdbId, userId)
-    } else if (
-      (STATUS_RANK[data.statusId] ?? 0) >
-      (STATUS_RANK[userGame.userGamesStatusId] ?? 0)
-    ) {
-      await this.userRepository.updateGameStatus(igdbId, userId, data.statusId)
+    } else {
+      const targetStatusId = data.confirmedFinished
+        ? PLAYED_STATUS_ID
+        : data.activityStatusId
+      if (
+        (STATUS_RANK[targetStatusId] ?? 0) >
+        (STATUS_RANK[userGame.userGamesStatusId] ?? 0)
+      ) {
+        await this.userRepository.updateGameStatus(
+          igdbId,
+          userId,
+          targetStatusId
+        )
+      }
     }
 
     const existing = userGame.platforms.find(p => p.platform === platform)
@@ -208,12 +220,12 @@ export class UserGamePlatformService {
 
     await this.platformRepository.savePlatform(userGame.id, platform, {
       hoursPlayed: data.hoursPlayed,
-      completions: data.finished
+      completions: countsAsCompletion
         ? Math.max(base.completions ?? 0, 1)
         : (base.completions ?? 0),
       completedAt:
         base.completedAt ??
-        (data.finished ? (data.completedAt ?? new Date()) : null)
+        (countsAsCompletion ? (data.completedAt ?? new Date()) : null)
     })
 
     return isNew ? 'imported' : 'updated'

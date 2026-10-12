@@ -174,8 +174,12 @@ function completionDateFrom(
 
 const BASE_GAME_GAMERSCORE = 1000
 
+function isConfirmedByProgress(title: XboxTitle) {
+  return title.achievementProgress >= 100
+}
+
 function looksFinished(title: XboxTitle, igdbGame: IGDBGame): boolean {
-  if (title.achievementProgress >= 100) return true
+  if (isConfirmedByProgress(title)) return true
   if (!canInferCompletion(igdbGame)) return false
 
   const earned = title.achievementsEarned
@@ -354,11 +358,9 @@ export class XboxService {
         !!lastPlayedAt &&
         now - lastPlayedAt.getTime() <= RECENT_PLAY_THRESHOLD_MS
 
-      const statusId = isFinished
-        ? PLAYED_STATUS_ID
-        : isRecent
-          ? PLAYING_STATUS_ID
-          : BACKLOG_STATUS_ID
+      const activityStatusId = isRecent ? PLAYING_STATUS_ID : BACKLOG_STATUS_ID
+      const statusId = isFinished ? PLAYED_STATUS_ID : activityStatusId
+      const confirmedFinished = isConfirmedByProgress(mostCompleted)
 
       await this.gameCacheService.cacheMany([igdbGame])
       const outcome = await this.userGamePlatformService.importPlatform(
@@ -367,11 +369,13 @@ export class XboxService {
         'XBOX',
         {
           statusId,
+          activityStatusId,
           hoursPlayed:
             minutes.length > 0
               ? Math.round((minutes.reduce((a, b) => a + b, 0) / 60) * 100) / 100
               : undefined,
           finished: isFinished,
+          confirmedFinished,
           completedAt: isFinished
             ? (completedAtByTitleId.get(mostCompleted.titleId) ??
               mostCompleted.lastPlayedAt ??

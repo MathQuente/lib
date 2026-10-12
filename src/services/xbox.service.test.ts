@@ -846,6 +846,66 @@ describe('XboxService.runImport', () => {
     )
   })
 
+  it.each([
+    [
+      'most achievements without all of them',
+      {
+        achievementProgress: 90,
+        achievementsEarned: 18,
+        achievementsTotal: 20
+      },
+      3
+    ],
+    [
+      'every achievement',
+      {
+        achievementProgress: 100,
+        achievementsEarned: 20,
+        achievementsTotal: 20
+      },
+      1
+    ]
+  ])(
+    'for a title already in the library, %s decides the upgrade',
+    async (_label, progress, expectedStatusId) => {
+      const xboxApi = fakeXboxApi({
+        getTitleHistory: vi
+          .fn()
+          .mockResolvedValue([
+            title({ ...progress, lastPlayedAt: new Date(Date.now() - DAY_MS) })
+          ]),
+        resolveProductIds: vi
+          .fn()
+          .mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+      })
+      mockExternal([['9AAA', 10]])
+      const updateGameStatus = vi.fn().mockResolvedValue(null)
+      const userRepository = fakeUserRepository({
+        findUserGame: vi
+          .fn()
+          .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } }),
+        updateGameStatus
+      })
+      const service = makeService(userRepository, xboxApi)
+
+      await service.runImport('user-1')
+
+      expect(updateGameStatus).toHaveBeenCalledTimes(1)
+      expect(updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        expectedStatusId
+      )
+      expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-10',
+        'XBOX',
+        expect.objectContaining({
+          completions: expectedStatusId === 1 ? 1 : 0
+        })
+      )
+    }
+  )
+
   it('marks a title played in the last 14 days as playing', async () => {
     const xboxApi = fakeXboxApi({
       getTitleHistory: vi

@@ -211,8 +211,10 @@ describe('UserGamePlatformService.importPlatform', () => {
 
     const outcome = await service.importPlatform('user-1', 10, 'STEAM', {
       statusId: 3,
+      activityStatusId: 3,
       hoursPlayed: 7,
-      finished: false
+      finished: false,
+      confirmedFinished: false
     })
 
     expect(outcome).toBe('imported')
@@ -230,8 +232,10 @@ describe('UserGamePlatformService.importPlatform', () => {
     const upgrade = setup(userGame({ statusId: 4 }))
     await upgrade.service.importPlatform('user-1', 10, 'STEAM', {
       statusId: 1,
+      activityStatusId: 3,
       hoursPlayed: 1,
-      finished: true
+      finished: true,
+      confirmedFinished: true
     })
     expect(upgrade.userRepository.updateGameStatus).toHaveBeenCalledWith(
       10,
@@ -244,7 +248,13 @@ describe('UserGamePlatformService.importPlatform', () => {
       'user-1',
       10,
       'STEAM',
-      { statusId: 4, hoursPlayed: 1, finished: false }
+      {
+        statusId: 4,
+        activityStatusId: 4,
+        hoursPlayed: 1,
+        finished: false,
+        confirmedFinished: false
+      }
     )
     expect(outcome).toBe('updated')
     expect(downgrade.userRepository.updateGameStatus).not.toHaveBeenCalled()
@@ -268,8 +278,10 @@ describe('UserGamePlatformService.importPlatform', () => {
 
     await service.importPlatform('user-1', 10, 'STEAM', {
       statusId: 1,
+      activityStatusId: 3,
       hoursPlayed: 25,
       finished: true,
+      confirmedFinished: true,
       completedAt: new Date('2024-01-01T00:00:00Z')
     })
 
@@ -284,13 +296,20 @@ describe('UserGamePlatformService.importPlatform', () => {
   it('replaces legacy manual hours but keeps legacy completion data on the first platform', async () => {
     const legacyDate = new Date('2020-02-02T00:00:00Z')
     const { service, platformRepository } = setup(
-      userGame({ statusId: 1, completedAt: legacyDate, hours: 40, completions: 2 })
+      userGame({
+        statusId: 1,
+        completedAt: legacyDate,
+        hours: 40,
+        completions: 2
+      })
     )
 
     await service.importPlatform('user-1', 10, 'PLAYSTATION', {
       statusId: 4,
+      activityStatusId: 4,
       hoursPlayed: 30,
-      finished: false
+      finished: false,
+      confirmedFinished: false
     })
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
@@ -308,8 +327,10 @@ describe('UserGamePlatformService.importPlatform', () => {
 
     await service.importPlatform('user-1', 10, 'PLAYSTATION', {
       statusId: 1,
+      activityStatusId: 3,
       hoursPlayed: 30,
       finished: true,
+      confirmedFinished: true,
       completedAt: importedDate
     })
 
@@ -318,5 +339,107 @@ describe('UserGamePlatformService.importPlatform', () => {
       'PLAYSTATION',
       { hoursPlayed: 30, completions: 1, completedAt: importedDate }
     )
+  })
+
+  describe('rule for games already in the library', () => {
+    const heuristicOnly = {
+      statusId: 1,
+      activityStatusId: 3,
+      hoursPlayed: 12,
+      finished: true,
+      confirmedFinished: false,
+      completedAt: new Date('2024-03-01T00:00:00Z')
+    }
+
+    it('does not mark an existing game as played on the heuristic alone', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({ statusId: 4, platforms: [row({ platform: 'STEAM' })] })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        3
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        { hoursPlayed: 12, completions: 0, completedAt: null }
+      )
+    })
+
+    it('marks an existing game as played, with a completion, when it is confirmed', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({ statusId: 4, platforms: [row({ platform: 'STEAM' })] })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...heuristicOnly,
+        confirmedFinished: true
+      })
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        1
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        {
+          hoursPlayed: 12,
+          completions: 1,
+          completedAt: heuristicOnly.completedAt
+        }
+      )
+    })
+
+    it('still moves an owned wishlist game up by recent activity', async () => {
+      const { service, userRepository } = setup(
+        userGame({ statusId: 5, platforms: [] })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        3
+      )
+    })
+
+    it('leaves a played game as it is when the import is not confirmed', async () => {
+      const { service, userRepository } = setup(
+        userGame({ statusId: 1, platforms: [row({ platform: 'STEAM' })] })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).not.toHaveBeenCalled()
+    })
+
+    it('keeps the heuristic for a game that is new to the library', async () => {
+      const { service, platformRepository, userRepository } = setup(null)
+      platformRepository.findUserGameWithPlatforms
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(userGame({ statusId: 1 }))
+
+      await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 10, statusIds: 1 })
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        {
+          hoursPlayed: 12,
+          completions: 1,
+          completedAt: heuristicOnly.completedAt
+        }
+      )
+    })
   })
 })

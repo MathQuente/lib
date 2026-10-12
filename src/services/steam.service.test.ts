@@ -284,6 +284,113 @@ describe('SteamService.runImport', () => {
     })
   })
 
+  it.each([
+    ['18 of 20 achievements is only the heuristic', 18, 3],
+    ['every achievement is confirmed', 20, 1]
+  ])(
+    'for a game already in the library, %s',
+    async (_label, achieved, expectedStatusId) => {
+      const updateGameStatus = vi.fn().mockResolvedValue(null)
+      const userRepository = fakeUserRepository({
+        findUserById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
+        findUserGame: vi
+          .fn()
+          .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 4 } }),
+        updateGameStatus
+      })
+
+      vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+        {
+          appid: 730,
+          name: 'Counter-Strike 2',
+          playtime_forever: 500,
+          rtime_last_played: Math.floor(Date.now() / 1000)
+        }
+      ])
+      vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+        { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
+      ] as never)
+      vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
+        achieved,
+        total: 20,
+        achievedApiNames: [],
+        unlockTimesByName: new Map()
+      })
+      vi.spyOn(
+        SteamApiService,
+        'getGlobalAchievementPercentages'
+      ).mockResolvedValue(null)
+
+      const service = new SteamService(
+        userRepository,
+        fakeGameCacheService(),
+        platformServiceFor(userRepository)
+      )
+
+      await service.runImport('user-1')
+
+      expect(updateGameStatus).toHaveBeenCalledTimes(1)
+      expect(updateGameStatus).toHaveBeenCalledWith(
+        2,
+        'user-1',
+        expectedStatusId
+      )
+      expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-2',
+        'STEAM',
+        expect.objectContaining({
+          completions: expectedStatusId === 1 ? 1 : 0
+        })
+      )
+    }
+  )
+
+  it('does not upgrade an existing game on a trivially small achievement set', async () => {
+    const updateGameStatus = vi.fn().mockResolvedValue(null)
+    const userRepository = fakeUserRepository({
+      findUserById: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
+      findUserGame: vi
+        .fn()
+        .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 4 } }),
+      updateGameStatus
+    })
+
+    vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+      {
+        appid: 730,
+        name: 'Counter-Strike 2',
+        playtime_forever: 500,
+        rtime_last_played: Math.floor(Date.now() / 1000)
+      }
+    ])
+    vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+      { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
+    ] as never)
+    vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
+      achieved: 1,
+      total: 1,
+      achievedApiNames: [],
+      unlockTimesByName: new Map()
+    })
+    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
+      null
+    )
+
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
+
+    await service.runImport('user-1')
+
+    expect(updateGameStatus).toHaveBeenCalledWith(2, 'user-1', 3)
+  })
+
   it('does not treat a trivially small achievement set as a completion signal', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi

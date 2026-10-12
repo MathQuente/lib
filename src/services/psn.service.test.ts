@@ -457,6 +457,59 @@ describe('PsnService.runImport', () => {
     expect(updateGameStatus).toHaveBeenCalledWith(10, 'user-1', 4)
   })
 
+  it.each([
+    [
+      'most trophies without the platinum',
+      { progress: 90, earned: 18, total: 20 },
+      3
+    ],
+    [
+      'the platinum',
+      { progress: 100, hasPlatinum: true, earned: 20, total: 20 },
+      1
+    ]
+  ])(
+    'for a game already in the library, %s decides the upgrade',
+    async (_label, trophies, expectedStatusId) => {
+      mockIgdb([['100', 10]])
+      const updateGameStatus = vi.fn().mockResolvedValue(null)
+      const service = makeService(
+        fakeUserRepository({
+          findUserGame: vi
+            .fn()
+            .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } }),
+          updateGameStatus
+        }),
+        fakePsnApi({
+          getPlayedGames: vi
+            .fn()
+            .mockResolvedValue([
+              played({ name: 'Bloodborne', lastPlayedAt: new Date() })
+            ]),
+          getTrophySummariesByName: vi
+            .fn()
+            .mockResolvedValue(new Map([['bloodborne', summary(trophies)]]))
+        })
+      )
+
+      await service.runImport('user-1')
+
+      expect(updateGameStatus).toHaveBeenCalledTimes(1)
+      expect(updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        expectedStatusId
+      )
+      expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-10',
+        'PLAYSTATION',
+        expect.objectContaining({
+          completions: expectedStatusId === 1 ? 1 : 0
+        })
+      )
+    }
+  )
+
   it('never downgrades the status of a game already in the library', async () => {
     mockIgdb([['100', 10]])
     const updateGameStatus = vi.fn().mockResolvedValue(null)

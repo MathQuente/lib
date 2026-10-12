@@ -50,8 +50,12 @@ function earliest(trophies: PsnEarnedTrophy[]): Date | undefined {
   return times.length > 0 ? new Date(Math.min(...times)) : undefined
 }
 
+function isConfirmedBySummary(summary: PsnTrophySummary) {
+  return summary.hasPlatinum || summary.progress >= 100
+}
+
 function finishedBySummary(summary: PsnTrophySummary, igdbGame: IGDBGame) {
-  if (summary.hasPlatinum || summary.progress >= 100) return true
+  if (isConfirmedBySummary(summary)) return true
   return (
     canInferCompletion(igdbGame) &&
     meetsCompletionRatio(summary.earned, summary.total)
@@ -350,11 +354,9 @@ export class PsnService {
         !!game.lastPlayedAt &&
         now - game.lastPlayedAt.getTime() <= RECENT_PLAY_THRESHOLD_MS
 
-      const statusId = isFinished
-        ? PLAYED_STATUS_ID
-        : isRecent
-          ? PLAYING_STATUS_ID
-          : BACKLOG_STATUS_ID
+      const activityStatusId = isRecent ? PLAYING_STATUS_ID : BACKLOG_STATUS_ID
+      const statusId = isFinished ? PLAYED_STATUS_ID : activityStatusId
+      const confirmedFinished = !!summary && isConfirmedBySummary(summary)
 
       const completedAt = isFinished
         ? (signal?.completedAt ??
@@ -370,8 +372,10 @@ export class PsnService {
         'PLAYSTATION',
         {
           statusId,
+          activityStatusId,
           hoursPlayed: Math.round((game.playMinutes / 60) * 100) / 100,
           finished: isFinished,
+          confirmedFinished,
           completedAt
         }
       )

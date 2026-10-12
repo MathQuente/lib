@@ -14,6 +14,7 @@ import {
   canInferCompletion,
   MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
   meetsCompletionRatio,
+  MIN_ACHIEVEMENTS_FOR_SIGNAL,
   RARE_ACHIEVEMENT_PERCENT
 } from '../utils/completion-heuristics'
 import {
@@ -319,11 +320,14 @@ export class SteamService {
       const isFinished =
         hasRareAchievement || hasCompletionKeyword || meetsRatioThreshold
 
-      const statusId = isFinished
-        ? PLAYED_STATUS_ID
-        : recentlyPlayed
-          ? PLAYING_STATUS_ID
-          : BACKLOG_STATUS_ID
+      const activityStatusId = recentlyPlayed
+        ? PLAYING_STATUS_ID
+        : BACKLOG_STATUS_ID
+      const statusId = isFinished ? PLAYED_STATUS_ID : activityStatusId
+      const confirmedFinished =
+        achievements != null &&
+        achievements.total >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
+        achievements.achieved >= achievements.total
 
       const completedAt =
         isFinished && achievements
@@ -336,8 +340,10 @@ export class SteamService {
         'STEAM',
         {
           statusId,
+          activityStatusId,
           hoursPlayed: Math.round((owned.playtime_forever / 60) * 100) / 100,
           finished: isFinished,
+          confirmedFinished,
           completedAt
         }
       )
