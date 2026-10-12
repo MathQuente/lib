@@ -51,9 +51,9 @@ describe('AuthService.validateUser', () => {
       fakeCacheRepository
     )
 
-    await expect(service.validateUser('a@a.com', 'wrong')).rejects.toThrow(
-      ClientError
-    )
+    await expect(
+      service.validateUser('a@a.com', 'wrong', '1.1.1.1')
+    ).rejects.toThrow(ClientError)
   })
 
   it('throws ClientError when the password does not match', async () => {
@@ -70,7 +70,7 @@ describe('AuthService.validateUser', () => {
     )
 
     await expect(
-      service.validateUser('a@a.com', 'wrong-password')
+      service.validateUser('a@a.com', 'wrong-password', '1.1.1.1')
     ).rejects.toThrow(ClientError)
   })
 
@@ -87,7 +87,11 @@ describe('AuthService.validateUser', () => {
       fakeCacheRepository
     )
 
-    const result = await service.validateUser('a@a.com', 'correct-password')
+    const result = await service.validateUser(
+      'a@a.com',
+      'correct-password',
+      '1.1.1.1'
+    )
 
     expect(result).toEqual({ user: { id: '1', userName: 'someone' } })
   })
@@ -316,12 +320,12 @@ describe('AuthService.resetPassword', () => {
     const deleteTokensByUserId = vi.fn()
     const cache = recordingCache('user-1')
     const authRepository = fakeAuthRepository({
-      updatePassword: vi.fn(),
+      updatePassword: vi.fn().mockResolvedValue({ email: 'a@a.com' }),
       deleteTokensByUserId
     })
     const service = new AuthService(authRepository, fakeJwt(), cache)
 
-    await service.resetPassword('reset-token', 'new-password')
+    await service.resetPassword('reset-token', 'new-password', '1.1.1.1')
 
     expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
     expect(cache.set).toHaveBeenCalledWith(
@@ -372,7 +376,7 @@ describe('AuthService.validateUser throttling', () => {
     )
 
     await expect(
-      service.validateUser('A@a.com', 'wrong')
+      service.validateUser('A@a.com', 'wrong', '1.1.1.1')
     ).rejects.toMatchObject({ statusCode: 400 })
     expect(cache.increment).toHaveBeenCalledWith(
       expect.stringMatching(/^login-failures:[0-9a-f]{64}$/),
@@ -389,7 +393,7 @@ describe('AuthService.validateUser throttling', () => {
     )
 
     await expect(
-      service.validateUser('a@a.com', 'correct-password')
+      service.validateUser('a@a.com', 'correct-password', '1.1.1.1')
     ).rejects.toMatchObject({ statusCode: 429 })
     expect(findByEmail).not.toHaveBeenCalled()
   })
@@ -407,7 +411,7 @@ describe('AuthService.validateUser throttling', () => {
       cache
     )
 
-    await service.validateUser('a@a.com', 'correct-password')
+    await service.validateUser('a@a.com', 'correct-password', '1.1.1.1')
 
     expect(cache.del).toHaveBeenCalledWith(
       expect.stringMatching(/^login-failures:/)
@@ -484,7 +488,7 @@ describe('AuthService password reset tokens', () => {
     )
 
     await expect(
-      service.resetPassword('used-token', 'new-password-1')
+      service.resetPassword('used-token', 'new-password-1', '1.1.1.1')
     ).rejects.toMatchObject({ statusCode: 400 })
     expect(cache.getdel).toHaveBeenCalledTimes(1)
     expect(updatePassword).not.toHaveBeenCalled()
@@ -512,6 +516,122 @@ describe('AuthService.isPasswordResetTokenValid', () => {
   })
 })
 
+describe('AuthService.validateUser lockout scopes', () => {
+  function cacheWithCounts(counts: Record<string, number>) {
+    const cache = fakeCache()
+    cache.get.mockImplementation(async (key: string) => counts[key] ?? null)
+    return cache
+  }
+
+  const ipKey = (cache: ReturnType<typeof fakeCache>) =>
+    cache.increment.mock.calls
+      .map(([key]) => key as string)
+      .find(k => k.split(':').length === 3)!
+  const emailKey = (cache: ReturnType<typeof fakeCache>) =>
+    cache.increment.mock.calls
+      .map(([key]) => key as string)
+      .find(k => k.split(':').length === 2)!
+
+  async function failedLoginKeys(ip: string) {
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail: vi.fn().mockResolvedValue(null) }),
+      fakeJwt(),
+      cache
+    )
+    await service.validateUser('a@a.com', 'wrong', ip).catch(() => undefined)
+    return { ip: ipKey(cache), email: emailKey(cache) }
+  }
+
+  it('blocks one IP after 10 failures without blocking another IP for the same email', async () => {
+    const attacker = await failedLoginKeys('9.9.9.9')
+    const other = await failedLoginKeys('2.2.2.2')
+    expect(attacker.ip).not.toBe(other.ip)
+    expect(attacker.email).toBe(other.email)
+
+    const findByEmail = vi.fn().mockResolvedValue(null)
+    const blocked = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      cacheWithCounts({ [attacker.ip]: 10 })
+    )
+    await expect(
+      blocked.validateUser('a@a.com', 'x', '9.9.9.9')
+    ).rejects.toMatchObject({ statusCode: 429 })
+    expect(findByEmail).not.toHaveBeenCalled()
+
+    const allowed = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      cacheWithCounts({ [attacker.ip]: 10 })
+    )
+    await expect(
+      allowed.validateUser('a@a.com', 'x', '2.2.2.2')
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(findByEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks every IP once the email reaches 50 failures', async () => {
+    const keys = await failedLoginKeys('9.9.9.9')
+    const findByEmail = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      cacheWithCounts({ [keys.email]: 50 })
+    )
+
+    await expect(
+      service.validateUser('a@a.com', 'x', '3.3.3.3')
+    ).rejects.toMatchObject({ statusCode: 429 })
+    expect(findByEmail).not.toHaveBeenCalled()
+  })
+
+  it('counts a failure against both the email+IP key and the email key', async () => {
+    const keys = await failedLoginKeys('9.9.9.9')
+    expect(keys.ip).toMatch(/^login-failures:[0-9a-f]{64}:[0-9a-f]{64}$/)
+    expect(keys.email).toMatch(/^login-failures:[0-9a-f]{64}$/)
+  })
+
+  it('clears only the email+IP counter on success', async () => {
+    const hashed = await bcrypt.hash('correct-password', 4)
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: '1', userName: 'x', password: hashed })
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await service.validateUser('a@a.com', 'correct-password', '1.1.1.1')
+
+    expect(cache.del).toHaveBeenCalledTimes(1)
+    expect(cache.del).toHaveBeenCalledWith(
+      expect.stringMatching(/^login-failures:[0-9a-f]{64}:[0-9a-f]{64}$/)
+    )
+  })
+
+  it('lifts both counters when the password is reset', async () => {
+    const failed = await failedLoginKeys('1.1.1.1')
+    const cache = fakeCache('user-1')
+    const service = new AuthService(
+      fakeAuthRepository({
+        updatePassword: vi.fn().mockResolvedValue({ email: 'a@a.com' }),
+        deleteTokensByUserId: vi.fn()
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await service.resetPassword('reset-token', 'new-password-1', '1.1.1.1')
+
+    expect(cache.del).toHaveBeenCalledWith(failed.ip)
+    expect(cache.del).toHaveBeenCalledWith(failed.email)
+  })
+})
+
 describe('AuthService token types', () => {
   const activeToken = {
     isValid: true,
@@ -533,9 +653,29 @@ describe('AuthService token types', () => {
       expect.anything()
     )
     expect(sign).toHaveBeenCalledWith(
-      { userId: 'user-1', tokenType: 'refresh' },
+      { userId: 'user-1', tokenType: 'refresh', jti: expect.any(String) },
       expect.anything()
     )
+  })
+
+  it('gives every refresh token its own jti so tokens signed in the same second differ', async () => {
+    const sign = vi.fn<(payload: object, options?: object) => string>(
+      () => 'signed-token'
+    )
+    const service = new AuthService(
+      fakeAuthRepository({ saveToken: vi.fn() }),
+      fakeJwt({ sign } as Partial<JWT>),
+      fakeCache()
+    )
+
+    await service.generateTokens('user-1')
+    await service.generateTokens('user-1')
+
+    const jtis = sign.mock.calls
+      .map(([payload]) => (payload as { jti?: string }).jti)
+      .filter(Boolean)
+    expect(jtis).toHaveLength(2)
+    expect(jtis[0]).not.toBe(jtis[1])
   })
 
   it('does not accept an access token as a refresh token', async () => {

@@ -34,7 +34,11 @@ export class AuthController {
   async loginHandler(request: FastifyRequest, reply: FastifyReply) {
     const { email, password } = AuthSchema.LoginBodySchema.parse(request.body)
 
-    const { user } = await this.authService.validateUser(email, password)
+    const { user } = await this.authService.validateUser(
+      email,
+      password,
+      request.ip
+    )
 
     const { accessToken, refreshToken } = await this.authService.generateTokens(
       user.id
@@ -67,7 +71,7 @@ export class AuthController {
       request.body
     )
 
-    await this.authService.resetPassword(token, password)
+    await this.authService.resetPassword(token, password, request.ip)
 
     return reply.status(200).send({ message: 'Senha atualizada com sucesso.' })
   }

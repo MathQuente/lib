@@ -6,12 +6,14 @@ declare module '@fastify/jwt' {
     payload: {
       userId: string
       tokenType?: 'access' | 'refresh'
+      jti?: string
       email?: string
       name?: string
     }
     user: {
       userId: string
       tokenType?: 'access' | 'refresh'
+      jti?: string
       email?: string
       name?: string
     }

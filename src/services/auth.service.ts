@@ -20,10 +20,15 @@ const RESET_REQUESTS_WINDOW_SECONDS = 60 * 60
 const passwordResetRequestsKey = (email: string) =>
   `password-reset-requests:${hashToken(email.toLowerCase())}`
 
-const MAX_LOGIN_FAILURES = 10
+const MAX_LOGIN_FAILURES_PER_IP = 10
+const MAX_LOGIN_FAILURES_PER_EMAIL = 50
 const LOGIN_FAILURES_WINDOW_SECONDS = 15 * 60
-const loginFailuresKey = (email: string) =>
+const loginFailuresByEmailKey = (email: string) =>
   `login-failures:${hashToken(email.toLowerCase())}`
+const loginFailuresByIpKey = (email: string, ip: string) =>
+  `${loginFailuresByEmailKey(email)}:${hashToken(ip)}`
+const hasReached = (failures: unknown, limit: number) =>
+  typeof failures === 'number' && failures >= limit
 
 export const revokedAccessTokenKey = (accessToken: string) =>
   `revoked:${hashToken(accessToken)}`
@@ -59,7 +64,7 @@ export class AuthService {
     )
 
     const refreshToken = this.jwt.sign(
-      { userId, tokenType: 'refresh' },
+      { userId, tokenType: 'refresh', jti: crypto.randomUUID() },
       { expiresIn: '7d' }
     )
 
@@ -298,10 +303,17 @@ export class AuthService {
     return tokens
   }
 
-  async validateUser(email: string, password: string) {
-    const failuresKey = loginFailuresKey(email)
-    const failures = await this.cacheRepository.get(failuresKey)
-    if (typeof failures === 'number' && failures >= MAX_LOGIN_FAILURES) {
+  async validateUser(email: string, password: string, ip: string) {
+    const ipFailuresKey = loginFailuresByIpKey(email, ip)
+    const emailFailuresKey = loginFailuresByEmailKey(email)
+    const [ipFailures, emailFailures] = await Promise.all([
+      this.cacheRepository.get(ipFailuresKey),
+      this.cacheRepository.get(emailFailuresKey)
+    ])
+    if (
+      hasReached(ipFailures, MAX_LOGIN_FAILURES_PER_IP) ||
+      hasReached(emailFailures, MAX_LOGIN_FAILURES_PER_EMAIL)
+    ) {
       throw new ClientError(
         'Muitas tentativas de login. Tente novamente mais tarde.',
         429
@@ -316,14 +328,26 @@ export class AuthService {
     )
 
     if (!user || !infoIsMatch) {
-      await this.cacheRepository.increment(
-        failuresKey,
-        LOGIN_FAILURES_WINDOW_SECONDS
-      )
+      const [ipCount, emailCount] = await Promise.all([
+        this.cacheRepository.increment(
+          ipFailuresKey,
+          LOGIN_FAILURES_WINDOW_SECONDS
+        ),
+        this.cacheRepository.increment(
+          emailFailuresKey,
+          LOGIN_FAILURES_WINDOW_SECONDS
+        )
+      ])
+      if (ipCount === MAX_LOGIN_FAILURES_PER_IP) {
+        console.warn('[Login] blocked', { scope: 'ip' })
+      }
+      if (emailCount === MAX_LOGIN_FAILURES_PER_EMAIL) {
+        console.warn('[Login] blocked', { scope: 'email' })
+      }
       throw new ClientError('Email ou senha incorretos.')
     }
 
-    await this.cacheRepository.del(failuresKey)
+    await this.cacheRepository.del(ipFailuresKey)
     await this.recentAuthService.mark(user.id)
 
     return {
@@ -373,7 +397,7 @@ export class AuthService {
     return (await this.cacheRepository.get(passwordResetKey(token))) !== null
   }
 
-  async resetPassword(token: string, newPassword: string) {
+  async resetPassword(token: string, newPassword: string, ip: string) {
     const userId = (await this.cacheRepository.getdel(
       passwordResetKey(token)
     )) as string | null
@@ -383,8 +407,15 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST)
-    await this.authRepository.updatePassword(userId, hashedPassword)
+    const { email } = await this.authRepository.updatePassword(
+      userId,
+      hashedPassword
+    )
     await this.revokeAllSessions(userId)
+    await Promise.all([
+      this.cacheRepository.del(loginFailuresByEmailKey(email)),
+      this.cacheRepository.del(loginFailuresByIpKey(email, ip))
+    ])
   }
 
   async logout(refreshToken?: string, accessToken?: string) {

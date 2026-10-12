@@ -2,18 +2,19 @@ import { prisma } from '../database/db'
 import { CreateUserDTO } from '../dtos/user.dto'
 import { hashToken } from '../utils/hash-token'
 
+const MAX_SESSIONS_PER_USER = 10
+
 export class AuthRepository {
   async saveToken(token: string, userId: string, expiresAt: Date) {
-    // Remove qualquer token anterior do usuário (válido ou já invalidado).
-    // JWTs assinados no mesmo segundo pro mesmo userId são idênticos (o `iat`
-    // só tem resolução de segundo) — se um token invalidado ficasse pra trás
-    // aqui, um refresh rápido o suficiente colidiria com a constraint única
-    // de `token` ao tentar criar o novo.
-    await prisma.$transaction([
-      prisma.refreshToken.deleteMany({
-        where: { userId }
-      }),
-      prisma.refreshToken.create({
+    await prisma.$transaction(async tx => {
+      await tx.refreshToken.deleteMany({
+        where: {
+          userId,
+          OR: [{ isValid: false }, { expiresAt: { lt: new Date() } }]
+        }
+      })
+
+      await tx.refreshToken.create({
         data: {
           tokenHash: hashToken(token),
           userId: userId,
@@ -21,7 +22,20 @@ export class AuthRepository {
           isValid: true
         }
       })
-    ])
+
+      const oldestBeyondLimit = await tx.refreshToken.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip: MAX_SESSIONS_PER_USER,
+        select: { id: true }
+      })
+
+      if (oldestBeyondLimit.length > 0) {
+        await tx.refreshToken.deleteMany({
+          where: { id: { in: oldestBeyondLimit.map(token => token.id) } }
+        })
+      }
+    })
   }
 
   async findUserByGoogleId(googleId: string) {
@@ -146,9 +160,10 @@ export class AuthRepository {
   }
 
   async updatePassword(userId: string, hashedPassword: string) {
-    await prisma.user.update({
+    return prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword }
+      data: { password: hashedPassword },
+      select: { email: true }
     })
   }
 }
