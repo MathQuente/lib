@@ -172,6 +172,7 @@ export class UserRepository {
       select: {
         id: true,
         email: true,
+        emailVerifiedAt: true,
         userBanner: true,
         userName: true,
         profilePicture: true,

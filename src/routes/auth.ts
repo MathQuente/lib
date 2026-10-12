@@ -112,6 +112,34 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => authController.validateResetToken(request, reply)
   )
 
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/verify-email',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute'
+        }
+      }
+    },
+    async (request, reply) => authController.verifyEmail(request, reply)
+  )
+
+  app.withTypeProvider<ZodTypeProvider>().post(
+    '/resend-verification',
+    {
+      preHandler: [app.authenticate],
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '1 hour'
+        }
+      }
+    },
+    async (request, reply) =>
+      authController.resendEmailVerification(request, reply)
+  )
+
   app
     .withTypeProvider<ZodTypeProvider>()
     .post('/refresh', async (request, reply) =>

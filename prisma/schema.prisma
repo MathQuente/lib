@@ -39,25 +39,26 @@ model Rating {
 }
 
 model User {
-  id             String         @id @default(uuid())
-  email          String         @unique
-  userName       String?        @map("user_name")
-  password       String
-  profilePicture String?        @map("profile_picture")
-  userBanner     String?        @map("user_banner")
-  googleId       String?        @unique @map("google_id")
-  discordId      String?        @unique @map("discord_id")
-  steamId        String?        @unique @map("steam_id")
-  psnAccountId   String?        @unique @map("psn_account_id")
-  psnOnlineId    String?        @map("psn_online_id")
-  xboxXuid       String?        @unique @map("xbox_xuid")
-  xboxGamertag   String?        @map("xbox_gamertag")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @default(now()) @map("updated_at")
-  userGames      UserGame[]
-  refreshToken   RefreshToken[]
-  Rating         Rating[]
-  Review         Review[]
+  id              String         @id @default(uuid())
+  email           String         @unique
+  userName        String?        @map("user_name")
+  password        String
+  profilePicture  String?        @map("profile_picture")
+  userBanner      String?        @map("user_banner")
+  googleId        String?        @unique @map("google_id")
+  discordId       String?        @unique @map("discord_id")
+  steamId         String?        @unique @map("steam_id")
+  psnAccountId    String?        @unique @map("psn_account_id")
+  psnOnlineId     String?        @map("psn_online_id")
+  xboxXuid        String?        @unique @map("xbox_xuid")
+  xboxGamertag    String?        @map("xbox_gamertag")
+  emailVerifiedAt DateTime?      @map("email_verified_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @default(now()) @map("updated_at")
+  userGames       UserGame[]
+  refreshToken    RefreshToken[]
+  Rating          Rating[]
+  Review          Review[]
 
   following Follow[] @relation("FollowFollower")
   followers Follow[] @relation("FollowFollowing")

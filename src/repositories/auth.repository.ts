@@ -71,7 +71,8 @@ export class AuthRepository {
         userName: data.name,
         profilePicture: data.picture,
         googleId: data.googleId,
-        password: data.password
+        password: data.password,
+        emailVerifiedAt: new Date()
       },
       select: { id: true }
     })
@@ -106,6 +107,20 @@ export class AuthRepository {
     })
   }
 
+  async findById(userId: string) {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, emailVerifiedAt: true }
+    })
+  }
+
+  async markEmailVerified(userId: string) {
+    await prisma.user.updateMany({
+      where: { id: userId, emailVerifiedAt: null },
+      data: { emailVerifiedAt: new Date() }
+    })
+  }
+
   async createWithDiscord(data: {
     email: string
     userName: string
@@ -113,7 +128,9 @@ export class AuthRepository {
     password: string
     profilePicture: string | null
   }) {
-    return prisma.user.create({ data })
+    return prisma.user.create({
+      data: { ...data, emailVerifiedAt: new Date() }
+    })
   }
 
   async linkGoogle(userId: string, googleId: string, picture?: string) {

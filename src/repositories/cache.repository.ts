@@ -1,5 +1,13 @@
 import { redis } from '../database/redis'
 
+const INCREMENT_WITH_TTL_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 or redis.call('TTL', KEYS[1]) == -1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`
+
 export class CacheRepository {
   async get(key: string): Promise<unknown | null> {
     const cached = await redis.get(key)
@@ -41,11 +49,13 @@ export class CacheRepository {
   }
 
   async increment(key: string, ttlSeconds: number): Promise<number> {
-    const count = await redis.incr(key)
-    if (count === 1) {
-      await redis.expire(key, ttlSeconds)
-    }
-    return count
+    const count = await redis.eval(
+      INCREMENT_WITH_TTL_SCRIPT,
+      1,
+      key,
+      ttlSeconds
+    )
+    return Number(count)
   }
 
   async del(key: string): Promise<void> {

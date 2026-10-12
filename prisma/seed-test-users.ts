@@ -58,11 +58,16 @@ async function main() {
   for (const plan of PLANS) {
     const user = await prisma.user.upsert({
       where: { email: plan.email },
-      update: { userName: plan.userName, password: passwordHash },
+      update: {
+        userName: plan.userName,
+        password: passwordHash,
+        emailVerifiedAt: new Date()
+      },
       create: {
         email: plan.email,
         userName: plan.userName,
-        password: passwordHash
+        password: passwordHash,
+        emailVerifiedAt: new Date()
       }
     })
 

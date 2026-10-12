@@ -3,11 +3,8 @@ import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
 import fastifyCors from '@fastify/cors'
 import { AuthRepository } from './repositories/auth.repository'
-import {
-  AuthService,
-  revokedAccessTokenKey,
-  sessionsRevokedAtKey
-} from './services/auth.service'
+import { AuthService, revokedAccessTokenKey } from './services/auth.service'
+import { sessionsRevokedAtKey } from './utils/session-revocation'
 import { CacheRepository } from './repositories/cache.repository'
 import { clearAuthCookies, setAccessTokenCookie } from './utils/auth-cookies'
 

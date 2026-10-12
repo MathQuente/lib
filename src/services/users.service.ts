@@ -9,6 +9,8 @@ import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
 import { GameCacheService } from './game-cache.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { CacheRepository } from '../repositories/cache.repository'
+import { markSessionsRevoked } from '../utils/session-revocation'
 import { randomInt } from 'crypto'
 
 const PLAYED_STATUS_ID = 1
@@ -25,7 +27,8 @@ export class UserService {
     private ratingRepository: RatingRepository,
     private gameCacheService: GameCacheService,
     private followRepository: FollowRepository,
-    private platformRepository: UserGamePlatformRepository = new UserGamePlatformRepository()
+    private platformRepository: UserGamePlatformRepository = new UserGamePlatformRepository(),
+    private cacheRepository: CacheRepository = new CacheRepository()
   ) {}
 
   private async requireUser(userId: string) {
@@ -71,6 +74,8 @@ export class UserService {
   async delete(userId: string) {
     await this.requireUser(userId)
 
+    await markSessionsRevoked(this.cacheRepository, userId)
+
     return { user: await this.userRepository.deleteUser(userId) }
   }
 
@@ -88,6 +93,8 @@ export class UserService {
         profilePicture: user.profilePicture,
         userName: user.userName,
         userBanner: user.userBanner,
+        email: user.email,
+        emailVerified: user.emailVerifiedAt !== null,
         gamesAmount: user._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
         steamId: user.steamId,

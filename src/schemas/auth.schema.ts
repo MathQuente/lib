@@ -4,7 +4,7 @@ import { isCommonPassword } from '../utils/common-passwords'
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_BYTES = 72
 
-export const EmailSchema = z.string().trim().max(254).email()
+export const EmailSchema = z.string().trim().toLowerCase().max(254).email()
 
 export const PasswordSchema = z
   .string()
@@ -45,6 +45,10 @@ export const ForgotPasswordBodySchema = z.object({
 })
 
 export const ResetTokenBodySchema = z.object({
+  token: z.string().min(1).max(256)
+})
+
+export const VerifyEmailBodySchema = z.object({
   token: z.string().min(1).max(256)
 })
 

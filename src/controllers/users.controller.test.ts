@@ -7,11 +7,13 @@ import { CacheRepository } from '../repositories/cache.repository'
 function fakeReply() {
   const reply = {
     status: vi.fn(() => reply),
-    send: vi.fn(() => reply)
+    send: vi.fn(() => reply),
+    clearCookie: vi.fn(() => reply)
   }
   return reply as unknown as FastifyReply & {
     status: ReturnType<typeof vi.fn>
     send: ReturnType<typeof vi.fn>
+    clearCookie: ReturnType<typeof vi.fn>
   }
 }
 
@@ -93,5 +95,41 @@ describe('UserController.updateUserGamePlayedCount', () => {
 
     expect(updateUserGamePlayedCount).toHaveBeenCalledTimes(1)
     expect(cache.setIfAbsent).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserController.deleteUser', () => {
+  it('deletes the account and clears the auth cookies', async () => {
+    const deleted = { id: 'user-1', userName: 'someone' }
+    const deleteUser = vi.fn().mockResolvedValue({ user: deleted })
+    const controller = new UserController({
+      delete: deleteUser
+    } as unknown as UserService)
+    const reply = fakeReply()
+
+    await controller.deleteUser(fakeRequest(), reply)
+
+    expect(deleteUser).toHaveBeenCalledWith('user-1')
+    expect(reply.clearCookie).toHaveBeenCalledWith(
+      'accessToken',
+      expect.objectContaining({ httpOnly: true })
+    )
+    expect(reply.clearCookie).toHaveBeenCalledWith(
+      'refreshToken',
+      expect.objectContaining({ httpOnly: true })
+    )
+    expect(reply.status).toHaveBeenCalledWith(200)
+    expect(reply.send).toHaveBeenCalledWith({ user: deleted })
+  })
+
+  it('does not clear cookies when the deletion fails', async () => {
+    const controller = new UserController({
+      delete: vi.fn().mockRejectedValue(new Error('not found'))
+    } as unknown as UserService)
+    const reply = fakeReply()
+
+    await expect(controller.deleteUser(fakeRequest(), reply)).rejects.toThrow()
+
+    expect(reply.clearCookie).not.toHaveBeenCalled()
   })
 })

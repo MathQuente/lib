@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  ForgotPasswordBodySchema,
   LoginBodySchema,
   PasswordSchema,
   RegisterBodySchema
@@ -38,6 +39,19 @@ describe('RegisterBodySchema', () => {
         password: 'longusername'
       }).success
     ).toBe(false)
+  })
+
+  it('lowercases the email on signup, login and password reset', () => {
+    expect(
+      RegisterBodySchema.parse({ email: 'Ana@Mail.COM', password: 'k3!fPq9z' })
+        .email
+    ).toBe('ana@mail.com')
+    expect(
+      LoginBodySchema.parse({ email: ' Ana@Mail.COM ', password: 'x' }).email
+    ).toBe('ana@mail.com')
+    expect(
+      ForgotPasswordBodySchema.parse({ email: 'Ana@Mail.COM' }).email
+    ).toBe('ana@mail.com')
   })
 
   it('trims the email and rejects one that is too long', () => {

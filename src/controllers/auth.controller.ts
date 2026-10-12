@@ -76,6 +76,22 @@ export class AuthController {
     return reply.status(200).send({ message: 'Senha atualizada com sucesso.' })
   }
 
+  async verifyEmail(request: FastifyRequest, reply: FastifyReply) {
+    const { token } = AuthSchema.VerifyEmailBodySchema.parse(request.body)
+
+    await this.authService.verifyEmail(token)
+
+    return reply.status(200).send({ message: 'Email confirmado com sucesso.' })
+  }
+
+  async resendEmailVerification(request: FastifyRequest, reply: FastifyReply) {
+    await this.authService.resendEmailVerification(request.user.userId)
+
+    return reply.status(200).send({
+      message: 'Se o email ainda não foi confirmado, enviamos um novo link.'
+    })
+  }
+
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
     const refreshToken = request.cookies.refreshToken
 

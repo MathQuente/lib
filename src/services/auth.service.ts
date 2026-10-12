@@ -4,10 +4,13 @@ import { CacheRepository } from '../repositories/cache.repository'
 import { EmailService } from './email.service'
 import { ClientError } from '../errors/client-error'
 import bcrypt from 'bcrypt'
+import { randomBytes } from 'node:crypto'
 import { CreateUserDTO } from '../dtos/user.dto'
 import { generateFromEmail } from 'unique-username-generator'
 import { hashToken } from '../utils/hash-token'
 import { RecentAuthService } from './recent-auth.service'
+import { markSessionsRevoked } from '../utils/session-revocation'
+import { normalizeEmail } from '../utils/normalize-email'
 
 const BCRYPT_COST = 12
 
@@ -18,15 +21,33 @@ const passwordResetKey = (token: string) =>
 const MAX_RESET_REQUESTS_PER_HOUR = 3
 const RESET_REQUESTS_WINDOW_SECONDS = 60 * 60
 const passwordResetRequestsKey = (email: string) =>
-  `password-reset-requests:${hashToken(email.toLowerCase())}`
+  `password-reset-requests:${hashToken(normalizeEmail(email))}`
+
+const EMAIL_VERIFICATION_TTL_SECONDS = 24 * 60 * 60
+const emailVerificationKey = (tokenHash: string) =>
+  `email-verification:${tokenHash}`
+const emailVerificationCurrentKey = (userId: string) =>
+  `email-verification-current:${userId}`
+
+const MAX_VERIFICATION_REQUESTS_PER_HOUR = 3
+const VERIFICATION_REQUESTS_WINDOW_SECONDS = 60 * 60
+const emailVerificationRequestsKey = (userId: string) =>
+  `email-verification-requests:${userId}`
+
+function randomToken() {
+  return randomBytes(32).toString('hex')
+}
 
 const MAX_LOGIN_FAILURES_PER_IP = 10
 const MAX_LOGIN_FAILURES_PER_EMAIL = 50
 const LOGIN_FAILURES_WINDOW_SECONDS = 15 * 60
 const loginFailuresByEmailKey = (email: string) =>
-  `login-failures:${hashToken(email.toLowerCase())}`
+  `login-failures:${hashToken(normalizeEmail(email))}`
 const loginFailuresByIpKey = (email: string, ip: string) =>
   `${loginFailuresByEmailKey(email)}:${hashToken(ip)}`
+const FAMILIAR_IP_TTL_SECONDS = 30 * 24 * 60 * 60
+const familiarIpKey = (email: string, ip: string) =>
+  `login-familiar-ip:${hashToken(normalizeEmail(email))}:${hashToken(ip)}`
 const hasReached = (failures: unknown, limit: number) =>
   typeof failures === 'number' && failures >= limit
 
@@ -39,9 +60,8 @@ function getDummyPasswordHash() {
   return dummyPasswordHash
 }
 
-const ACCESS_TOKEN_TTL_SECONDS = 60 * 15
-export const sessionsRevokedAtKey = (userId: string) =>
-  `sessions-revoked-at:${userId}`
+const PROVIDER_ALREADY_LINKED_MESSAGE =
+  'Este email já está vinculado a outra conta desse provedor.'
 
 const UNVERIFIED_PROVIDER_EMAIL_MESSAGE =
   'O email dessa conta não foi verificado pelo provedor.'
@@ -168,6 +188,7 @@ export class AuthService {
 
     const { accessToken, refreshToken } = await this.generateTokens(user.id)
     await this.recentAuthService.mark(user.id)
+    await this.issueEmailVerification(user.id, data.email)
 
     return {
       accessToken,
@@ -178,7 +199,80 @@ export class AuthService {
     }
   }
 
-  private async takeOverUnverifiedAccount(userId: string) {
+  private async issueEmailVerification(userId: string, email: string) {
+    const token = randomToken()
+    const tokenHash = hashToken(token)
+
+    await this.cacheRepository.set(
+      emailVerificationKey(tokenHash),
+      userId,
+      EMAIL_VERIFICATION_TTL_SECONDS
+    )
+
+    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`
+
+    try {
+      await this.emailService.sendEmailVerificationEmail(email, verifyUrl)
+    } catch (err) {
+      console.error('[EmailVerification] email delivery failed', {
+        error: err instanceof Error ? err.message : 'unknown error'
+      })
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[EmailVerification] dev verification link:', verifyUrl)
+      }
+      return false
+    }
+
+    const previousHash = await this.cacheRepository.get(
+      emailVerificationCurrentKey(userId)
+    )
+    if (typeof previousHash === 'string') {
+      await this.cacheRepository.del(emailVerificationKey(previousHash))
+    }
+    await this.cacheRepository.set(
+      emailVerificationCurrentKey(userId),
+      tokenHash,
+      EMAIL_VERIFICATION_TTL_SECONDS
+    )
+    return true
+  }
+
+  async verifyEmail(token: string) {
+    const userId = (await this.cacheRepository.getdel(
+      emailVerificationKey(hashToken(token))
+    )) as string | null
+
+    if (!userId) {
+      throw new ClientError('Link de verificação inválido ou expirado.', 400)
+    }
+
+    await this.authRepository.markEmailVerified(userId)
+    await this.cacheRepository.del(emailVerificationCurrentKey(userId))
+  }
+
+  async resendEmailVerification(userId: string) {
+    const user = await this.authRepository.findById(userId)
+    if (!user) throw new ClientError('Usuário não encontrado.', 404)
+    if (user.emailVerifiedAt) return
+
+    const requests = await this.cacheRepository.increment(
+      emailVerificationRequestsKey(userId),
+      VERIFICATION_REQUESTS_WINDOW_SECONDS
+    )
+    if (requests > MAX_VERIFICATION_REQUESTS_PER_HOUR) {
+      throw new ClientError(
+        'Muitos pedidos de verificação. Tente novamente mais tarde.',
+        429
+      )
+    }
+
+    const sent = await this.issueEmailVerification(user.id, user.email)
+    if (!sent) {
+      throw new ClientError('Não foi possível enviar o email agora.', 503)
+    }
+  }
+
+  private async discardPasswordAndSessions(userId: string) {
     const hashedPassword = await bcrypt.hash(crypto.randomUUID(), BCRYPT_COST)
     await this.authRepository.updatePassword(userId, hashedPassword)
     await this.revokeAllSessions(userId)
@@ -186,11 +280,7 @@ export class AuthService {
 
   async revokeAllSessions(userId: string) {
     await this.authRepository.deleteTokensByUserId(userId)
-    await this.cacheRepository.set(
-      sessionsRevokedAtKey(userId),
-      Math.floor(Date.now() / 1000),
-      ACCESS_TOKEN_TTL_SECONDS
-    )
+    await markSessionsRevoked(this.cacheRepository, userId)
   }
 
   async loginWithGoogle(profile: {
@@ -208,12 +298,18 @@ export class AuthService {
         throw new ClientError(UNVERIFIED_PROVIDER_EMAIL_MESSAGE, 403)
       }
 
+      const email = normalizeEmail(profile.email)
+
       // Se não encontrou por googleId, busca por email
-      const existing = await this.authRepository.findByEmail(profile.email)
+      const existing = await this.authRepository.findByEmail(email)
 
       if (existing) {
+        if (existing.googleId) {
+          throw new ClientError(PROVIDER_ALREADY_LINKED_MESSAGE, 409)
+        }
+
         if (!existing.discordId) {
-          await this.takeOverUnverifiedAccount(existing.id)
+          await this.discardPasswordAndSessions(existing.id)
         }
 
         // Usuário existe com esse email, vincula o Google ID
@@ -222,16 +318,12 @@ export class AuthService {
           profile.sub,
           profile.picture
         )
+        await this.authRepository.markEmailVerified(existing.id)
       } else {
-        const array = new Uint8Array(32)
-        crypto.getRandomValues(array)
-        const randomPassword = Array.from(array, byte =>
-          byte.toString(16).padStart(2, '0')
-        ).join('')
-        const hashedPassword = await bcrypt.hash(randomPassword, BCRYPT_COST)
+        const hashedPassword = await bcrypt.hash(randomToken(), BCRYPT_COST)
 
         const created = await this.authRepository.createUserWithGoogle({
-          email: profile.email,
+          email,
           name: profile.name,
           picture: profile.picture,
           googleId: profile.sub,
@@ -240,7 +332,7 @@ export class AuthService {
 
         user = {
           id: created.id,
-          email: profile.email,
+          email,
           userName: profile.name,
           profilePicture: profile.picture
         }
@@ -273,23 +365,33 @@ export class AuthService {
         throw new ClientError(UNVERIFIED_PROVIDER_EMAIL_MESSAGE, 403)
       }
 
-      user = await this.authRepository.findByEmail(discordUser.email)
+      const email = normalizeEmail(discordUser.email)
+
+      user = await this.authRepository.findByEmail(email)
 
       if (user) {
-        if (!user.googleId) await this.takeOverUnverifiedAccount(user.id)
+        if (user.discordId) {
+          throw new ClientError(PROVIDER_ALREADY_LINKED_MESSAGE, 409)
+        }
+
+        const existingId = user.id
+        if (!user.googleId) {
+          await this.discardPasswordAndSessions(existingId)
+        }
 
         user = await this.authRepository.linkDiscord(
-          user.id,
+          existingId,
           discordUser.id,
           profilePicture
         )
+        await this.authRepository.markEmailVerified(existingId)
       } else {
         const hashedPassword = await bcrypt.hash(
           crypto.randomUUID(),
           BCRYPT_COST
         )
         user = await this.authRepository.createWithDiscord({
-          email: discordUser.email,
+          email,
           userName: `${discordUser.username}`,
           discordId: discordUser.id,
           password: hashedPassword,
@@ -306,13 +408,16 @@ export class AuthService {
   async validateUser(email: string, password: string, ip: string) {
     const ipFailuresKey = loginFailuresByIpKey(email, ip)
     const emailFailuresKey = loginFailuresByEmailKey(email)
-    const [ipFailures, emailFailures] = await Promise.all([
+    const familiarKey = familiarIpKey(email, ip)
+    const [ipFailures, emailFailures, familiar] = await Promise.all([
       this.cacheRepository.get(ipFailuresKey),
-      this.cacheRepository.get(emailFailuresKey)
+      this.cacheRepository.get(emailFailuresKey),
+      this.cacheRepository.get(familiarKey)
     ])
+    const isFamiliarIp = familiar !== null
     if (
       hasReached(ipFailures, MAX_LOGIN_FAILURES_PER_IP) ||
-      hasReached(emailFailures, MAX_LOGIN_FAILURES_PER_EMAIL)
+      (!isFamiliarIp && hasReached(emailFailures, MAX_LOGIN_FAILURES_PER_EMAIL))
     ) {
       throw new ClientError(
         'Muitas tentativas de login. Tente novamente mais tarde.',
@@ -328,26 +433,27 @@ export class AuthService {
     )
 
     if (!user || !infoIsMatch) {
-      const [ipCount, emailCount] = await Promise.all([
-        this.cacheRepository.increment(
-          ipFailuresKey,
-          LOGIN_FAILURES_WINDOW_SECONDS
-        ),
-        this.cacheRepository.increment(
-          emailFailuresKey,
-          LOGIN_FAILURES_WINDOW_SECONDS
-        )
-      ])
+      const ipCount = await this.cacheRepository.increment(
+        ipFailuresKey,
+        LOGIN_FAILURES_WINDOW_SECONDS
+      )
       if (ipCount === MAX_LOGIN_FAILURES_PER_IP) {
         console.warn('[Login] blocked', { scope: 'ip' })
       }
-      if (emailCount === MAX_LOGIN_FAILURES_PER_EMAIL) {
-        console.warn('[Login] blocked', { scope: 'email' })
+      if (!isFamiliarIp) {
+        const emailCount = await this.cacheRepository.increment(
+          emailFailuresKey,
+          LOGIN_FAILURES_WINDOW_SECONDS
+        )
+        if (emailCount === MAX_LOGIN_FAILURES_PER_EMAIL) {
+          console.warn('[Login] blocked', { scope: 'email' })
+        }
       }
       throw new ClientError('Email ou senha incorretos.')
     }
 
     await this.cacheRepository.del(ipFailuresKey)
+    await this.cacheRepository.set(familiarKey, true, FAMILIAR_IP_TTL_SECONDS)
     await this.recentAuthService.mark(user.id)
 
     return {
@@ -369,9 +475,7 @@ export class AuthService {
     )
     if (requests > MAX_RESET_REQUESTS_PER_HOUR) return
 
-    const array = new Uint8Array(32)
-    crypto.getRandomValues(array)
-    const token = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+    const token = randomToken()
 
     await this.cacheRepository.set(
       passwordResetKey(token),
@@ -411,6 +515,7 @@ export class AuthService {
       userId,
       hashedPassword
     )
+    await this.authRepository.markEmailVerified(userId)
     await this.revokeAllSessions(userId)
     await Promise.all([
       this.cacheRepository.del(loginFailuresByEmailKey(email)),

@@ -3,6 +3,7 @@ import { UserService } from '../services/users.service'
 import * as UserSchema from '../schemas/user.schema'
 import { ClientError } from '../errors/client-error'
 import { CacheRepository } from '../repositories/cache.repository'
+import { clearAuthCookies } from '../utils/auth-cookies'
 
 const IDEMPOTENCY_TTL_SECONDS = 60
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
@@ -31,7 +32,7 @@ export class UserController {
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
     const { user } = await this.userService.delete(userId)
-    return reply.status(200).send({ user })
+    return clearAuthCookies(reply).status(200).send({ user })
   }
 
   async getAllUserGames(request: FastifyRequest, reply: FastifyReply) {

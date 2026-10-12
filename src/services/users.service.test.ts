@@ -7,6 +7,7 @@ import { PaginatedUserGameRow } from '../types/user'
 import { RatingRepository } from '../repositories/rating.repository'
 import { FollowRepository } from '../repositories/follow.repository'
 import { ClientError } from '../errors/client-error'
+import { CacheRepository } from '../repositories/cache.repository'
 
 function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
@@ -460,6 +461,8 @@ describe('UserService.findMe', () => {
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
         userName: 'matheus',
+        email: 'matheus@a.com',
+        emailVerifiedAt: null,
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
         steamId: '12345',
@@ -486,6 +489,8 @@ describe('UserService.findMe', () => {
       profilePicture: 'pic.png',
       userBanner: 'banner.png',
       userName: 'matheus',
+      email: 'matheus@a.com',
+      emailVerified: false,
       gamesAmount: 3,
       totalHoursPlayed: 12.5,
       steamId: '12345',
@@ -493,5 +498,52 @@ describe('UserService.findMe', () => {
       followersCount: 2,
       followingCount: 5
     })
+  })
+})
+
+describe('UserService.delete', () => {
+  function build(cacheSet: ReturnType<typeof vi.fn>) {
+    const deleteUser = vi
+      .fn()
+      .mockResolvedValue({ id: 'user-1', userName: 'someone' })
+    const service = new UserService(
+      fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        deleteUser
+      }),
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository(),
+      undefined,
+      { set: cacheSet } as unknown as CacheRepository
+    )
+    return { service, deleteUser }
+  }
+
+  it('revokes the sessions that were already issued and then deletes the account', async () => {
+    const set = vi.fn().mockResolvedValue(undefined)
+    const { service, deleteUser } = build(set)
+
+    const result = await service.delete('user-1')
+
+    expect(set).toHaveBeenCalledWith(
+      'sessions-revoked-at:user-1',
+      expect.any(Number),
+      expect.any(Number)
+    )
+    expect(deleteUser).toHaveBeenCalledWith('user-1')
+    expect(set.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteUser.mock.invocationCallOrder[0]
+    )
+    expect(result).toEqual({ user: { id: 'user-1', userName: 'someone' } })
+  })
+
+  it('keeps the account when the revocation cannot be stored', async () => {
+    const { service, deleteUser } = build(
+      vi.fn().mockRejectedValue(new Error('redis down'))
+    )
+
+    await expect(service.delete('user-1')).rejects.toThrow('redis down')
+    expect(deleteUser).not.toHaveBeenCalled()
   })
 })

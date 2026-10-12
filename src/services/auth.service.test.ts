@@ -254,6 +254,7 @@ describe('AuthService.loginWithGoogle', () => {
       updatePassword,
       deleteTokensByUserId,
       linkGoogle,
+      markEmailVerified: vi.fn(),
       saveToken: vi.fn()
     })
     const service = new AuthService(authRepository, fakeJwt(), cache)
@@ -319,14 +320,17 @@ describe('AuthService.resetPassword', () => {
   it('revokes every session of the user after changing the password', async () => {
     const deleteTokensByUserId = vi.fn()
     const cache = recordingCache('user-1')
+    const markEmailVerified = vi.fn()
     const authRepository = fakeAuthRepository({
       updatePassword: vi.fn().mockResolvedValue({ email: 'a@a.com' }),
+      markEmailVerified,
       deleteTokensByUserId
     })
     const service = new AuthService(authRepository, fakeJwt(), cache)
 
     await service.resetPassword('reset-token', 'new-password', '1.1.1.1')
 
+    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
     expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
     expect(cache.set).toHaveBeenCalledWith(
       'sessions-revoked-at:user-1',
@@ -613,12 +617,79 @@ describe('AuthService.validateUser lockout scopes', () => {
     )
   })
 
+  it('does not apply the email-wide limit to an IP that logged in before', async () => {
+    const keys = await failedLoginKeys('7.7.7.7')
+    const cache = fakeCache()
+    cache.get.mockImplementation(async (key: string) => {
+      if (key === keys.email) return 50
+      if (key.startsWith('login-familiar-ip:')) return true
+      return null
+    })
+    const findByEmail = vi.fn().mockResolvedValue(null)
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(
+      service.validateUser('a@a.com', 'x', '7.7.7.7')
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(findByEmail).toHaveBeenCalledTimes(1)
+    expect(cache.increment).toHaveBeenCalledTimes(1)
+    expect(cache.increment).toHaveBeenCalledWith(keys.ip, expect.any(Number))
+  })
+
+  it('still blocks a familiar IP at its own limit', async () => {
+    const keys = await failedLoginKeys('7.7.7.7')
+    const cache = fakeCache()
+    cache.get.mockImplementation(async (key: string) => {
+      if (key === keys.ip) return 10
+      if (key.startsWith('login-familiar-ip:')) return true
+      return null
+    })
+    const findByEmail = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({ findByEmail }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(
+      service.validateUser('a@a.com', 'x', '7.7.7.7')
+    ).rejects.toMatchObject({ statusCode: 429 })
+    expect(findByEmail).not.toHaveBeenCalled()
+  })
+
+  it('remembers the IP for 30 days after a successful login', async () => {
+    const hashed = await bcrypt.hash('correct-password', 4)
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: '1', userName: 'x', password: hashed })
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await service.validateUser('a@a.com', 'correct-password', '7.7.7.7')
+
+    expect(cache.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^login-familiar-ip:[0-9a-f]{64}:[0-9a-f]{64}$/),
+      true,
+      30 * 24 * 60 * 60
+    )
+  })
+
   it('lifts both counters when the password is reset', async () => {
     const failed = await failedLoginKeys('1.1.1.1')
     const cache = fakeCache('user-1')
     const service = new AuthService(
       fakeAuthRepository({
         updatePassword: vi.fn().mockResolvedValue({ email: 'a@a.com' }),
+        markEmailVerified: vi.fn(),
         deleteTokensByUserId: vi.fn()
       }),
       fakeJwt(),
@@ -629,6 +700,427 @@ describe('AuthService.validateUser lockout scopes', () => {
 
     expect(cache.del).toHaveBeenCalledWith(failed.ip)
     expect(cache.del).toHaveBeenCalledWith(failed.email)
+  })
+})
+
+describe('AuthService email verification', () => {
+  function emailServiceMock(send = vi.fn().mockResolvedValue(undefined)) {
+    return {
+      sendEmailVerificationEmail: send,
+      sendPasswordResetEmail: vi.fn()
+    } as unknown as EmailService
+  }
+
+  function tokenFrom(send: ReturnType<typeof vi.fn>) {
+    const url = send.mock.calls[0][1] as string
+    return new URL(url).searchParams.get('token') as string
+  }
+
+  it('sends a verification email on signup and stores only the hash of the token', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createUser: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      cache,
+      emailServiceMock(send)
+    )
+
+    await service.createUser({ email: 'a@a.com', password: 'k3!fgh-long-pw' })
+
+    const token = tokenFrom(send)
+    expect(send).toHaveBeenCalledWith(
+      'a@a.com',
+      expect.stringContaining('/verify-email?token=')
+    )
+    expect(token).toMatch(/^[0-9a-f]{64}$/)
+    expect(cache.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^email-verification:[0-9a-f]{64}$/),
+      'user-1',
+      24 * 60 * 60
+    )
+    const storedKeys = cache.set.mock.calls.map(([key]) => String(key))
+    expect(storedKeys.some(key => key.includes(token))).toBe(false)
+  })
+
+  it('does not fail the signup when the email cannot be delivered', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createUser: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache(),
+      emailServiceMock(vi.fn().mockRejectedValue(new Error('no api key')))
+    )
+
+    await expect(
+      service.createUser({ email: 'a@a.com', password: 'k3!fgh-long-pw' })
+    ).resolves.toMatchObject({ user: { id: 'user-1' } })
+    vi.restoreAllMocks()
+  })
+
+  it('marks the account as verified with a valid token and consumes it', async () => {
+    const markEmailVerified = vi.fn()
+    const cache = fakeCache('user-1')
+    const service = new AuthService(
+      fakeAuthRepository({ markEmailVerified }),
+      fakeJwt(),
+      cache
+    )
+
+    await service.verifyEmail('some-token')
+
+    expect(cache.getdel).toHaveBeenCalledWith(
+      expect.stringMatching(/^email-verification:[0-9a-f]{64}$/)
+    )
+    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+  })
+
+  it('rejects an unknown or already used token', async () => {
+    const markEmailVerified = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({ markEmailVerified }),
+      fakeJwt(),
+      fakeCache(null)
+    )
+
+    await expect(service.verifyEmail('used-token')).rejects.toMatchObject({
+      statusCode: 400
+    })
+    expect(markEmailVerified).not.toHaveBeenCalled()
+  })
+
+  it('invalidates the previous link when a new one is sent', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    const cache = fakeCache()
+    cache.get.mockResolvedValue('previous-hash')
+    const service = new AuthService(
+      fakeAuthRepository({
+        findById: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'a@a.com',
+          emailVerifiedAt: null
+        })
+      }),
+      fakeJwt(),
+      cache,
+      emailServiceMock(send)
+    )
+
+    await service.resendEmailVerification('user-1')
+
+    expect(cache.del).toHaveBeenCalledWith('email-verification:previous-hash')
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the previous link working when the new one cannot be delivered', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const cache = fakeCache()
+    cache.get.mockResolvedValue('previous-hash')
+    const service = new AuthService(
+      fakeAuthRepository({
+        findById: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'a@a.com',
+          emailVerifiedAt: null
+        })
+      }),
+      fakeJwt(),
+      cache,
+      emailServiceMock(vi.fn().mockRejectedValue(new Error('no api key')))
+    )
+
+    await expect(
+      service.resendEmailVerification('user-1')
+    ).rejects.toMatchObject({ statusCode: 503 })
+    expect(cache.del).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('does not resend to an account that is already verified', async () => {
+    const send = vi.fn()
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findById: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'a@a.com',
+          emailVerifiedAt: new Date()
+        })
+      }),
+      fakeJwt(),
+      cache,
+      emailServiceMock(send)
+    )
+
+    await service.resendEmailVerification('user-1')
+
+    expect(send).not.toHaveBeenCalled()
+    expect(cache.increment).not.toHaveBeenCalled()
+  })
+
+  it('stops resending after 3 requests in an hour', async () => {
+    const send = vi.fn()
+    const cache = fakeCache()
+    cache.increment.mockResolvedValue(4)
+    const service = new AuthService(
+      fakeAuthRepository({
+        findById: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'a@a.com',
+          emailVerifiedAt: null
+        })
+      }),
+      fakeJwt(),
+      cache,
+      emailServiceMock(send)
+    )
+
+    await expect(
+      service.resendEmailVerification('user-1')
+    ).rejects.toMatchObject({ statusCode: 429 })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('tells the user when the resend could not be delivered', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const service = new AuthService(
+      fakeAuthRepository({
+        findById: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'a@a.com',
+          emailVerifiedAt: null
+        })
+      }),
+      fakeJwt(),
+      fakeCache(),
+      emailServiceMock(vi.fn().mockRejectedValue(new Error('no api key')))
+    )
+
+    await expect(
+      service.resendEmailVerification('user-1')
+    ).rejects.toMatchObject({ statusCode: 503 })
+    vi.restoreAllMocks()
+  })
+})
+
+describe('AuthService provider linking', () => {
+  const googleProfile = {
+    sub: 'google-1',
+    email: 'user@a.com',
+    email_verified: true,
+    name: 'User',
+    picture: 'https://example.com/p.png'
+  }
+
+  function googleSetup(existing: { discordId: string | null }) {
+    const updatePassword = vi.fn()
+    const deleteTokensByUserId = vi.fn()
+    const markEmailVerified = vi.fn()
+    const authRepository = fakeAuthRepository({
+      findUserByGoogleId: vi.fn().mockResolvedValue(null),
+      findByEmail: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', googleId: null, ...existing }),
+      linkGoogle: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      updatePassword,
+      deleteTokensByUserId,
+      markEmailVerified,
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(authRepository, fakeJwt(), fakeCache())
+    return { service, updatePassword, deleteTokensByUserId, markEmailVerified }
+  }
+
+  it('drops the password of a password-only account even when its email was verified by link', async () => {
+    const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
+      googleSetup({ discordId: null })
+
+    await service.loginWithGoogle(googleProfile)
+
+    expect(updatePassword).toHaveBeenCalledWith('user-1', expect.any(String))
+    expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
+    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+  })
+
+  it('keeps the password and sessions of an account that already has another provider', async () => {
+    const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
+      googleSetup({ discordId: 'discord-1' })
+
+    await service.loginWithGoogle(googleProfile)
+
+    expect(updatePassword).not.toHaveBeenCalled()
+    expect(deleteTokensByUserId).not.toHaveBeenCalled()
+    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+  })
+
+  it.each([
+    ['a password-only account', null, true],
+    ['an account that already has Google', 'google-1', false]
+  ])('links Discord to %s', async (_label, googleId, expectsTakeOver) => {
+    const updatePassword = vi.fn()
+    const markEmailVerified = vi.fn()
+    const linkDiscord = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', googleId, discordId: null }),
+        linkDiscord,
+        updatePassword,
+        deleteTokensByUserId: vi.fn(),
+        markEmailVerified,
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithDiscord({
+      id: 'discord-1',
+      email: 'user@a.com',
+      verified: true,
+      username: 'user',
+      avatar: null
+    })
+
+    expect(linkDiscord).toHaveBeenCalledWith('user-1', 'discord-1', null)
+    expect(updatePassword).toHaveBeenCalledTimes(expectsTakeOver ? 1 : 0)
+    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+  })
+})
+
+describe('AuthService provider already linked', () => {
+  it('refuses to replace the Google account already linked to that email', async () => {
+    const linkGoogle = vi.fn()
+    const updatePassword = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          googleId: 'another-google-account',
+          discordId: null
+        }),
+        linkGoogle,
+        updatePassword
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await expect(
+      service.loginWithGoogle({
+        sub: 'google-2',
+        email: 'user@a.com',
+        email_verified: true,
+        name: 'User',
+        picture: 'https://example.com/p.png'
+      })
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(linkGoogle).not.toHaveBeenCalled()
+    expect(updatePassword).not.toHaveBeenCalled()
+  })
+
+  it('refuses to replace the Discord account already linked to that email', async () => {
+    const linkDiscord = vi.fn()
+    const updatePassword = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          googleId: null,
+          discordId: 'another-discord-account'
+        }),
+        linkDiscord,
+        updatePassword
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await expect(
+      service.loginWithDiscord({
+        id: 'discord-2',
+        email: 'user@a.com',
+        verified: true,
+        username: 'user',
+        avatar: null
+      })
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(linkDiscord).not.toHaveBeenCalled()
+    expect(updatePassword).not.toHaveBeenCalled()
+  })
+})
+
+describe('AuthService provider emails', () => {
+  it('looks up and creates the Google account with a lowercase email', async () => {
+    const findByEmail = vi.fn().mockResolvedValue(null)
+    const createUserWithGoogle = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue(null),
+        findByEmail,
+        createUserWithGoogle,
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    const result = await service.loginWithGoogle({
+      sub: 'google-1',
+      email: 'Ana@Mail.COM',
+      email_verified: true,
+      name: 'Ana',
+      picture: 'https://example.com/p.png'
+    })
+
+    expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
+    expect(createUserWithGoogle).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'ana@mail.com' })
+    )
+    expect(result.user).toMatchObject({ email: 'ana@mail.com' })
+  })
+
+  it('looks up and creates the Discord account with a lowercase email', async () => {
+    const findByEmail = vi.fn().mockResolvedValue(null)
+    const createWithDiscord = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail,
+        createWithDiscord,
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithDiscord({
+      id: 'discord-1',
+      email: 'Ana@Mail.COM',
+      verified: true,
+      username: 'ana',
+      avatar: null
+    })
+
+    expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
+    expect(createWithDiscord).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'ana@mail.com' })
+    )
   })
 })
 

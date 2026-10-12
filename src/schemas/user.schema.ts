@@ -30,6 +30,8 @@ export const GetMeResponseSchema = z.object({
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
+    email: z.string(),
+    emailVerified: z.boolean(),
     gamesAmount: z.number(),
     totalHoursPlayed: z.number(),
     steamId: z.string().nullable(),
