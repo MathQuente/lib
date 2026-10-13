@@ -339,8 +339,6 @@ export class UserService {
     const hasPlatforms = (userGame._count?.platforms ?? 0) > 0
 
     if (statusId === WISHLIST_STATUS_ID) {
-      // Wishlist means "haven't played it" — an existing rating would be a
-      // leftover opinion that no longer makes sense there.
       const rating = await this.ratingRepository.findUniqueByUserGame(
         igdbId,
         userId

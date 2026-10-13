@@ -97,7 +97,6 @@ export class AuthService {
 
   async validateRefreshToken(refreshToken: string) {
     try {
-      // Primeiro verifica no banco
       const storedToken = await this.authRepository.findToken(refreshToken)
 
       if (
@@ -108,7 +107,6 @@ export class AuthService {
         throw new ClientError('Sessão inválida ou expirada.', 401)
       }
 
-      // Depois verifica a assinatura JWT
       const decoded = this.jwt.verify(refreshToken) as {
         userId: string
         tokenType?: string
@@ -117,7 +115,6 @@ export class AuthService {
         throw new ClientError('Sessão inválida.', 401)
       }
 
-      // Remove o token usado (rotação de tokens)
       await this.authRepository.invalidateToken(refreshToken)
 
       return decoded.userId
@@ -133,9 +130,6 @@ export class AuthService {
     }
   }
 
-  // Checagem só-leitura, sem rotação: usada pelo fallback silencioso do
-  // authenticateDecorator (jwt.ts) pra renovar o access token sem invalidar
-  // o refresh token a cada 15 minutos.
   async isRefreshTokenActive(refreshToken: string): Promise<string | null> {
     const storedToken = await this.authRepository.findToken(refreshToken)
 
@@ -290,7 +284,6 @@ export class AuthService {
     name: string
     picture: string
   }) {
-    // Primeiro tenta encontrar por googleId
     let user = await this.authRepository.findUserByGoogleId(profile.sub)
 
     if (!user) {
@@ -300,7 +293,6 @@ export class AuthService {
 
       const email = normalizeEmail(profile.email)
 
-      // Se não encontrou por googleId, busca por email
       const existing = await this.authRepository.findByEmail(email)
 
       if (existing) {
@@ -312,7 +304,6 @@ export class AuthService {
           await this.discardPasswordAndSessions(existing.id)
         }
 
-        // Usuário existe com esse email, vincula o Google ID
         user = await this.authRepository.linkGoogle(
           existing.id,
           profile.sub,
@@ -540,9 +531,7 @@ export class AuthService {
             ttlSeconds
           )
         }
-      } catch {
-        // Token já inválido/expirado — nada pra revogar.
-      }
+      } catch {}
     }
   }
 }

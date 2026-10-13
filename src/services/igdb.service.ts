@@ -161,19 +161,12 @@ export class IGDBService {
     )
   }
 
-  // external_games.category is deprecated (always empty). The current
-  // field is external_game_source, a reference into external_game_sources
-  // — id 1 there is "Steam" (confirmed by querying that endpoint directly).
   static readonly STEAM_EXTERNAL_GAME_SOURCE = 1
   static readonly PSN_EXTERNAL_GAME_SOURCE = 36
   static readonly XBOX_EXTERNAL_GAME_SOURCE = 11
   static readonly XBOX_SEARCH_PLATFORM_IDS = [11, 12, 49, 169, 6]
   private static readonly EXTERNAL_GAMES_BATCH_SIZE = 500
 
-  // `external_games` is a reverse multi-relation on `games` — it can't be
-  // filtered via `where external_games.uid = (...)` on the `games`
-  // endpoint. IGDB requires querying the `external_games` endpoint
-  // directly for the uid->game id mapping, then fetching those games.
   static async getGamesByExternalIds(
     uids: string[],
     source: number

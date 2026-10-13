@@ -2,9 +2,6 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../database/db'
 import { GameCacheSortBy, GameCacheSortOrder } from '../types/game-cache'
 
-// A cached game is notable enough to list/search if it clears either bar:
-// enough post-release ratings (covers classics, which rarely have hype), or
-// enough pre-release hype (covers unreleased/announced games with no ratings yet).
 const MIN_TOTAL_RATING_COUNT = 10
 const MIN_HYPES = 5
 
@@ -229,9 +226,6 @@ export class GameCacheRepository {
     )
   }
 
-  // `category` is always written (real id or the -1 "unknown" sentinel), so
-  // `category IS NULL` reliably means "not backfilled yet" and only ever
-  // matches once per row, even though category is legitimately absent for many games.
   async findManyMissingCategoryOrParent(limit: number): Promise<number[]> {
     const rows = await prisma.gameCache.findMany({
       where: { category: null },

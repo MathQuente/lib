@@ -158,7 +158,6 @@ export class Jwt {
       try {
         await request.jwtVerify()
       } catch {
-        // anonymous — proceed without request.user
         return
       }
 

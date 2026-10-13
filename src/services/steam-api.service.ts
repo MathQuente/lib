@@ -100,8 +100,6 @@ export class SteamApiService {
       response: { game_count?: number; games?: SteamOwnedGame[] }
     }
 
-    // A private profile (or bad SteamID) returns an empty `response` object
-    // with no `games` key at all — that's the only signal Valve gives us.
     if (!data.response.games) return null
 
     return data.response.games
@@ -119,9 +117,6 @@ export class SteamApiService {
       response?: { items?: { appid: number }[] }
     }
 
-    // Same shape-based signal as GetOwnedGames: a missing `items` key means
-    // the profile/wishlist couldn't be read; an empty array is a real,
-    // legitimately empty wishlist.
     if (!data.response?.items) return null
 
     return data.response.items
@@ -147,8 +142,6 @@ export class SteamApiService {
       }
     }
 
-    // `success: false` covers games with no achievement schema at all
-    // (most multiplayer-only titles) — nothing to signal off of there.
     const achievements = data.playerstats?.achievements
     if (!data.playerstats?.success || !achievements || achievements.length === 0) {
       return null

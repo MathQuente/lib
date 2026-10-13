@@ -162,12 +162,10 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: 'OAuth2 not configured' })
       }
 
-      // Gera state manualmente
       const state = crypto.randomBytes(16).toString('hex')
       await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
       setOAuthStateCookie(reply, state)
 
-      // Constrói a URL manualmente
       const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
       const params = new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -188,7 +186,6 @@ export async function authRoutes(app: FastifyInstance) {
     }
   })
 
-  // ✅ Callback do Google
   app.get('/google/callback', async (request, reply) => {
     const query = request.query as {
       state?: string
@@ -198,7 +195,6 @@ export async function authRoutes(app: FastifyInstance) {
     const stateFromQuery = query.state
     const code = query.code
 
-    // Verifica se há erro do Google
     if (query.error) {
       console.error('❌ Erro do Google:', query.error)
       return reply.redirect(
@@ -208,7 +204,6 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    // Valida state manualmente
     if (!stateFromQuery) {
       console.error('❌ State ausente na query')
       return reply.redirect(
@@ -238,7 +233,6 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    // Remove state após validação
     await cacheRepository.del(oauthStateKey(stateFromQuery))
 
     return authController.googleCallback(request, reply)

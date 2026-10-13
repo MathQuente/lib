@@ -122,9 +122,6 @@ export class Server {
   }
 
   private static async initRateLimit() {
-    // Raised from 100: TanStack Query's cross-cutting cache invalidation
-    // (several query keys refetched per mutation) plus Steam-import status
-    // polling made 100/min too tight for normal single-user usage.
     await this.app.register(fastifyRateLimit, {
       max: 300,
       timeWindow: '1 minute',
