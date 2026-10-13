@@ -13,9 +13,29 @@ const MIN_SECRET_LENGTH = 32
 const authRepository = new AuthRepository()
 const cacheRepository = new CacheRepository()
 
+const RENEWABLE_ERROR_CODES = new Set([
+  'FST_JWT_NO_AUTHORIZATION_IN_COOKIE',
+  'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED'
+])
+
+function respondUnavailable(
+  response: FastifyReply,
+  label: string,
+  error: unknown
+) {
+  console.error(label, {
+    error: error instanceof Error ? error.message : 'unknown error'
+  })
+  return response.status(503).send({ status: 'unavailable' })
+}
+
+function verifyAccessCookie(request: FastifyRequest) {
+  return request.jwtVerify({ onlyCookie: true })
+}
+
 async function isSessionRevoked(request: FastifyRequest): Promise<boolean> {
   const accessToken = request.cookies.accessToken
-  if (!accessToken) return false
+  if (!accessToken) return true
 
   const revokedToken = await cacheRepository.get(
     revokedAccessTokenKey(accessToken)
@@ -79,7 +99,7 @@ export class Jwt {
       'authenticate',
       async (request: FastifyRequest, response: FastifyReply) => {
         try {
-          await request.jwtVerify()
+          await verifyAccessCookie(request)
 
           if (request.user.tokenType === 'refresh') {
             return response.status(401).send({ status: 'unauthorized' })
@@ -89,13 +109,11 @@ export class Jwt {
           try {
             revoked = await isSessionRevoked(request)
           } catch (revocationCheckError) {
-            console.error('Revocation check failed:', {
-              error:
-                revocationCheckError instanceof Error
-                  ? revocationCheckError.message
-                  : 'unknown error'
-            })
-            return response.status(503).send({ status: 'unavailable' })
+            return respondUnavailable(
+              response,
+              'Revocation check failed:',
+              revocationCheckError
+            )
           }
 
           if (revoked) {
@@ -105,48 +123,55 @@ export class Jwt {
           }
         } catch (error) {
           const code = (error as { code?: string }).code
-          if (code === 'FST_JWT_NO_AUTHORIZATION_IN_COOKIE') {
-            const refreshToken = request.cookies.refreshToken
-
-            if (!refreshToken) {
-              return response.status(401).send({ status: 'unauthorized' })
-            }
-
-            try {
-              const authService = new AuthService(
-                authRepository,
-                fastify.jwt,
-                cacheRepository
-              )
-              const userId =
-                await authService.isRefreshTokenActive(refreshToken)
-
-              if (!userId) {
-                return clearAuthCookies(response)
-                  .status(401)
-                  .send({ status: 'unauthorized' })
-              }
-
-              const newAccessToken = fastify.jwt.sign({
-                userId,
-                tokenType: 'access'
-              })
-
-              setAccessTokenCookie(response, newAccessToken)
-
-              request.cookies.accessToken = newAccessToken
-
-              await request.jwtVerify()
-            } catch (error) {
-              console.error('Refresh Error:', {
-                error: error instanceof Error ? error.message : 'unknown error'
-              })
-              return clearAuthCookies(response)
-                .status(401)
-                .send({ status: 'unauthorized' })
-            }
-          } else {
+          if (!RENEWABLE_ERROR_CODES.has(code ?? '')) {
             return response.status(401).send({ status: 'unauthorized' })
+          }
+
+          const refreshToken = request.cookies.refreshToken
+
+          if (!refreshToken) {
+            return response.status(401).send({ status: 'unauthorized' })
+          }
+
+          let userId: string | null
+          try {
+            const authService = new AuthService(
+              authRepository,
+              fastify.jwt,
+              cacheRepository
+            )
+            userId = await authService.isRefreshTokenActive(refreshToken)
+          } catch (refreshCheckError) {
+            return respondUnavailable(
+              response,
+              'Refresh check failed:',
+              refreshCheckError
+            )
+          }
+
+          if (!userId) {
+            return clearAuthCookies(response)
+              .status(401)
+              .send({ status: 'unauthorized' })
+          }
+
+          try {
+            const newAccessToken = fastify.jwt.sign({
+              userId,
+              tokenType: 'access'
+            })
+
+            request.cookies.accessToken = newAccessToken
+
+            await verifyAccessCookie(request)
+
+            setAccessTokenCookie(response, newAccessToken)
+          } catch (renewalError) {
+            return respondUnavailable(
+              response,
+              'Session renewal failed:',
+              renewalError
+            )
           }
         }
       }
@@ -156,7 +181,7 @@ export class Jwt {
   private static tryAuthenticateDecorator = (fastify: FastifyInstance) => {
     fastify.decorate('tryAuthenticate', async (request: FastifyRequest) => {
       try {
-        await request.jwtVerify()
+        await verifyAccessCookie(request)
       } catch {
         return
       }
@@ -164,7 +189,14 @@ export class Jwt {
       try {
         const isAccessToken = request.user.tokenType !== 'refresh'
         if (isAccessToken && !(await isSessionRevoked(request))) return
-      } catch {}
+      } catch (revocationCheckError) {
+        console.error('Revocation check failed:', {
+          error:
+            revocationCheckError instanceof Error
+              ? revocationCheckError.message
+              : 'unknown error'
+        })
+      }
 
       ;(request as { user?: unknown }).user = undefined
     })
