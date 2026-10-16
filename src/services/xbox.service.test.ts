@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { Prisma } from '@prisma/client'
 import {
+  collapsePortsIntoParent,
+  findBasesOfFinishedExpansions,
   nameVariants,
   pickNameMatch,
   pickSubtitleMatch,
@@ -190,6 +192,132 @@ describe('pickNameMatch', () => {
     expect(pickNameMatch('Battlefield 3™', [igdb(9, { name: 'Battlefield 3' }), undated])).toBe(
       undated
     )
+  })
+})
+
+describe('collapsePortsIntoParent', () => {
+  const parent = igdb(11071, { name: 'FIFA 16' })
+
+  it('points a port with the same name at its parent when the parent was matched too', () => {
+    const port = igdb(240448, { name: 'FIFA 16', parent_game: 11071 })
+
+    const result = collapsePortsIntoParent(
+      new Map([
+        ['one', parent],
+        ['360', port]
+      ])
+    )
+
+    expect(result.get('360')).toBe(parent)
+    expect(result.get('one')).toBe(parent)
+  })
+
+  it('keeps a child with a different name (edition, remaster, DLC)', () => {
+    const edition = igdb(19456, {
+      name: 'Ori and the Blind Forest: Definitive Edition',
+      parent_game: 7344
+    })
+    const base = igdb(7344, { name: 'Ori and the Blind Forest' })
+
+    const result = collapsePortsIntoParent(
+      new Map([
+        ['a', base],
+        ['b', edition]
+      ])
+    )
+
+    expect(result.get('b')).toBe(edition)
+  })
+
+  it('keeps a port whose parent was not matched', () => {
+    const port = igdb(240426, { name: 'FIFA 15', parent_game: 7574 })
+
+    const result = collapsePortsIntoParent(new Map([['360', port]]))
+
+    expect(result.get('360')).toBe(port)
+  })
+
+  it('keeps a game without a parent', () => {
+    const result = collapsePortsIntoParent(new Map([['one', parent]]))
+
+    expect(result.get('one')).toBe(parent)
+  })
+})
+
+describe('findBasesOfFinishedExpansions', () => {
+  const EXPANSION = 2
+  const STANDALONE = 4
+
+  function merged(
+    id: number,
+    titleId: string,
+    earned: number,
+    parent?: number
+  ) {
+    return {
+      igdbGame: igdb(id, { parent_game: parent }),
+      titleIds: [titleId],
+      lastPlayedAt: null,
+      mostCompleted: title({ titleId, achievementsEarned: earned })
+    }
+  }
+
+  const base = merged(120, 'base', 10)
+  const expansion = merged(3182, 'exp', 27, 120)
+
+  it('returns the base of a finished expansion that is in the import', () => {
+    const result = findBasesOfFinishedExpansions(
+      [base, expansion],
+      new Set(['exp']),
+      new Map([[3182, EXPANSION]])
+    )
+
+    expect(result).toEqual(['base'])
+  })
+
+  it('ignores standalone expansions', () => {
+    const result = findBasesOfFinishedExpansions(
+      [base, expansion],
+      new Set(['exp']),
+      new Map([[3182, STANDALONE]])
+    )
+
+    expect(result).toEqual([])
+  })
+
+  it('ignores a base with no achievements', () => {
+    const result = findBasesOfFinishedExpansions(
+      [merged(120, 'base', 0), expansion],
+      new Set(['exp']),
+      new Map([[3182, EXPANSION]])
+    )
+
+    expect(result).toEqual([])
+  })
+
+  it('ignores an expansion that is not finished and a base that already is', () => {
+    const types = new Map([[3182, EXPANSION]])
+
+    expect(
+      findBasesOfFinishedExpansions([base, expansion], new Set(), types)
+    ).toEqual([])
+    expect(
+      findBasesOfFinishedExpansions(
+        [base, expansion],
+        new Set(['exp', 'base']),
+        types
+      )
+    ).toEqual([])
+  })
+
+  it('does nothing when the base is not in the import', () => {
+    const result = findBasesOfFinishedExpansions(
+      [expansion],
+      new Set(['exp']),
+      new Map([[3182, EXPANSION]])
+    )
+
+    expect(result).toEqual([])
   })
 })
 
@@ -509,6 +637,242 @@ describe('XboxService.runImport', () => {
     )
   })
 
+  it('imports the Xbox One and Xbox 360 versions of a game as one entry', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({ titleId: '1', name: 'FIFA 16', pfn: null, devices: ['XboxOne'] }),
+        title({ titleId: '2', name: 'FIFA 16', pfn: null, devices: ['Xbox360'] })
+      ]),
+      getMinutesPlayed: vi.fn().mockResolvedValue(
+        new Map([
+          ['1', 60],
+          ['2', 30]
+        ])
+      )
+    })
+    mockExternal([])
+    vi.spyOn(IGDBService, 'searchGamesByName').mockResolvedValue([
+      igdb(11071, { name: 'FIFA 16', platforms: [{ name: 'Xbox One' }] }),
+      igdb(240448, {
+        name: 'FIFA 16',
+        parent_game: 11071,
+        platforms: [{ name: 'Xbox 360' }]
+      })
+    ] as IGDBGame[])
+    const service = makeService(fakeUserRepository(), xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(result.library).toMatchObject({ imported: 1, skipped: 1 })
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledTimes(1)
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-11071',
+      'XBOX',
+      expect.objectContaining({ hoursPlayed: 1.5 })
+    )
+  })
+
+  describe('story achievement', () => {
+    async function importWith(
+      getUnlockedAchievements: XboxApiService['getUnlockedAchievements'],
+      game: IGDBGame,
+      earned = 11
+    ) {
+      const xboxApi = fakeXboxApi({
+        getTitleHistory: vi.fn().mockResolvedValue([
+          title({
+            achievementProgress: 19,
+            achievementsEarned: earned,
+            achievementsTotal: 58,
+            devices: ['Xbox360']
+          })
+        ]),
+        resolveProductIds: vi
+          .fn()
+          .mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+        getUnlockedAchievements
+      })
+      vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+        { uid: '9AAA', game }
+      ])
+      const userRepository = fakeUserRepository()
+      await makeService(userRepository, xboxApi).runImport('user-1')
+      return userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>
+    }
+
+    it('marks a title as played when an unlocked achievement describes the ending, even below the ratio', async () => {
+      const lookup = vi
+        .fn()
+        .mockResolvedValue([
+          { description: 'Completed the final mission.', unlockedAt: null }
+        ])
+
+      const addGame = await importWith(lookup, igdb(10, { game_modes: [{ name: 'Single player' }] }))
+
+      expect(lookup).toHaveBeenCalledWith('xuid-1', '1', ['Xbox360'])
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 10, statusIds: 1 })
+      )
+    })
+
+    it('flags a title found through the story achievement as a strong finish', async () => {
+      const importPlatform = vi.fn().mockResolvedValue('imported')
+      const xboxApi = fakeXboxApi({
+        getTitleHistory: vi.fn().mockResolvedValue([
+          title({
+            achievementProgress: 19,
+            achievementsEarned: 11,
+            achievementsTotal: 58,
+            devices: ['Xbox360']
+          })
+        ]),
+        resolveProductIds: vi
+          .fn()
+          .mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+        getUnlockedAchievements: vi
+          .fn()
+          .mockResolvedValue([
+            { description: 'Completed the final mission.', unlockedAt: null }
+          ])
+      })
+      vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+        { uid: '9AAA', game: igdb(10, { game_modes: [{ name: 'Single player' }] }) }
+      ])
+      const service = new XboxService(
+        fakeUserRepository(),
+        fakeGameCacheService(),
+        xboxApi,
+        { importPlatform } as never,
+        0
+      )
+
+      await service.runImport('user-1')
+
+      expect(importPlatform).toHaveBeenCalledWith(
+        'user-1',
+        10,
+        'XBOX',
+        expect.objectContaining({ finished: true, strongFinished: true })
+      )
+    })
+
+    it('applies to racing and sport games that have a single-player mode', async () => {
+      const lookup = vi
+        .fn()
+        .mockResolvedValue([
+          { description: 'Completed the final mission.', unlockedAt: null }
+        ])
+      const game = igdb(10, {
+        genres: [{ name: 'Racing' }],
+        game_modes: [{ name: 'Single player' }, { name: 'Multiplayer' }]
+      })
+
+      const addGame = await importWith(lookup, game)
+
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 1 })
+      )
+    })
+
+    it('skips games without a single-player mode and games with too few achievements', async () => {
+      const lookup = vi
+        .fn()
+        .mockResolvedValue([{ description: 'Watch the credits', unlockedAt: null }])
+
+      await importWith(lookup, igdb(10, { game_modes: [{ name: 'Multiplayer' }] }))
+      await importWith(lookup, igdb(11, { game_modes: [{ name: 'Single player' }] }), 3)
+
+      expect(lookup).not.toHaveBeenCalled()
+    })
+
+    it('stops looking after the first OpenXBL error and keeps the import going', async () => {
+      const lookup = vi.fn().mockRejectedValue(new XboxApiError('rate', 429))
+
+      const addGame = await importWith(
+        lookup,
+        igdb(10, { game_modes: [{ name: 'Single player' }] })
+      )
+
+      expect(lookup).toHaveBeenCalledTimes(1)
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 4 })
+      )
+    })
+  })
+
+  describe('expansion bases', () => {
+    async function importPair(gameTypes: () => Promise<Map<number, number>>) {
+      vi.spyOn(IGDBService, 'getGameTypesByIds').mockImplementation(gameTypes)
+      const xboxApi = fakeXboxApi({
+        getTitleHistory: vi.fn().mockResolvedValue([
+          title({
+            titleId: '1',
+            name: 'Diablo III',
+            pfn: 'pfn-base',
+            achievementsEarned: 10,
+            achievementsTotal: 45
+          }),
+          title({
+            titleId: '2',
+            name: 'Diablo III: Reaper of Souls',
+            pfn: 'pfn-exp',
+            achievementProgress: 63,
+            achievementsEarned: 27,
+            achievementsTotal: 43
+          })
+        ]),
+        resolveProductIds: vi.fn().mockResolvedValue(
+          new Map([
+            ['pfn-base', '9AAA'],
+            ['pfn-exp', '9BBB']
+          ])
+        )
+      })
+      vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+        { uid: '9AAA', game: igdb(120, { name: 'Diablo III' }) },
+        {
+          uid: '9BBB',
+          game: igdb(3182, { name: 'Diablo III: Reaper of Souls', parent_game: 120 })
+        }
+      ])
+      const userRepository = fakeUserRepository()
+      await makeService(userRepository, xboxApi).runImport('user-1')
+      return userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>
+    }
+
+    it('marks the base game as played when its expansion was finished', async () => {
+      const addGame = await importPair(async () => new Map([[3182, 2]]))
+
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 120, statusIds: 1 })
+      )
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 3182, statusIds: 1 })
+      )
+    })
+
+    it('leaves the base alone when the expansion is standalone', async () => {
+      const addGame = await importPair(async () => new Map([[3182, 4]]))
+
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 120, statusIds: 4 })
+      )
+    })
+
+    it('keeps importing when the game type lookup fails', async () => {
+      const addGame = await importPair(async () => {
+        throw new IGDBRequestError('down')
+      })
+
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 120, statusIds: 4 })
+      )
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 3182, statusIds: 1 })
+      )
+    })
+  })
+
   it('saves hours from minutes played, summing merged titles', async () => {
     const getMinutesPlayed = vi.fn().mockResolvedValue(
       new Map([
@@ -699,7 +1063,7 @@ describe('XboxService.runImport', () => {
     )
   })
 
-  it('does not infer completion for sports and racing games', async () => {
+  it('does not infer completion from the ratio for sports and racing games', async () => {
     const xboxApi = fakeXboxApi({
       getTitleHistory: vi.fn().mockResolvedValue([
         title({
@@ -722,7 +1086,6 @@ describe('XboxService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
       expect.objectContaining({ statusIds: 4 })
     )
-    expect(xboxApi.getUnlockedAchievements).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -760,7 +1123,7 @@ describe('XboxService.runImport', () => {
 
     await service.runImport('user-1')
 
-    expect(xboxApi.getUnlockedAchievements).toHaveBeenCalledWith('xuid-1', '1')
+    expect(xboxApi.getUnlockedAchievements).toHaveBeenCalledWith('xuid-1', '1', ['XboxOne'])
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
       expect.objectContaining({ statusIds: 1, completedAt: expected })
     )

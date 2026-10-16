@@ -29,7 +29,7 @@ export interface XboxTitle {
 
 export interface XboxUnlockedAchievement {
   description: string
-  unlockedAt: Date
+  unlockedAt: Date | null
 }
 
 export class XboxApiError extends Error {
@@ -67,6 +67,12 @@ interface OpenXblAchievement {
   progressState?: string
   description?: string
   progression?: { timeUnlocked?: string } | null
+}
+
+interface OpenXbl360Achievement {
+  unlocked?: boolean
+  description?: string
+  lockedDescription?: string
 }
 
 interface OpenXblStat {
@@ -163,15 +169,24 @@ export class XboxApiService {
 
   async getUnlockedAchievements(
     xuid: string,
-    titleId: string
+    titleId: string,
+    devices: string[] = []
   ): Promise<XboxUnlockedAchievement[]> {
+    const onlyXbox360 =
+      devices.includes('Xbox360') &&
+      !devices.includes('XboxOne') &&
+      !devices.includes('XboxSeries')
+    if (onlyXbox360) {
+      return this.getUnlockedAchievementsFromXbox360(xuid, titleId)
+    }
+
     const { achievements } = await this.request<{
       achievements?: OpenXblAchievement[]
     }>(
       `/achievements/player/${encodeURIComponent(xuid)}/${encodeURIComponent(titleId)}`
     )
 
-    return (achievements ?? []).flatMap(achievement => {
+    const dated = (achievements ?? []).flatMap(achievement => {
       if (achievement.progressState !== 'Achieved') return []
       const unlockedAt = new Date(achievement.progression?.timeUnlocked ?? '')
       if (Number.isNaN(unlockedAt.getTime()) || unlockedAt.getFullYear() < 2005) {
@@ -179,6 +194,32 @@ export class XboxApiService {
       }
       return [{ description: achievement.description ?? '', unlockedAt }]
     })
+
+    if ((achievements ?? []).length > 0 || !devices.includes('Xbox360')) {
+      return dated
+    }
+
+    return this.getUnlockedAchievementsFromXbox360(xuid, titleId)
+  }
+
+  private async getUnlockedAchievementsFromXbox360(
+    xuid: string,
+    titleId: string
+  ): Promise<XboxUnlockedAchievement[]> {
+    const { achievements } = await this.request<{
+      achievements?: OpenXbl360Achievement[]
+    }>(
+      `/achievements/x360/${encodeURIComponent(xuid)}/title/${encodeURIComponent(titleId)}`
+    )
+
+    return (achievements ?? [])
+      .filter(achievement => achievement.unlocked === true)
+      .map(achievement => ({
+        description: [achievement.description, achievement.lockedDescription]
+          .filter(Boolean)
+          .join(' '),
+        unlockedAt: null
+      }))
   }
 
   async getMinutesPlayed(

@@ -15,7 +15,9 @@ import { normalizeGameName } from '../utils/normalize-game-name'
 import {
   canInferCompletion,
   COMPLETION_KEYWORD_PATTERN,
-  meetsCompletionRatio
+  hasSinglePlayerMode,
+  meetsCompletionRatio,
+  MIN_ACHIEVEMENTS_FOR_SIGNAL
 } from '../utils/completion-heuristics'
 import {
   xboxImportQueue,
@@ -135,6 +137,7 @@ export function pickNameMatch(
 }
 
 const MAX_COMPLETION_DATE_LOOKUPS = 20
+const MAX_KEYWORD_LOOKUPS = 40
 
 const IGDB_PLATFORM_BY_DEVICE: Record<string, string> = {
   Xbox: 'Xbox',
@@ -158,18 +161,65 @@ export function runsOnTitleDevices(game: IGDBGame, devices: string[]): boolean {
 }
 
 function completionDateFrom(
-  achievements: { description: string; unlockedAt: Date }[]
+  achievements: { description: string; unlockedAt: Date | null }[]
 ): Date | undefined {
-  if (achievements.length === 0) return undefined
-  const times = (list: typeof achievements) =>
-    list.map(a => a.unlockedAt.getTime())
-
-  const story = achievements.filter(a =>
-    COMPLETION_KEYWORD_PATTERN.test(a.description)
+  const dated = achievements.flatMap(a =>
+    a.unlockedAt ? [{ description: a.description, unlockedAt: a.unlockedAt }] : []
   )
+  if (dated.length === 0) return undefined
+  const times = (list: typeof dated) => list.map(a => a.unlockedAt.getTime())
+
+  const story = dated.filter(a => COMPLETION_KEYWORD_PATTERN.test(a.description))
   return story.length > 0
     ? new Date(Math.min(...times(story)))
-    : new Date(Math.max(...times(achievements)))
+    : new Date(Math.max(...times(dated)))
+}
+
+function parentIdOf(game: IGDBGame): number | undefined {
+  const parent = game.parent_game
+  if (parent == null) return undefined
+  return typeof parent === 'object' ? parent.id : parent
+}
+
+export function collapsePortsIntoParent(
+  igdbByTitleId: Map<string, IGDBGame>
+): Map<string, IGDBGame> {
+  const matchedById = new Map<number, IGDBGame>()
+  for (const game of igdbByTitleId.values()) matchedById.set(game.id, game)
+
+  const collapsed = new Map<string, IGDBGame>()
+  for (const [titleId, game] of igdbByTitleId) {
+    const parentId = parentIdOf(game)
+    const parent = parentId !== undefined ? matchedById.get(parentId) : undefined
+    const isPort =
+      !!parent &&
+      normalizeGameName(parent.name) === normalizeGameName(game.name)
+    collapsed.set(titleId, isPort ? parent : game)
+  }
+  return collapsed
+}
+
+export function findBasesOfFinishedExpansions(
+  games: MergedXboxGame[],
+  finishedTitleIds: Set<string>,
+  gameTypes: Map<number, number>
+): string[] {
+  const byIgdbId = new Map(games.map(game => [game.igdbGame.id, game]))
+  const bases: string[] = []
+
+  for (const { igdbGame, mostCompleted } of games) {
+    if (!finishedTitleIds.has(mostCompleted.titleId)) continue
+    if (gameTypes.get(igdbGame.id) !== IGDBService.EXPANSION_GAME_TYPE) continue
+
+    const parentId = parentIdOf(igdbGame)
+    const base = parentId !== undefined ? byIgdbId.get(parentId) : undefined
+    if (!base || finishedTitleIds.has(base.mostCompleted.titleId)) continue
+    if (base.mostCompleted.achievementsEarned <= 0) continue
+
+    bases.push(base.mostCompleted.titleId)
+  }
+
+  return bases
 }
 
 const BASE_GAME_GAMERSCORE = 1000
@@ -293,7 +343,9 @@ export class XboxService {
       throw err
     }
 
-    const igdbByTitleId = await this.matchTitles(titles)
+    const igdbByTitleId = collapsePortsIntoParent(
+      await this.matchTitles(titles)
+    )
 
     const notFound: string[] = []
     let skipped = 0
@@ -346,6 +398,23 @@ export class XboxService {
     )
     const finishedTitleIds = new Set(finishedTitles.map(t => t.titleId))
 
+    const storyFinished = await this.findFinishedByStoryAchievement(
+      user.xboxXuid,
+      toImport.filter(game => !finishedTitleIds.has(game.mostCompleted.titleId))
+    )
+    const strongTitleIds = new Set(storyFinished.keys())
+    for (const [titleId, completedAt] of storyFinished) {
+      finishedTitleIds.add(titleId)
+      if (completedAt) completedAtByTitleId.set(titleId, completedAt)
+    }
+
+    for (const titleId of await this.findExpansionBases(
+      toImport,
+      finishedTitleIds
+    )) {
+      finishedTitleIds.add(titleId)
+    }
+
     const total = toImport.length
     let imported = 0
     let updated = 0
@@ -376,6 +445,7 @@ export class XboxService {
               : undefined,
           finished: isFinished,
           confirmedFinished,
+          strongFinished: strongTitleIds.has(mostCompleted.titleId),
           completedAt: isFinished
             ? (completedAtByTitleId.get(mostCompleted.titleId) ??
               mostCompleted.lastPlayedAt ??
@@ -394,6 +464,74 @@ export class XboxService {
     return { library: { imported, updated, skipped, notFound } }
   }
 
+  private async findExpansionBases(
+    games: MergedXboxGame[],
+    finishedTitleIds: Set<string>
+  ) {
+    const importedIds = new Set(games.map(game => game.igdbGame.id))
+    const childIds = games
+      .filter(({ igdbGame, mostCompleted }) => {
+        const parentId = parentIdOf(igdbGame)
+        return (
+          finishedTitleIds.has(mostCompleted.titleId) &&
+          parentId !== undefined &&
+          importedIds.has(parentId)
+        )
+      })
+      .map(({ igdbGame }) => igdbGame.id)
+    if (childIds.length === 0) return []
+
+    try {
+      const gameTypes = await IGDBService.getGameTypesByIds(childIds)
+      return findBasesOfFinishedExpansions(games, finishedTitleIds, gameTypes)
+    } catch (err) {
+      if (!(err instanceof IGDBRequestError)) throw err
+      console.warn('[Xbox] game type lookup failed, skipping expansion bases')
+      return []
+    }
+  }
+
+  private async findFinishedByStoryAchievement(
+    xuid: string,
+    games: MergedXboxGame[]
+  ) {
+    const finished = new Map<string, Date | undefined>()
+
+    const candidates = games
+      .filter(
+        ({ mostCompleted, igdbGame }) =>
+          mostCompleted.achievementsEarned >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
+          hasSinglePlayerMode(igdbGame)
+      )
+      .map(({ mostCompleted }) => mostCompleted)
+      .sort((a, b) => b.achievementsEarned - a.achievementsEarned)
+      .slice(0, MAX_KEYWORD_LOOKUPS)
+
+    for (const title of candidates) {
+      try {
+        const achievements = await this.xboxApiService.getUnlockedAchievements(
+          xuid,
+          title.titleId,
+          title.devices
+        )
+        const matched = achievements.filter(a =>
+          COMPLETION_KEYWORD_PATTERN.test(a.description)
+        )
+        if (matched.length > 0) {
+          finished.set(title.titleId, completionDateFrom(matched))
+        }
+      } catch (err) {
+        if (!(err instanceof XboxApiError)) throw err
+        console.warn('[Xbox] story achievement lookup failed, skipping the rest', {
+          error: err.message
+        })
+        break
+      }
+    }
+
+    return finished
+  }
+
   private async loadCompletionDates(xuid: string, titles: XboxTitle[]) {
     const dates = new Map<string, Date>()
 
@@ -401,7 +539,8 @@ export class XboxService {
       try {
         const achievements = await this.xboxApiService.getUnlockedAchievements(
           xuid,
-          title.titleId
+          title.titleId,
+          title.devices
         )
         const completedAt = completionDateFrom(achievements)
         if (completedAt) dates.set(title.titleId, completedAt)

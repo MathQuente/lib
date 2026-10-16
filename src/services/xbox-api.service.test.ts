@@ -147,6 +147,74 @@ describe('XboxApiService.getUnlockedAchievements', () => {
   })
 })
 
+describe('XboxApiService.getUnlockedAchievements for Xbox 360 titles', () => {
+  const empty = json({ content: { achievements: [] } })
+
+  const unlocked360 = {
+    content: {
+      achievements: [
+        {
+          unlocked: true,
+          description: 'Completed the final mission.',
+          lockedDescription: 'Complete the final mission.'
+        },
+        { unlocked: false, description: 'Not yet', lockedDescription: 'Not yet' }
+      ]
+    }
+  }
+
+  it('goes straight to the Xbox 360 endpoint for titles that only ran on the 360', async () => {
+    fetchMock.mockResolvedValueOnce(json(unlocked360))
+
+    const result = await new XboxApiService().getUnlockedAchievements(
+      '123',
+      '1414793383',
+      ['Xbox360']
+    )
+
+    expect(result).toEqual([
+      {
+        description: 'Completed the final mission. Complete the final mission.',
+        unlockedAt: null
+      }
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://xbl.io/api/v2/achievements/x360/123/title/1414793383'
+    )
+  })
+
+  it('falls back to the Xbox 360 endpoint for a cross-generation title whose player list is empty', async () => {
+    fetchMock
+      .mockResolvedValueOnce(empty)
+      .mockResolvedValueOnce(json(unlocked360))
+
+    const result = await new XboxApiService().getUnlockedAchievements(
+      '123',
+      '1414793383',
+      ['Xbox360', 'XboxOne']
+    )
+
+    expect(result).toHaveLength(1)
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://xbl.io/api/v2/achievements/x360/123/title/1414793383'
+    )
+  })
+
+  it('does not call the Xbox 360 endpoint for titles that did not run on it', async () => {
+    fetchMock.mockResolvedValueOnce(empty)
+
+    const result = await new XboxApiService().getUnlockedAchievements(
+      '123',
+      '1',
+      ['XboxOne']
+    )
+
+    expect(result).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('XboxApiService.getTitleHistory', () => {
   it('maps titles and drops the ones that only ran on Win32', async () => {
     fetchMock.mockResolvedValue(

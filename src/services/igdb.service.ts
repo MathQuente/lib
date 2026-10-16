@@ -295,6 +295,26 @@ export class IGDBService {
     return timesByGame
   }
 
+  static readonly EXPANSION_GAME_TYPE = 2
+
+  static async getGameTypesByIds(ids: number[]): Promise<Map<number, number>> {
+    const unique = [...new Set(ids)]
+    const typesByGame = new Map<number, number>()
+
+    for (let i = 0; i < unique.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      const chunk = unique.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE)
+      const results = await this.request<{ id: number; game_type?: number }[]>(
+        'games',
+        `where id = (${chunk.join(',')}); fields id,game_type; limit ${chunk.length};`
+      )
+      for (const row of results) {
+        if (row.game_type !== undefined) typesByGame.set(row.id, row.game_type)
+      }
+    }
+
+    return typesByGame
+  }
+
   static async getTotalRatingCountsByIds(
     ids: number[]
   ): Promise<Map<number, number>> {

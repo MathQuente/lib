@@ -161,3 +161,46 @@ describe('IGDBService.getTimeToBeatByGameIds', () => {
   })
 })
 
+describe('IGDBService.getGameTypesByIds', () => {
+  it('returns empty without calling IGDB when no ids are given', async () => {
+    const request = mockRequest([])
+
+    const result = await IGDBService.getGameTypesByIds([])
+
+    expect(result.size).toBe(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('maps game ids to their game type and ignores rows without one', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([
+        { id: 3182, game_type: 2 },
+        { id: 232, game_type: 4 },
+        { id: 9 }
+      ])
+
+    const result = await IGDBService.getGameTypesByIds([3182, 232, 9, 3182])
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('where id = (3182,232,9);')
+    )
+    expect([...result]).toEqual([
+      [3182, 2],
+      [232, 4]
+    ])
+  })
+
+  it('splits large id lists into batches of 500', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([])
+
+    await IGDBService.getGameTypesByIds(
+      Array.from({ length: 501 }, (_, i) => i + 1)
+    )
+
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+})
