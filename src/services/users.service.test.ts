@@ -13,7 +13,10 @@ import { SteamApiService } from './steam-api.service'
 function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
 ): UserRepository {
-  return { ...overrides } as unknown as UserRepository
+  return {
+    findUserGameStats: vi.fn().mockResolvedValue({ stats: null }),
+    ...overrides
+  } as unknown as UserRepository
 }
 
 function fakeRatingRepository(
@@ -92,6 +95,90 @@ describe('UserService.addGameToUserLibrary', () => {
       userId: 'user-1'
     })
     expect(result).toEqual({ igdbId: 1022 })
+  })
+})
+
+describe('UserService.addGameToUserLibrary completions', () => {
+  it.each([
+    ['played', 1, 1],
+    ['in the queue', 4, 0],
+    ['on the wishlist', 5, 0]
+  ])('creates the stats with the right completions when added as %s', async (_label, statusId, expected) => {
+    const createUserGameStats = vi.fn().mockResolvedValue({ completions: expected })
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue(null),
+      addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1022 }),
+      createUserGameStats
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+
+    await service.addGameToUserLibrary(1022, 'user-1', statusId)
+
+    expect(createUserGameStats).toHaveBeenCalledWith('user-1', 1022, expected)
+  })
+})
+
+describe('UserService.updateGame keeps the completion history', () => {
+  function serviceFor(currentStatus: number, completions: number) {
+    const ensureAtLeastOneCompletion = vi
+      .fn()
+      .mockResolvedValue({ completions: Math.max(completions, 1) })
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({
+        id: 'ug-1',
+        UserGamesStatus: { id: currentStatus },
+        _count: { platforms: 0 }
+      }),
+      updateGameStatus: vi.fn().mockImplementation(async (igdbId, _u, statusId) => ({
+        igdbId,
+        UserGamesStatus: { id: statusId, status: 'X' }
+      })),
+      findUserGameStats: vi.fn().mockResolvedValue({ stats: { completions } }),
+      ensureAtLeastOneCompletion
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+    return { service, userRepository, ensureAtLeastOneCompletion }
+  }
+
+  it.each([
+    ['playing', 3],
+    ['dropped', 6],
+    ['paused', 2]
+  ])('keeps the completions when a played game without platforms moves to %s', async (_label, statusId) => {
+    const { service } = serviceFor(1, 2)
+
+    const result = await service.updateGame(1, 'user-1', statusId)
+
+    expect(result.playedCountUpdated).toBe(2)
+  })
+
+  it('keeps a higher count when the game comes back to played', async () => {
+    const { service, ensureAtLeastOneCompletion } = serviceFor(3, 2)
+
+    const result = await service.updateGame(1, 'user-1', 1)
+
+    expect(ensureAtLeastOneCompletion).toHaveBeenCalledWith('user-1', 1)
+    expect(result.playedCountUpdated).toBe(2)
+  })
+
+  it('counts one completion when a game with none becomes played', async () => {
+    const { service } = serviceFor(3, 0)
+
+    const result = await service.updateGame(1, 'user-1', 1)
+
+    expect(result.playedCountUpdated).toBe(1)
   })
 })
 
@@ -680,5 +767,62 @@ describe('UserService.delete', () => {
 
     await expect(service.delete('user-1')).rejects.toThrow('redis down')
     expect(deleteUser).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserService.updateUserGamePlayedCount', () => {
+  function serviceFor(statusId: number, completions: number) {
+    const updateUserGamePlayedCount = vi
+      .fn()
+      .mockImplementation(async (_u, _g, inc) => ({ completions: completions + inc }))
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({
+        UserGamesStatus: { id: statusId },
+        _count: { platforms: 0 }
+      }),
+      findUserGameStats: vi.fn().mockResolvedValue({ stats: { completions } }),
+      updateUserGamePlayedCount
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+    return { service, updateUserGamePlayedCount }
+  }
+
+  it('lets a game that is not played go down to zero completions', async () => {
+    const { service } = serviceFor(3, 1)
+
+    await expect(service.updateUserGamePlayedCount('user-1', 1, -1)).resolves.toEqual({
+      playedCount: 0
+    })
+  })
+
+  it('does not go below zero', async () => {
+    const { service, updateUserGamePlayedCount } = serviceFor(3, 0)
+
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, -1)
+    ).rejects.toThrow(ClientError)
+    expect(updateUserGamePlayedCount).not.toHaveBeenCalled()
+  })
+
+  it('keeps at least one completion on a played game', async () => {
+    const { service } = serviceFor(1, 1)
+
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, -1)
+    ).rejects.toThrow(ClientError)
+  })
+
+  it('adds a completion to a game being replayed', async () => {
+    const { service } = serviceFor(3, 2)
+
+    await expect(service.updateUserGamePlayedCount('user-1', 1, 1)).resolves.toEqual({
+      playedCount: 3
+    })
   })
 })

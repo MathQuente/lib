@@ -84,13 +84,33 @@ describe('UserGamePlatformService.addPlatform', () => {
     )
   })
 
-  it('does not inherit completions or date when the game is not played', async () => {
+  it('keeps the completion history when the first platform is added to a game that is not played', async () => {
+    const completedAt = new Date('2025-01-01T00:00:00Z')
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 3,
+        completedAt,
+        hours: 45,
+        completions: 2
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'STEAM')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'STEAM',
+      { hoursPlayed: 45, completions: 2, completedAt }
+    )
+  })
+
+  it('does not carry a date when the game was never finished', async () => {
     const { service, platformRepository } = setup(
       userGame({
         statusId: 4,
         completedAt: new Date(),
         hours: 5,
-        completions: 1
+        completions: 0
       })
     )
 

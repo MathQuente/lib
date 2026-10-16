@@ -70,7 +70,11 @@ export class UserService {
       throw err
     }
 
-    await this.userRepository.createUserGameStats(userId, igdbId)
+    await this.userRepository.createUserGameStats(
+      userId,
+      igdbId,
+      statusIds === PLAYED_STATUS_ID ? 1 : 0
+    )
 
     return { igdbId: addedId }
   }
@@ -407,21 +411,8 @@ export class UserService {
       }
     }
 
-    if (currentStatus === PLAYED_STATUS_ID && statusId !== PLAYED_STATUS_ID) {
-      await this.userRepository.removeUserGameStats(userId, igdbId)
-
-      const { igdbId: updatedId, UserGamesStatus } =
-        await this.userRepository.updateGameStatus(igdbId, userId, statusId)
-
-      return {
-        igdbId: updatedId,
-        userGameStatus: UserGamesStatus,
-        playedCountUpdated: 0
-      }
-    }
-
     if (currentStatus !== PLAYED_STATUS_ID && statusId === PLAYED_STATUS_ID) {
-      const stats = await this.userRepository.createUserGameStats(
+      const stats = await this.userRepository.ensureAtLeastOneCompletion(
         userId,
         igdbId
       )
@@ -438,11 +429,15 @@ export class UserService {
 
     const { igdbId: updatedId, UserGamesStatus } =
       await this.userRepository.updateGameStatus(igdbId, userId, statusId)
+    const { stats } = await this.userRepository.findUserGameStats(
+      igdbId,
+      userId
+    )
 
     return {
       igdbId: updatedId,
       userGameStatus: UserGamesStatus,
-      playedCountUpdated: 0
+      playedCountUpdated: stats?.completions ?? 0
     }
   }
 
@@ -479,6 +474,17 @@ export class UserService {
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
     if ((userGame?._count?.platforms ?? 0) > 0) {
       throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
+    }
+
+    const { stats } = await this.userRepository.findUserGameStats(igdbId, userId)
+    const minimum = userGame?.UserGamesStatus?.id === PLAYED_STATUS_ID ? 1 : 0
+    if ((stats?.completions ?? 0) + incrementValue < minimum) {
+      throw new ClientError(
+        minimum === 1
+          ? 'Um jogo marcado como Jogado precisa de pelo menos uma conclusão.'
+          : 'O número de vezes zerado não pode ser negativo.',
+        400
+      )
     }
 
     const userGameStats = await this.userRepository.updateUserGamePlayedCount(

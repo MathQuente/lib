@@ -42,12 +42,12 @@ function toDateString(date: Date | null) {
 }
 
 function legacyValues(userGame: UserGameWithPlatforms): PlatformValues {
-  const isPlayed = userGame.userGamesStatusId === PLAYED_STATUS_ID
   const legacyHours = userGame.UserGameStats?.hoursPlayed
+  const completions = userGame.UserGameStats?.completions ?? 0
   return {
     hoursPlayed: legacyHours != null ? Number(legacyHours) : null,
-    completions: isPlayed ? (userGame.UserGameStats?.completions ?? 0) : 0,
-    completedAt: isPlayed ? userGame.completedAt : null
+    completions,
+    completedAt: completions > 0 ? userGame.completedAt : null
   }
 }
 

@@ -990,6 +990,11 @@ describe('SteamService.runImport', () => {
       userId: 'user-1',
       statusIds: 5
     })
+    expect(userRepository.createUserGameStats).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(Number),
+      0
+    )
     expect(lastPlatformRepository.savePlatform).not.toHaveBeenCalled()
   })
 

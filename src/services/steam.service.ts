@@ -378,7 +378,7 @@ export class SteamService {
         userId,
         statusIds: WISHLIST_STATUS_ID
       })
-      await this.userRepository.createUserGameStats(userId, igdbGame.id)
+      await this.userRepository.createUserGameStats(userId, igdbGame.id, 0)
       imported++
       onItemDone()
     }

@@ -34,7 +34,7 @@ export class UserRepository {
   async createUserGameStats(
     userId: string,
     igdbId: number,
-    completions: number = 1
+    completions: number = 0
   ) {
     const userGame = await prisma.userGame.findUnique({
       where: { userId_igdbId: { userId, igdbId } },
@@ -375,26 +375,31 @@ export class UserRepository {
     })
   }
 
-  async removeUserGameStats(userId: string, igdbId: number) {
+  async ensureAtLeastOneCompletion(userId: string, igdbId: number) {
     const userGame = await prisma.userGame.findUnique({
       where: { userId_igdbId: { userId, igdbId } },
       select: { id: true }
     })
 
     if (!userGame) {
-      console.error('[UserGameStats] removeUserGameStats: userGame not found', {
-        userId,
-        igdbId
-      })
+      console.error(
+        '[UserGameStats] ensureAtLeastOneCompletion: userGame not found',
+        { userId, igdbId }
+      )
       return null
     }
 
     await prisma.userGameStats.updateMany({
-      where: { userGameId: userGame.id },
-      data: { completions: 0 }
+      where: { userGameId: userGame.id, completions: { lt: 1 } },
+      data: { completions: 1 }
     })
 
-    return { completions: 0 }
+    return prisma.userGameStats.upsert({
+      where: { userGameId: userGame.id },
+      update: {},
+      create: { userGameId: userGame.id, completions: 1 },
+      select: { completions: true }
+    })
   }
 
   async updateGameStatus(igdbId: number, userId: string, statusId: number) {
