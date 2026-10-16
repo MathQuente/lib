@@ -119,3 +119,45 @@ describe('IGDBService.searchGamesByName', () => {
     expect(request).not.toHaveBeenCalled()
   })
 })
+
+describe('IGDBService.getTimeToBeatByGameIds', () => {
+  it('returns empty without calling IGDB when no ids are given', async () => {
+    const request = mockRequest([])
+
+    const result = await IGDBService.getTimeToBeatByGameIds([])
+
+    expect(result.size).toBe(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('maps game ids to the normal time to beat and ignores rows without one', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([
+        { game_id: 10, normally: 36000 },
+        { game_id: 20 },
+        { game_id: 30, normally: 0 }
+      ])
+
+    const result = await IGDBService.getTimeToBeatByGameIds([10, 20, 30, 10])
+
+    expect(request).toHaveBeenCalledWith(
+      'game_time_to_beats',
+      expect.stringContaining('where game_id = (10,20,30);')
+    )
+    expect([...result]).toEqual([[10, 36000]])
+  })
+
+  it('splits large id lists into batches of 500', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([])
+
+    await IGDBService.getTimeToBeatByGameIds(
+      Array.from({ length: 501 }, (_, i) => i + 1)
+    )
+
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+})
+

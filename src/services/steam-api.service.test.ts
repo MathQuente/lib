@@ -222,6 +222,59 @@ describe('SteamApiService achievement requests', () => {
   })
 })
 
+describe('SteamApiService.getUnlockedAchievementTexts', () => {
+  const xml = `<?xml version="1.0"?><playerstats><achievements>
+    <achievement closed="1"><name><![CDATA[Thank You!]]></name><apiname><![CDATA[38_Thank_You]]></apiname><description><![CDATA[Completed the final chapter.]]></description></achievement>
+    <achievement closed="0"><name><![CDATA[Kiwami]]></name><apiname><![CDATA[00_KIWAMI]]></apiname><description><![CDATA[Obtain all other achievements.]]></description></achievement>
+  </achievements></playerstats>`
+
+  function answer(status: number, body = '') {
+    return { ok: status >= 200 && status < 300, status, text: () => Promise.resolve(body) }
+  }
+
+  it('returns name and description of the unlocked achievements, keyed by lower-case api name', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(answer(200, xml))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await SteamApiService.getUnlockedAchievementTexts(
+      '76561198198405543',
+      3717330
+    )
+
+    expect([...result!]).toEqual([
+      ['38_thank_you', 'Thank You! Completed the final chapter.']
+    ])
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://steamcommunity.com/profiles/76561198198405543/stats/3717330/?xml=1&l=english'
+    )
+  })
+
+  it('returns null when the profile is private or has no achievements', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(answer(200, '<playerstats><error>private</error></playerstats>'))
+    )
+
+    expect(await SteamApiService.getUnlockedAchievementTexts('1', 2)).toBeNull()
+  })
+
+  it('retries after a 429', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(answer(429))
+      .mockResolvedValueOnce(answer(200, xml))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = SteamApiService.getUnlockedAchievementTexts('1', 2)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(await pending).not.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+})
+
 describe('SteamApiService.getOwnedGames', () => {
   function answer(status: number, body: unknown = {}) {
     return {

@@ -253,7 +253,7 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 | Provider limits (not enforced in code) | not known | about 300 calls per 15 minutes on the service account | OpenXBL: 150 requests per hour; a 429 from it becomes a 503 |
 
 **Completion detection** (`src/utils/completion-heuristics.ts` + each service). Two signals per game:
-- `finished`, a heuristic: a rare achievement (5% or less of players, only when the game has at most 100 achievements), or an achievement whose description matches end-of-game wording (`COMPLETION_KEYWORD_PATTERN`), or an earned/total ratio above a threshold that shrinks as the total grows (90% up to 10 achievements, down to 15% above 150; never with fewer than 5). Only inferred for games with a single-player mode that are not sport or racing (`canInferCompletion`).
+- `finished`, a heuristic: a rare achievement (5% or less of players, only when the game has at most 100 achievements), or an achievement whose description matches end-of-game wording (`COMPLETION_KEYWORD_PATTERN`), or an earned/total ratio above a threshold that shrinks as the total grows (90% up to 10 achievements, down to 15% above 150; never with fewer than 5), or, on Steam only, playtime at or above IGDB's usual time to beat (`IGDBService.getTimeToBeatByGameIds`) with at least 25% of the achievements (`meetsPlaytimeSignal`). Only inferred for games with a single-player mode that are not sport or racing with a multiplayer mode (`canInferCompletion`).
 - `confirmedFinished`, a fact: every achievement (Steam, with at least 5; Xbox, `achievementProgress >= 100`) or the platinum / 100% of trophies (PSN).
 - `activityStatusId`: PLAYING when played in the last 14 days, otherwise BACKLOG.
 
@@ -332,7 +332,7 @@ Reasons that are not visible in the code. The code has no explanatory comments; 
 1. **Global rate limit is 300/min, not the usual 100** (`src/server.ts`). It was raised because TanStack Query refetches several query keys after each mutation and the import status is polled; 100 per minute was too tight for one person using the app normally.
 2. **BullMQ has its own Redis connection** (`src/queues/connection.ts`). BullMQ needs a connection that is not shared with ordinary commands, created with `maxRetriesPerRequest: null`, because of its blocking commands.
 3. **The job id is the "one import at a time" lock** (`src/queues/*-import.queue.ts`, `src/queues/import-job.ts`). The id is deterministic per user; `enqueueUniqueImport` looks the job up by that id and refuses a new one while it is waiting, active or delayed.
-4. **Steam answers by shape, not by status** (`src/services/steam-api.service.ts`).
+4. **Steam answers by shape, not by status** (`src/services/steam-api.service.ts`). The three achievement requests retry twice on network errors, 429 and 5xx, so a rate-limited call does not silently turn a finished game into a backlog one.
    - `GetOwnedGames`: a private profile (or a wrong SteamID) returns an empty `response` object with no `games` key. That missing key is the only signal Valve gives, and it is what turns into "make your profile public".
    - Wishlist: a missing `items` key means it could not be read; an empty array is a real, empty wishlist.
    - `GetPlayerAchievements`: `success: false` means the game has no achievement schema at all (most multiplayer-only titles), so there is nothing to infer from.

@@ -883,7 +883,7 @@ describe('XboxService.runImport', () => {
       const userRepository = fakeUserRepository({
         findUserGame: vi
           .fn()
-          .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } }),
+          .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 2 } }),
         updateGameStatus
       })
       const service = makeService(userRepository, xboxApi)

@@ -399,7 +399,7 @@ describe('UserGamePlatformService.importPlatform', () => {
 
     it('does not mark an existing game as played on the heuristic alone', async () => {
       const { service, platformRepository, userRepository } = setup(
-        userGame({ statusId: 4, platforms: [row({ platform: 'STEAM' })] })
+        userGame({ statusId: 2, platforms: [row({ platform: 'STEAM' })] })
       )
 
       await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
@@ -447,12 +447,138 @@ describe('UserGamePlatformService.importPlatform', () => {
         userGame({ statusId: 5, platforms: [] })
       )
 
-      await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...heuristicOnly,
+        finished: false
+      })
 
       expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
         10,
         'user-1',
         3
+      )
+    })
+
+    it('marks a backlog game as played, with a completion, on the heuristic', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({ statusId: 4, platforms: [row({ platform: 'STEAM' })] })
+      )
+
+      await service.importPlatform('user-1', 10, 'XBOX', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        1
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'XBOX',
+        {
+          hoursPlayed: 12,
+          completions: 1,
+          completedAt: heuristicOnly.completedAt
+        }
+      )
+    })
+
+    describe('a game in progress', () => {
+      const strong = { ...heuristicOnly, strongFinished: true }
+
+      it('is marked as played, with a completion, on a strong finishing signal when it has no completion yet', async () => {
+        const { service, platformRepository, userRepository } = setup(
+          userGame({ statusId: 3, platforms: [row({ platform: 'STEAM' })] })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', strong)
+
+        expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+          10,
+          'user-1',
+          1
+        )
+        expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+          'ug-1',
+          'STEAM',
+          {
+            hoursPlayed: 12,
+            completions: 1,
+            completedAt: heuristicOnly.completedAt
+          }
+        )
+      })
+
+      it('stays as it is when a completion is already registered', async () => {
+        const { service, userRepository } = setup(
+          userGame({
+            statusId: 3,
+            platforms: [row({ platform: 'STEAM', completions: 1 })]
+          })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', strong)
+
+        expect(userRepository.updateGameStatus).not.toHaveBeenCalled()
+      })
+
+      it('stays as it is when the signal is not strong', async () => {
+        const { service, userRepository } = setup(
+          userGame({ statusId: 3, platforms: [row({ platform: 'STEAM' })] })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', heuristicOnly)
+
+        expect(userRepository.updateGameStatus).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['paused', 2],
+        ['dropped', 6]
+      ])('does not move a %s game on a strong signal', async (_label, statusId) => {
+        const { service, userRepository } = setup(
+          userGame({ statusId, platforms: [row({ platform: 'STEAM' })] })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', strong)
+
+        expect(userRepository.updateGameStatus).not.toHaveBeenCalledWith(
+          10,
+          'user-1',
+          1
+        )
+      })
+    })
+
+    it('leaves a game in progress alone on the heuristic', async () => {
+      const { service, userRepository } = setup(
+        userGame({ statusId: 3, platforms: [row({ platform: 'STEAM' })] })
+      )
+
+      await service.importPlatform('user-1', 10, 'XBOX', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).not.toHaveBeenCalled()
+    })
+
+    it('marks a wishlist game as played, with a completion, on the heuristic', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({ statusId: 5, platforms: [] })
+      )
+
+      await service.importPlatform('user-1', 10, 'XBOX', heuristicOnly)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        1
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'XBOX',
+        {
+          hoursPlayed: 12,
+          completions: 1,
+          completedAt: heuristicOnly.completedAt
+        }
       )
     })
 

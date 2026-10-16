@@ -15,6 +15,7 @@ import {
   canInferCompletion,
   MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
   meetsCompletionRatio,
+  meetsPlaytimeSignal,
   MIN_ACHIEVEMENTS_FOR_SIGNAL,
   RARE_ACHIEVEMENT_PERCENT
 } from '../utils/completion-heuristics'
@@ -44,12 +45,31 @@ const ACHIEVEMENT_CHECK_CONCURRENCY = 10
 
 function matchingCompletionKeywordNames(
   achievedApiNames: string[],
-  schema: Map<string, string> | null
+  schema: Map<string, string> | null,
+  communityTexts: Map<string, string> | null = null
 ): string[] {
-  if (!schema) return []
+  if (!schema && !communityTexts) return []
   return achievedApiNames.filter(name => {
-    const description = schema.get(name)
-    return !!description && COMPLETION_KEYWORD_PATTERN.test(description)
+    const text = [schema?.get(name), communityTexts?.get(name.toLowerCase())]
+      .filter(Boolean)
+      .join(' ')
+    return !!text && COMPLETION_KEYWORD_PATTERN.test(text)
+  })
+}
+
+function hasRareAchievementSignal(
+  achievements: SteamAchievementSummary,
+  globalPercentages: Map<string, number> | null
+): string[] {
+  if (
+    achievements.total > MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL ||
+    globalPercentages == null
+  ) {
+    return []
+  }
+  return achievements.achievedApiNames.filter(name => {
+    const percent = globalPercentages.get(name)
+    return percent !== undefined && percent <= RARE_ACHIEVEMENT_PERCENT
   })
 }
 
@@ -254,10 +274,15 @@ export class SteamService {
       onProgress?.(total === 0 ? 100 : Math.round((processed / total) * 100))
     }
 
+    const timeToBeatByGame = await IGDBService.getTimeToBeatByGameIds(
+      ownedResolved.toImport.map(({ igdbGame }) => igdbGame.id)
+    ).catch(() => new Map<number, number>())
+
     const library = await this.importOwnedGames(
       ownedResolved,
       userId,
       steamId,
+      timeToBeatByGame,
       bump
     )
     const wishlist = await this.importWishlist(wishlistResolved, userId, bump)
@@ -279,6 +304,7 @@ export class SteamService {
     },
     userId: string,
     steamId: string,
+    timeToBeatByGame: Map<number, number>,
     onItemDone: () => void
   ): Promise<SteamImportSectionResult> {
     const achievementData = await mapWithConcurrency(
@@ -294,7 +320,24 @@ export class SteamService {
           SteamApiService.getAchievementSchema(item.appid)
         ])
 
-        return { achievements, globalPercentages, schema }
+        const hasSignalAlready =
+          !!achievements &&
+          (matchingCompletionKeywordNames(
+            achievements.achievedApiNames,
+            schema
+          ).length > 0 ||
+            hasRareAchievementSignal(achievements, globalPercentages).length > 0)
+        const communityTexts =
+          achievements &&
+          achievements.achieved >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
+          !hasSignalAlready
+            ? await SteamApiService.getUnlockedAchievementTexts(
+                steamId,
+                item.appid
+              )
+            : null
+
+        return { achievements, globalPercentages, schema, communityTexts }
       }
     )
 
@@ -306,6 +349,7 @@ export class SteamService {
       const achievements = achievementData[i]?.achievements ?? null
       const globalPercentages = achievementData[i]?.globalPercentages ?? null
       const schema = achievementData[i]?.schema ?? null
+      const communityTexts = achievementData[i]?.communityTexts ?? null
 
       await this.gameCacheService.cacheMany([igdbGame])
 
@@ -315,15 +359,9 @@ export class SteamService {
         owned.playtime_forever > 0 &&
         secondsSinceLastPlayed <= RECENT_PLAY_THRESHOLD_SECONDS
 
-      const matchedRareNames =
-        achievements != null &&
-        achievements.total <= MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL &&
-        globalPercentages != null
-          ? achievements.achievedApiNames.filter(name => {
-              const percent = globalPercentages.get(name)
-              return percent !== undefined && percent <= RARE_ACHIEVEMENT_PERCENT
-            })
-          : []
+      const matchedRareNames = achievements
+        ? hasRareAchievementSignal(achievements, globalPercentages)
+        : []
       const hasRareAchievement = matchedRareNames.length > 0
 
       const meetsRatioThreshold =
@@ -331,12 +369,30 @@ export class SteamService {
         meetsCompletionRatio(achievements.achieved, achievements.total)
 
       const matchedKeywordNames = achievements
-        ? matchingCompletionKeywordNames(achievements.achievedApiNames, schema)
+        ? matchingCompletionKeywordNames(
+            achievements.achievedApiNames,
+            schema,
+            communityTexts
+          )
         : []
       const hasCompletionKeyword = matchedKeywordNames.length > 0
 
+      const hoursPlayed = Math.round((owned.playtime_forever / 60) * 100) / 100
+      const normallySeconds = timeToBeatByGame.get(igdbGame.id)
+      const meetsPlaytime =
+        achievements != null &&
+        meetsPlaytimeSignal({
+          hoursPlayed,
+          normallyHours: normallySeconds ? normallySeconds / 3600 : undefined,
+          achieved: achievements.achieved,
+          total: achievements.total
+        })
+
       const isFinished =
-        hasRareAchievement || hasCompletionKeyword || meetsRatioThreshold
+        hasRareAchievement ||
+        hasCompletionKeyword ||
+        meetsRatioThreshold ||
+        meetsPlaytime
 
       const activityStatusId = recentlyPlayed
         ? PLAYING_STATUS_ID
@@ -359,9 +415,10 @@ export class SteamService {
         {
           statusId,
           activityStatusId,
-          hoursPlayed: Math.round((owned.playtime_forever / 60) * 100) / 100,
+          hoursPlayed,
           finished: isFinished,
           confirmedFinished,
+          strongFinished: hasRareAchievement || hasCompletionKeyword,
           completedAt
         }
       )

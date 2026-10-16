@@ -271,6 +271,30 @@ export class IGDBService {
     return new Map(results.map(r => [r.id, r.hypes ?? 0]))
   }
 
+  static async getTimeToBeatByGameIds(
+    ids: number[]
+  ): Promise<Map<number, number>> {
+    const unique = [...new Set(ids)]
+    const timesByGame = new Map<number, number>()
+
+    for (let i = 0; i < unique.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      const chunk = unique.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE)
+      const results = await this.request<
+        { game_id: number; normally?: number }[]
+      >(
+        'game_time_to_beats',
+        `where game_id = (${chunk.join(',')}); fields game_id,normally; limit ${chunk.length};`
+      )
+      for (const row of results) {
+        if (row.normally && row.normally > 0) {
+          timesByGame.set(row.game_id, row.normally)
+        }
+      }
+    }
+
+    return timesByGame
+  }
+
   static async getTotalRatingCountsByIds(
     ids: number[]
   ): Promise<Map<number, number>> {

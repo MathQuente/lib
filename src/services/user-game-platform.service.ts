@@ -8,6 +8,8 @@ import { UserRepository } from '../repositories/users.repository'
 
 const PLAYED_STATUS_ID = 1
 const WISHLIST_STATUS_ID = 5
+const BACKLOG_STATUS_ID = 4
+const PLAYING_STATUS_ID = 3
 
 const STATUS_RANK: Record<number, number> = {
   5: 0,
@@ -24,6 +26,7 @@ export interface ImportedPlatformData {
   hoursPlayed?: number
   finished: boolean
   confirmedFinished: boolean
+  strongFinished?: boolean
   completedAt?: Date
 }
 
@@ -182,7 +185,21 @@ export class UserGamePlatformService {
       userId
     )
     const isNew = !userGame
-    const countsAsCompletion = isNew ? data.finished : data.confirmedFinished
+    const isUndecided =
+      !!userGame &&
+      (userGame.userGamesStatusId === WISHLIST_STATUS_ID ||
+        userGame.userGamesStatusId === BACKLOG_STATUS_ID)
+    const hasNoCompletion =
+      !!userGame && userGame.platforms.every(p => (p.completions ?? 0) === 0)
+    const isPromotableInProgress =
+      !!userGame &&
+      userGame.userGamesStatusId === PLAYING_STATUS_ID &&
+      !!data.strongFinished &&
+      hasNoCompletion
+    const trustsHeuristic = isNew || isUndecided || isPromotableInProgress
+    const countsAsCompletion = trustsHeuristic
+      ? data.finished
+      : data.confirmedFinished
 
     if (!userGame) {
       await this.userRepository.addGameToUserLibrary({
@@ -194,9 +211,10 @@ export class UserGamePlatformService {
       await this.userRepository.createUserGameStats(userId, igdbId, 0)
       userGame = await this.requireUserGame(igdbId, userId)
     } else {
-      const targetStatusId = data.confirmedFinished
-        ? PLAYED_STATUS_ID
-        : data.activityStatusId
+      const targetStatusId =
+        data.confirmedFinished || ((isUndecided || isPromotableInProgress) && data.finished)
+          ? PLAYED_STATUS_ID
+          : data.activityStatusId
       if (
         (STATUS_RANK[targetStatusId] ?? 0) >
         (STATUS_RANK[userGame.userGamesStatusId] ?? 0)

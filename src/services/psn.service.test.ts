@@ -477,7 +477,7 @@ describe('PsnService.runImport', () => {
         fakeUserRepository({
           findUserGame: vi
             .fn()
-            .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } }),
+            .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 2 } }),
           updateGameStatus
         }),
         fakePsnApi({

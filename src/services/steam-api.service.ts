@@ -214,6 +214,33 @@ export class SteamApiService {
     }
   }
 
+  static async getUnlockedAchievementTexts(
+    steamId: string,
+    appId: number
+  ): Promise<Map<string, string> | null> {
+    const url = `https://steamcommunity.com/profiles/${encodeURIComponent(steamId)}/stats/${appId}/?xml=1&l=english`
+    const response = await this.fetchAchievementData(url)
+
+    if (!response?.ok) return null
+
+    const xml = await response.text()
+    const texts = new Map<string, string>()
+    const blocks = xml.matchAll(
+      /<achievement closed="1">([\s\S]*?)<\/achievement>/g
+    )
+    for (const [, block] of blocks) {
+      const field = (tag: string) =>
+        new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`).exec(
+          block
+        )?.[1] ?? ''
+      const apiName = field('apiname').toLowerCase()
+      if (!apiName) continue
+      texts.set(apiName, `${field('name')} ${field('description')}`.trim())
+    }
+
+    return texts.size > 0 ? texts : null
+  }
+
   static async getGlobalAchievementPercentages(
     appId: number
   ): Promise<Map<string, number> | null> {

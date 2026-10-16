@@ -115,9 +115,212 @@ describe('SteamService.enqueueImport', () => {
   })
 })
 
+let communityTextsSpy: ReturnType<typeof vi.spyOn>
+
 describe('SteamService.runImport', () => {
   beforeEach(() => {
     vi.spyOn(SteamApiService, 'getWishlist').mockResolvedValue([])
+    vi.spyOn(IGDBService, 'getTimeToBeatByGameIds').mockResolvedValue(new Map())
+  })
+
+  async function importSingleGame({
+    playtimeMinutes,
+    normallySeconds,
+    achieved,
+    total,
+    genres = [],
+    gameModes = [{ name: 'Single player' }],
+    timeToBeatFails = false,
+    achievedApiNames = [],
+    communityTexts = null,
+    schema = null
+  }: {
+    playtimeMinutes: number
+    normallySeconds?: number
+    achieved: number
+    total: number
+    genres?: { name: string }[]
+    gameModes?: { name: string }[]
+    timeToBeatFails?: boolean
+    achievedApiNames?: string[]
+    communityTexts?: Map<string, string> | null
+    schema?: Map<string, string> | null
+  }) {
+    const userRepository = fakeUserRepository({
+      findUserById: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
+      findUserGame: vi.fn().mockResolvedValue(null),
+      addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 7 }),
+      createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
+      upsertUserGameHours: vi.fn().mockResolvedValue({ hoursPlayed: 1 })
+    })
+    vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+      {
+        appid: 1174180,
+        name: 'Game',
+        playtime_forever: playtimeMinutes,
+        rtime_last_played: 0
+      }
+    ])
+    vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+      {
+        appId: 1174180,
+        game: { id: 7, name: 'Game', genres, game_modes: gameModes }
+      }
+    ] as never)
+    vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
+      achieved,
+      total,
+      achievedApiNames,
+      unlockTimesByName: new Map()
+    })
+    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
+      null
+    )
+    vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(schema)
+    communityTextsSpy = vi
+      .spyOn(SteamApiService, 'getUnlockedAchievementTexts')
+      .mockResolvedValue(communityTexts)
+    const timeToBeat = vi.spyOn(IGDBService, 'getTimeToBeatByGameIds')
+    if (timeToBeatFails) timeToBeat.mockRejectedValue(new Error('igdb down'))
+    else
+      timeToBeat.mockResolvedValue(
+        normallySeconds ? new Map([[7, normallySeconds]]) : new Map()
+      )
+
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
+    await service.runImport('user-1')
+
+    return userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>
+  }
+
+  it('marks a new game as PLAYED when playtime reaches the usual time to beat and enough achievements are earned', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 108 * 60,
+      normallySeconds: 89.5 * 3600,
+      achieved: 20,
+      total: 51
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it.each([
+    ['few achievements are earned', { achieved: 8, total: 51 }, 90 * 3600],
+    ['playtime is below the time to beat', { achieved: 15, total: 51 }, 200 * 3600],
+    ['the time to beat is unknown', { achieved: 15, total: 51 }, undefined]
+  ])('keeps a new game out of PLAYED when %s', async (_label, ach, normally) => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 100 * 60,
+      normallySeconds: normally,
+      ...ach
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('still imports the game when the time to beat lookup fails', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 100 * 60,
+      achieved: 5,
+      total: 51,
+      timeToBeatFails: true
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('marks a game as played from a hidden achievement described only on the community page (Yakuza Kiwami-shaped)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 23 * 60,
+      achieved: 21,
+      total: 55,
+      achievedApiNames: ['38_Thank_You', '12_Tell_Me_A_Story'],
+      communityTexts: new Map([
+        ['38_thank_you', 'Thank You! Completed the final chapter.'],
+        ['12_tell_me_a_story', 'Tell Me a Story Completed 10 substories.']
+      ])
+    })
+
+    expect(communityTextsSpy).toHaveBeenCalledWith('76561197960287930', 1174180)
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it('does not ask the community page when the schema already shows a finishing achievement', async () => {
+    await importSingleGame({
+      playtimeMinutes: 20 * 60,
+      achieved: 10,
+      total: 40,
+      achievedApiNames: ['END'],
+      schema: new Map([['END', 'Watch the credits']])
+    })
+
+    expect(communityTextsSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not ask the community page for a game with too few earned achievements', async () => {
+    await importSingleGame({
+      playtimeMinutes: 20 * 60,
+      achieved: 3,
+      total: 40,
+      achievedApiNames: ['A']
+    })
+
+    expect(communityTextsSpy).not.toHaveBeenCalled()
+  })
+
+  it('keeps a game out of played when the community texts do not describe an ending', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 5 * 60,
+      achieved: 6,
+      total: 55,
+      achievedApiNames: ['A'],
+      communityTexts: new Map([['a', 'Tutorial Complete the tutorial.']])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('analyses a single-player sport game by achievements (Punch Club-shaped)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 20 * 60,
+      achieved: 36,
+      total: 47,
+      genres: [{ name: 'Sport' }, { name: 'Strategy' }]
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it('does not read achievements for a multiplayer sport game', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 90 * 60,
+      achieved: 36,
+      total: 40,
+      genres: [{ name: 'Sport' }],
+      gameModes: [{ name: 'Single player' }, { name: 'Multiplayer' }]
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
   })
 
   it('imports matched games, updates existing ones, and lists unmatched by name', async () => {
@@ -297,7 +500,7 @@ describe('SteamService.runImport', () => {
           .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
         findUserGame: vi
           .fn()
-          .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 4 } }),
+          .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 2 } }),
         updateGameStatus
       })
 
@@ -355,7 +558,7 @@ describe('SteamService.runImport', () => {
         .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
       findUserGame: vi
         .fn()
-        .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 4 } }),
+        .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 2 } }),
       updateGameStatus
     })
 
