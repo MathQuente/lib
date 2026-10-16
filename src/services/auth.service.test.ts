@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import bcrypt from 'bcrypt'
 import { JWT } from '@fastify/jwt'
-import { AuthService } from './auth.service'
+import { AuthService, revokedAccessTokenKey } from './auth.service'
 import { AuthRepository } from '../repositories/auth.repository'
 import { CacheRepository } from '../repositories/cache.repository'
 import { ClientError } from '../errors/client-error'
@@ -94,6 +94,70 @@ describe('AuthService.validateUser', () => {
     )
 
     expect(result).toEqual({ user: { id: '1', userName: 'someone' } })
+  })
+})
+
+describe('AuthService.logout', () => {
+  const future = () => Math.floor(Date.now() / 1000) + 600
+
+  it('revokes the access token for the time it still has left', async () => {
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({ invalidateToken: vi.fn() }),
+      fakeJwt({ verify: vi.fn(() => ({ exp: future() })) }),
+      cache
+    )
+
+    await service.logout('refresh', 'access')
+
+    expect(cache.set).toHaveBeenCalledWith(
+      revokedAccessTokenKey('access'),
+      true,
+      expect.any(Number)
+    )
+  })
+
+  it('does nothing about the access token when it is invalid or expired', async () => {
+    const cache = fakeCache()
+    const invalid = new AuthService(
+      fakeAuthRepository({ invalidateToken: vi.fn() }),
+      fakeJwt({
+        verify: vi.fn(() => {
+          throw new Error('invalid token')
+        })
+      }),
+      cache
+    )
+    const expired = new AuthService(
+      fakeAuthRepository({ invalidateToken: vi.fn() }),
+      fakeJwt({ verify: vi.fn(() => ({ exp: 1 })) }),
+      cache
+    )
+
+    await expect(invalid.logout('refresh', 'access')).resolves.toBeUndefined()
+    await expect(expired.logout('refresh', 'access')).resolves.toBeUndefined()
+    expect(cache.set).not.toHaveBeenCalled()
+  })
+
+  it('logs the failure, and still finishes, when Redis cannot store the revocation', async () => {
+    const cache = fakeCache()
+    cache.set.mockRejectedValue(new Error('redis down'))
+    const invalidateToken = vi.fn()
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const service = new AuthService(
+      fakeAuthRepository({ invalidateToken }),
+      fakeJwt({ verify: vi.fn(() => ({ exp: future() })) }),
+      cache
+    )
+
+    await expect(service.logout('refresh', 'access')).resolves.toBeUndefined()
+
+    expect(invalidateToken).toHaveBeenCalledWith('refresh')
+    expect(logged).toHaveBeenCalledWith(
+      '[Auth] access token revocation failed at logout',
+      { error: 'redis down' }
+    )
+    logged.mockRestore()
   })
 })
 

@@ -519,19 +519,28 @@ export class AuthService {
       await this.authRepository.invalidateToken(refreshToken)
     }
 
-    if (accessToken) {
-      try {
-        const decoded = this.jwt.verify(accessToken) as { exp: number }
-        const ttlSeconds = decoded.exp - Math.floor(Date.now() / 1000)
+    if (!accessToken) return
 
-        if (ttlSeconds > 0) {
-          await this.cacheRepository.set(
-            revokedAccessTokenKey(accessToken),
-            true,
-            ttlSeconds
-          )
-        }
-      } catch {}
+    let ttlSeconds: number
+    try {
+      const decoded = this.jwt.verify(accessToken) as { exp: number }
+      ttlSeconds = decoded.exp - Math.floor(Date.now() / 1000)
+    } catch {
+      return
+    }
+
+    if (ttlSeconds <= 0) return
+
+    try {
+      await this.cacheRepository.set(
+        revokedAccessTokenKey(accessToken),
+        true,
+        ttlSeconds
+      )
+    } catch (error) {
+      console.error('[Auth] access token revocation failed at logout', {
+        error: error instanceof Error ? error.message : 'unknown error'
+      })
     }
   }
 }
