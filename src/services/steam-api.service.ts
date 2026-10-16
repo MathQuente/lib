@@ -14,6 +14,7 @@ export interface SteamAchievementSummary {
   unlockTimesByName: Map<string, number>
 }
 
+const PERSONA_TIMEOUT_MS = 1_500
 const STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login'
 const OPENID_IDENTIFIER_SELECT =
   'http://specs.openid.net/auth/2.0/identifier_select'
@@ -86,6 +87,19 @@ export class SteamApiService {
       throw new Error('STEAM_API_KEY environment variable is required')
     }
     return key
+  }
+
+  static async getPersonaName(steamId: string): Promise<string | null> {
+    const url = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${this.getApiKey()}&steamids=${steamId}`
+    const response = await fetchWithTimeout(url, {}, PERSONA_TIMEOUT_MS)
+
+    if (!response.ok) return null
+
+    const data = (await response.json()) as {
+      response?: { players?: { personaname?: string }[] }
+    }
+
+    return data.response?.players?.[0]?.personaname ?? null
   }
 
   static async getOwnedGames(

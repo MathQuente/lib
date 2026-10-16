@@ -46,5 +46,6 @@ export const ImportStatusResponseSchema = z.object({
     })
     .optional(),
   error: z.string().optional(),
+  finishedAt: z.number().optional(),
   cooldownUntil: z.number().optional()
 })

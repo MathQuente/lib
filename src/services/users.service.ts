@@ -7,6 +7,7 @@ import { UserRepository } from '../repositories/users.repository'
 import { FollowRepository } from '../repositories/follow.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
+import { SteamApiService } from './steam-api.service'
 import { GameCacheService } from './game-cache.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { CacheRepository } from '../repositories/cache.repository'
@@ -15,6 +16,9 @@ import { randomInt } from 'crypto'
 
 const PLAYED_STATUS_ID = 1
 const WISHLIST_STATUS_ID = 5
+const STEAM_PERSONA_TTL_SECONDS = 6 * 60 * 60
+const STEAM_PERSONA_FAILURE_TTL_SECONDS = 60
+const steamPersonaKey = (steamId: string) => `steam:persona:${steamId}`
 const EDIT_BY_PLATFORM_MESSAGE =
   'Este jogo tem plataformas cadastradas. Edite os valores por plataforma.'
 
@@ -79,6 +83,38 @@ export class UserService {
     return { user: await this.userRepository.deleteUser(userId) }
   }
 
+  private async getSteamPersonaName(
+    steamId: string | null
+  ): Promise<string | null> {
+    if (!steamId) return null
+
+    try {
+      const key = steamPersonaKey(steamId)
+      const cached = await this.cacheRepository.get(key)
+      if (cached && typeof cached === 'object' && 'name' in cached) {
+        return (cached as { name: string | null }).name
+      }
+
+      let name: string | null = null
+      try {
+        name = await SteamApiService.getPersonaName(steamId)
+      } catch (error) {
+        console.error('Steam persona lookup failed:', {
+          error: error instanceof Error ? error.message : 'unknown error'
+        })
+      }
+
+      await this.cacheRepository.set(
+        key,
+        { name },
+        name ? STEAM_PERSONA_TTL_SECONDS : STEAM_PERSONA_FAILURE_TTL_SECONDS
+      )
+      return name
+    } catch {
+      return null
+    }
+  }
+
   async findMe(userId: string) {
     const user = await this.requireUser(userId)
 
@@ -98,6 +134,7 @@ export class UserService {
         gamesAmount: user._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
         steamId: user.steamId,
+        steamPersonaName: await this.getSteamPersonaName(user.steamId),
         psnOnlineId: user.psnOnlineId,
         xboxGamertag: user.xboxGamertag,
         followersCount,

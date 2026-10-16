@@ -104,3 +104,41 @@ describe('SteamApiService.verifyOpenIdAssertion', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+describe('SteamApiService.getPersonaName', () => {
+  function mockSummaries(body: unknown, ok = true) {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok, json: () => Promise.resolve(body) })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('returns the public profile name', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = mockSummaries({
+      response: { players: [{ personaname: 'Matheus' }] }
+    })
+
+    const name = await SteamApiService.getPersonaName('76561197960287930')
+
+    expect(name).toBe('Matheus')
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      'steamids=76561197960287930'
+    )
+  })
+
+  it('returns null when Steam finds no player', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    mockSummaries({ response: { players: [] } })
+
+    expect(await SteamApiService.getPersonaName('1')).toBeNull()
+  })
+
+  it('returns null when Steam answers with an error status', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    mockSummaries({}, false)
+
+    expect(await SteamApiService.getPersonaName('1')).toBeNull()
+  })
+})
+

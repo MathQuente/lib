@@ -236,7 +236,7 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 
 ## Platform Imports (Steam, PlayStation, Xbox)
 
-**Flow, the same for the three platforms**: `POST /users/<platform>/import` → `XService.enqueueImport` → `enqueueUniqueImport` (`src/queues/import-job.ts`) adds a job to the platform's BullMQ queue → the worker (started in `Server.start()`, same process as the API, concurrency 1 per queue) calls `XService.runImport(userId, onProgress)` under a 5 minute timeout → each game goes through `UserGamePlatformService.importPlatform`. `GET /users/<platform>/import` reads the job: `idle`, `waiting`/`active`/`delayed` (with `progress`), `completed` (with `result` and `cooldownUntil`) or `failed` (with `error`).
+**Flow, the same for the three platforms**: `POST /users/<platform>/import` → `XService.enqueueImport` → `enqueueUniqueImport` (`src/queues/import-job.ts`) adds a job to the platform's BullMQ queue → the worker (started in `Server.start()`, same process as the API, concurrency 1 per queue) calls `XService.runImport(userId, onProgress)` under a 5 minute timeout → each game goes through `UserGamePlatformService.importPlatform`. `GET /users/<platform>/import` reads the job: `idle`, `waiting`/`active`/`delayed` (with `progress`), `completed` (with `result`, `finishedAt` and `cooldownUntil`) or `failed` (with `error`).
 
 - **Queues**: `steam-import`, `psn-import`, `xbox-import`. Job id `<platform>-import-${userId}`.
 - **One at a time, 1 hour cooldown**: a waiting/active/delayed job answers 409; a job completed less than 1 hour ago answers 429 with the minutes left; a failed job can be retried at once. Jobs are never auto-removed: the finished job kept in Redis is what the cooldown reads.

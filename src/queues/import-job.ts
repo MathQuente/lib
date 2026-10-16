@@ -56,6 +56,7 @@ export async function getImportJobStatus<TResult>(queue: Queue, jobId: string) {
     return {
       status: 'completed' as const,
       result: job.returnvalue as TResult,
+      finishedAt: job.finishedOn,
       cooldownUntil:
         cooldownUntil && cooldownUntil > Date.now() ? cooldownUntil : undefined
     }
