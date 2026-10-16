@@ -120,8 +120,8 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 | `UserGameStats` | `user_game_stats` | `completions`(default 0), `hoursPlayed`(Decimal(6,2), nullable), unique `userGameId` | belongsTo `UserGame`, cascade | Game-level totals. Once a game has platform rows these are recomputed from them and can no longer be edited directly. |
 | `UserGamePlatform` | `user_game_platforms` | `platform`(enum), `hoursPlayed`, `completions`, `completedAt`, unique `[userGameId, platform]` | belongsTo `UserGame`, cascade | Per-platform stats, written by the imports and by `/users/platforms`. |
 | `Platform` (enum) | n/a | `STEAM, PLAYSTATION, XBOX, NINTENDO, EPIC, GOG, OTHER` | n/a | |
-| `UserGamesStatus` | `users_games_status` | `id`(autoincrement), `status`(enum `Status`) | hasMany `UserGame` | Lookup table. The code hard-codes the ids: 1 PLAYED, 2 PAUSED, 3 PLAYING, 4 BACKLOG, 5 WISHLIST. The rows must exist in that order. |
-| `Status` (enum) | n/a | `PLAYED, PAUSED, PLAYING, BACKLOG, WISHLIST` | n/a | `PAUSED` exists in the database but has no product rule and no UI. |
+| `UserGamesStatus` | `users_games_status` | `id`(autoincrement), `status`(enum `Status`) | hasMany `UserGame` | Lookup table. The code hard-codes the ids: 1 PLAYED, 2 PAUSED, 3 PLAYING, 4 BACKLOG, 5 WISHLIST, 6 DROPPED. The rows must exist with those ids; the `seed_dropped_status_row` migration inserts row 6. |
+| `Status` (enum) | n/a | `PLAYED, PAUSED, PLAYING, BACKLOG, WISHLIST, DROPPED` | n/a | `PAUSED` means "stopped, intends to come back"; `DROPPED` means "stopped for good". Only the user sets either one. `DROPPED` was added in its own migration because Postgres cannot use a new enum value in the transaction that creates it. |
 | `Rating` | `ratings` | `value`(Float, 0-5), unique `[userId, igdbId]`, index `igdbId` | belongsTo `User`, cascade | One rating per user per game. |
 | `Review` | `reviews` | `text`(1-2000 chars), unique `[userId, igdbId]`, index `igdbId` | belongsTo `User`, cascade | One review per user per game. |
 | `Follow` | `follows` | `followerId`, `followingId`, unique pair, index `followingId` | both sides belongTo `User`, cascade | One-directional follow, no approval, no privacy flag. |
@@ -259,7 +259,7 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 
 **What `importPlatform` does** (`src/services/user-game-platform.service.ts`):
 - New game: enters with the heuristic (`PLAYED` when `finished`, otherwise the activity status).
-- Game already in the library: only `confirmedFinished` moves it to PLAYED; otherwise it can only move up to the activity status. The status never goes down. Rank, lowest first: WISHLIST, BACKLOG, PAUSED, PLAYING, PLAYED.
+- Game already in the library: only `confirmedFinished` moves it to PLAYED; otherwise it can only move up to the activity status. The status never goes down. Rank, lowest first: WISHLIST, BACKLOG, PAUSED and DROPPED (same level), PLAYING, PLAYED. So an import with recent activity brings a paused or dropped game back to PLAYING, and one without activity leaves it where the user put it.
 - Platform row: hours are overwritten with the platform's value; a completion and its date are only added (never removed or overwritten), and for an existing game only when confirmed.
 - Steam only fetches achievements for games with playtime and `canInferCompletion`, so a multiplayer-only game at 100% is never confirmed.
 
@@ -350,6 +350,7 @@ Reasons that are not visible in the code. The code has no explanatory comments; 
 9. **Silent session renewal does not rotate the refresh token** (`src/services/auth.service.ts`, `isRefreshTokenActive`). It is a read-only check used by `app.authenticate`; rotating here would replace the refresh token every 15 minutes. Rotation happens only on `POST /auth/refresh`. At logout the access token is revoked inside an empty `catch`: the intent is to ignore a token that is already invalid or expired (nothing left to revoke), but the same `catch` also hides a Redis failure while storing the revocation.
 10. **`tryAuthenticate` treats any problem as "anonymous"** (`src/jwt.ts`). The public listings must keep working for a visitor with a bad or expired cookie. This includes a Redis failure during the revocation check, which is logged; `authenticate` answers 503 in the same situation.
 11. **Rating a game changes the library** (`src/services/rating.service.ts`). A game that is not in the library is added as PLAYED with one completion; a WISHLIST game moves to PLAYED. Other statuses are left alone. Deleting the rating does not undo it.
+12. **The next-game suggestion prefers paused games** (`src/services/users.service.ts`, `findGamesToDisplay`). A paused game is one the user already said they intend to resume, so it is drawn before anything in the backlog. Dropped games are never suggested.
 
 ## Conventions
 

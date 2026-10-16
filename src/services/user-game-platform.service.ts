@@ -13,6 +13,7 @@ const STATUS_RANK: Record<number, number> = {
   5: 0,
   4: 1,
   2: 2,
+  6: 2,
   3: 3,
   1: 4
 }

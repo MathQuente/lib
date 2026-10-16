@@ -157,6 +157,7 @@ Enum Status {
   PLAYING
   BACKLOG
   WISHLIST
+  DROPPED
 }
 
 Ref: refresh_token.userId > users.id [delete: Cascade]

@@ -193,7 +193,8 @@ export class UserService {
       PLAYING: [],
       PAUSED: [],
       BACKLOG: [],
-      WISHLIST: []
+      WISHLIST: [],
+      DROPPED: []
     }
 
     for (const entry of enriched) {
@@ -555,14 +556,17 @@ export class UserService {
 
     const userGames = await this.userRepository.findManyGamesOfUser({ userId })
 
-    const backlogIds = userGames
-      .filter(ug => ug.status === Status.BACKLOG)
-      .map(ug => ug.igdbId)
+    const idsWithStatus = (status: Status) =>
+      userGames.filter(ug => ug.status === status).map(ug => ug.igdbId)
+
+    const pausedIds = idsWithStatus(Status.PAUSED)
+    const backlogIds = idsWithStatus(Status.BACKLOG)
+    const candidateIds = pausedIds.length > 0 ? pausedIds : backlogIds
 
     const ownedIds = new Set(userGames.map(ug => ug.igdbId))
 
-    if (backlogIds.length > 0) {
-      const pickedId = backlogIds[randomInt(backlogIds.length)]
+    if (candidateIds.length > 0) {
+      const pickedId = candidateIds[randomInt(candidateIds.length)]
       const game = await IGDBService.getGameById(pickedId)
       return {
         game: game
@@ -572,7 +576,10 @@ export class UserService {
               coverUrl: IGDBService.formatCoverUrl(game.cover?.url)
             }
           : null,
-        message: 'Tire a poeira desses jogos esquecidos.'
+        message:
+          pausedIds.length > 0
+            ? 'Que tal retomar este?'
+            : 'Tire a poeira desses jogos esquecidos.'
       }
     }
 

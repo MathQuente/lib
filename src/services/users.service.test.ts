@@ -38,7 +38,7 @@ function fakeGameCacheService(
 }
 
 function statusCounts(counts: Partial<Record<string, number>>) {
-  const all = ['PLAYED', 'PLAYING', 'PAUSED', 'BACKLOG', 'WISHLIST']
+  const all = ['PLAYED', 'PLAYING', 'PAUSED', 'BACKLOG', 'WISHLIST', 'DROPPED']
   return all.map(status => ({
     status,
     _count: { userGames: counts[status] ?? 0 }
@@ -330,6 +330,55 @@ describe('UserService.findManyUserGames', () => {
     )
 
     expect(result.games.WISHLIST[0].releaseDate).toBeUndefined()
+  })
+})
+
+describe('UserService.findGamesToDisplay', () => {
+  function serviceWithLibrary(rows: Array<{ igdbId: number; status: string }>) {
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findManyGamesOfUser: vi.fn().mockResolvedValue(rows)
+    })
+    return new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+  }
+
+  it('suggests a paused game before any backlog game', async () => {
+    const getGameById = vi
+      .spyOn(IGDBService, 'getGameById')
+      .mockResolvedValue({ id: 20, name: 'Paused game' })
+    const service = serviceWithLibrary([
+      { igdbId: 10, status: 'BACKLOG' },
+      { igdbId: 20, status: 'PAUSED' },
+      { igdbId: 30, status: 'DROPPED' }
+    ])
+
+    const result = await service.findGamesToDisplay('user-1')
+
+    expect(getGameById).toHaveBeenCalledWith(20)
+    expect(result.game?.igdbId).toBe(20)
+    expect(result.message).toBe('Que tal retomar este?')
+    getGameById.mockRestore()
+  })
+
+  it('falls back to the backlog when nothing is paused', async () => {
+    const getGameById = vi
+      .spyOn(IGDBService, 'getGameById')
+      .mockResolvedValue({ id: 10, name: 'Backlog game' })
+    const service = serviceWithLibrary([
+      { igdbId: 10, status: 'BACKLOG' },
+      { igdbId: 30, status: 'DROPPED' }
+    ])
+
+    const result = await service.findGamesToDisplay('user-1')
+
+    expect(getGameById).toHaveBeenCalledWith(10)
+    expect(result.message).toBe('Tire a poeira desses jogos esquecidos.')
+    getGameById.mockRestore()
   })
 })
 

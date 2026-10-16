@@ -260,6 +260,32 @@ describe('UserGamePlatformService.importPlatform', () => {
     expect(downgrade.userRepository.updateGameStatus).not.toHaveBeenCalled()
   })
 
+  it('brings a dropped game back to playing on recent activity and leaves it alone otherwise', async () => {
+    const resumed = setup(userGame({ statusId: 6 }))
+    await resumed.service.importPlatform('user-1', 10, 'STEAM', {
+      statusId: 3,
+      activityStatusId: 3,
+      hoursPlayed: 1,
+      finished: false,
+      confirmedFinished: false
+    })
+    expect(resumed.userRepository.updateGameStatus).toHaveBeenCalledWith(
+      10,
+      'user-1',
+      3
+    )
+
+    const idle = setup(userGame({ statusId: 6 }))
+    await idle.service.importPlatform('user-1', 10, 'STEAM', {
+      statusId: 4,
+      activityStatusId: 4,
+      hoursPlayed: 1,
+      finished: false,
+      confirmedFinished: false
+    })
+    expect(idle.userRepository.updateGameStatus).not.toHaveBeenCalled()
+  })
+
   it('overwrites only its own platform hours and keeps a higher manual completion count', async () => {
     const existingDate = new Date('2021-05-10T00:00:00Z')
     const { service, platformRepository } = setup(
