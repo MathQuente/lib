@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { Prisma } from '@prisma/client'
 import { SteamService } from './steam.service'
-import { SteamApiService } from './steam-api.service'
+import { SteamApiError, SteamApiService } from './steam-api.service'
 import { IGDBService } from './igdb.service'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
@@ -1030,6 +1030,60 @@ describe('SteamService.runImport', () => {
       skipped: 1,
       notFound: []
     })
+  })
+
+  it.each([
+    ['rate limited', 429, 503, /limite de consultas/],
+    ['unavailable', 500, 502, /consultar a Steam agora/],
+    ['rejecting the key', 403, 502, /consultar a Steam agora/],
+    ['unreachable', undefined, 502, /consultar a Steam agora/]
+  ])(
+    'tells the user Steam is the problem, not the profile, when Steam is %s',
+    async (_label, status, expectedCode, message) => {
+      const userRepository = fakeUserRepository({
+        findUserById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' })
+      })
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(SteamApiService, 'getOwnedGames').mockRejectedValue(
+        new SteamApiError('down', status)
+      )
+      const service = new SteamService(
+        userRepository,
+        fakeGameCacheService(),
+        platformServiceFor(userRepository)
+      )
+
+      const error = await service.runImport('user-1').catch(e => e)
+
+      expect(error).toBeInstanceOf(ClientError)
+      expect(error.statusCode).toBe(expectedCode)
+      expect(error.message).toMatch(message)
+      expect(console.error).toHaveBeenCalledWith(
+        '[Steam] owned games failed',
+        expect.objectContaining({ status })
+      )
+    }
+  )
+
+  it('still asks for a public profile when Steam answers without games', async () => {
+    const userRepository = fakeUserRepository({
+      findUserById: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' })
+    })
+    vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue(null)
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
+
+    const error = await service.runImport('user-1').catch(e => e)
+
+    expect(error.statusCode).toBe(400)
+    expect(error.message).toMatch(/perfil está público/)
   })
 
   it('throws when the Steam profile is private or invalid', async () => {

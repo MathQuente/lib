@@ -4,6 +4,7 @@ import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
 import {
+  SteamApiError,
   SteamApiService,
   SteamAchievementSummary,
   SteamOwnedGame
@@ -27,6 +28,11 @@ import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
+
+const UNAVAILABLE_MESSAGE =
+  'Não foi possível consultar a Steam agora. Tente novamente mais tarde.'
+const RATE_LIMITED_MESSAGE =
+  'A integração com a Steam atingiu o limite de consultas. Tente novamente mais tarde.'
 
 const PLAYED_STATUS_ID = 1
 const PLAYING_STATUS_ID = 3
@@ -191,10 +197,22 @@ export class SteamService {
     }
     const steamId = user.steamId
 
-    const [ownedGames, wishlistItemsRaw] = await Promise.all([
-      SteamApiService.getOwnedGames(steamId),
-      SteamApiService.getWishlist(steamId)
-    ])
+    let ownedGames: SteamOwnedGame[] | null
+    let wishlistItemsRaw: { appid: number }[] | null
+    try {
+      ;[ownedGames, wishlistItemsRaw] = await Promise.all([
+        SteamApiService.getOwnedGames(steamId),
+        SteamApiService.getWishlist(steamId)
+      ])
+    } catch (err) {
+      if (!(err instanceof SteamApiError)) throw err
+      console.error('[Steam] owned games failed', {
+        status: err.status,
+        error: err.message
+      })
+      if (err.status === 429) throw new ClientError(RATE_LIMITED_MESSAGE, 503)
+      throw new ClientError(UNAVAILABLE_MESSAGE, 502)
+    }
 
     if (!ownedGames) {
       throw new ClientError(

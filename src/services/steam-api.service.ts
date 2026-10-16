@@ -7,6 +7,16 @@ export interface SteamOwnedGame {
   rtime_last_played?: number
 }
 
+export class SteamApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number
+  ) {
+    super(message)
+    this.name = 'SteamApiError'
+  }
+}
+
 export interface SteamAchievementSummary {
   achieved: number
   total: number
@@ -15,6 +25,8 @@ export interface SteamAchievementSummary {
 }
 
 const PERSONA_TIMEOUT_MS = 1_500
+const ACHIEVEMENT_RETRY_DELAYS_MS = [400, 1_000]
+
 const STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login'
 const OPENID_IDENTIFIER_SELECT =
   'http://specs.openid.net/auth/2.0/identifier_select'
@@ -106,9 +118,19 @@ export class SteamApiService {
     steamId: string
   ): Promise<SteamOwnedGame[] | null> {
     const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${this.getApiKey()}&steamid=${steamId}&include_appinfo=1&format=json`
-    const response = await fetchWithTimeout(url)
+    let response: Response
+    try {
+      response = await fetchWithTimeout(url)
+    } catch (err) {
+      throw new SteamApiError(err instanceof Error ? err.message : String(err))
+    }
 
-    if (!response.ok) return null
+    if (!response.ok) {
+      throw new SteamApiError(
+        `Steam responded ${response.status} for GetOwnedGames`,
+        response.status
+      )
+    }
 
     const data = (await response.json()) as {
       response: { game_count?: number; games?: SteamOwnedGame[] }
@@ -136,14 +158,33 @@ export class SteamApiService {
     return data.response.items
   }
 
+  private static async fetchAchievementData(url: string): Promise<Response | null> {
+    for (let attempt = 0; ; attempt++) {
+      let response: Response | null = null
+      try {
+        response = await fetchWithTimeout(url)
+      } catch {
+        response = null
+      }
+
+      const retryable =
+        response === null || response.status === 429 || response.status >= 500
+      if (!retryable) return response
+      if (attempt >= ACHIEVEMENT_RETRY_DELAYS_MS.length) return response
+      await new Promise(resolve =>
+        setTimeout(resolve, ACHIEVEMENT_RETRY_DELAYS_MS[attempt])
+      )
+    }
+  }
+
   static async getPlayerAchievements(
     steamId: string,
     appId: number
   ): Promise<SteamAchievementSummary | null> {
     const url = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key=${this.getApiKey()}&steamid=${steamId}&appid=${appId}`
-    const response = await fetchWithTimeout(url)
+    const response = await this.fetchAchievementData(url)
 
-    if (!response.ok) return null
+    if (!response?.ok) return null
 
     const data = (await response.json()) as {
       playerstats?: {
@@ -177,9 +218,9 @@ export class SteamApiService {
     appId: number
   ): Promise<Map<string, number> | null> {
     const url = `https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?key=${this.getApiKey()}&gameid=${appId}`
-    const response = await fetchWithTimeout(url)
+    const response = await this.fetchAchievementData(url)
 
-    if (!response.ok) return null
+    if (!response?.ok) return null
 
     const data = (await response.json()) as {
       achievementpercentages?: {
@@ -197,9 +238,9 @@ export class SteamApiService {
     appId: number
   ): Promise<Map<string, string> | null> {
     const url = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=${this.getApiKey()}&appid=${appId}&l=english`
-    const response = await fetchWithTimeout(url)
+    const response = await this.fetchAchievementData(url)
 
-    if (!response.ok) return null
+    if (!response?.ok) return null
 
     const data = (await response.json()) as {
       game?: {

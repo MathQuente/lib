@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { SteamApiService } from './steam-api.service'
+import { SteamApiError, SteamApiService } from './steam-api.service'
 
 const RETURN_TO =
   'https://lib.example/api/users/steam/openid/callback?state=abc'
@@ -33,6 +33,7 @@ function mockSteamAnswer(body: string, ok = true) {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('SteamApiService.buildOpenIdLoginUrl', () => {
@@ -104,6 +105,7 @@ describe('SteamApiService.verifyOpenIdAssertion', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
 describe('SteamApiService.getPersonaName', () => {
   function mockSummaries(body: unknown, ok = true) {
     const fetchMock = vi
@@ -142,3 +144,128 @@ describe('SteamApiService.getPersonaName', () => {
   })
 })
 
+describe('SteamApiService achievement requests', () => {
+  const achievementsBody = {
+    playerstats: {
+      success: true,
+      achievements: [{ apiname: 'A', achieved: 1, unlocktime: 5 }]
+    }
+  }
+
+  function answer(status: number, body: unknown = {}) {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body)
+    }
+  }
+
+  async function run(promise: Promise<unknown>) {
+    await vi.advanceTimersByTimeAsync(2_000)
+    return promise
+  }
+
+  it('retries after a 429 and returns the data once Steam answers', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(answer(429))
+      .mockResolvedValueOnce(answer(200, achievementsBody))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await run(SteamApiService.getPlayerAchievements('1', 10))
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ achieved: 1, total: 1 })
+    vi.useRealTimers()
+  })
+
+  it('retries after a network error', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(answer(200, achievementsBody))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await run(SteamApiService.getPlayerAchievements('1', 10))
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ achieved: 1 })
+    vi.useRealTimers()
+  })
+
+  it('does not retry a 403 (private profile)', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = vi.fn().mockResolvedValue(answer(403))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await SteamApiService.getPlayerAchievements('1', 10)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toBeNull()
+  })
+
+  it('gives up after two retries', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = vi.fn().mockResolvedValue(answer(503))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await run(SteamApiService.getAchievementSchema(10))
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(result).toBeNull()
+    vi.useRealTimers()
+  })
+})
+
+describe('SteamApiService.getOwnedGames', () => {
+  function answer(status: number, body: unknown = {}) {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body)
+    }
+  }
+
+  it('returns the games of a public profile', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const games = [{ appid: 1, name: 'A', playtime_forever: 10 }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(200, { response: { games } })))
+
+    expect(await SteamApiService.getOwnedGames('1')).toEqual(games)
+  })
+
+  it('returns null when the profile is private (200 without games)', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(200, { response: {} })))
+
+    expect(await SteamApiService.getOwnedGames('1')).toBeNull()
+  })
+
+  it.each([401, 403, 429, 500, 503])(
+    'throws a SteamApiError carrying status %i',
+    async status => {
+      vi.stubEnv('STEAM_API_KEY', 'key')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(status)))
+
+      await expect(SteamApiService.getOwnedGames('1')).rejects.toMatchObject({
+        name: 'SteamApiError',
+        status
+      })
+    }
+  )
+
+  it('throws a SteamApiError without status when the request fails', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('aborted')))
+
+    const error = await SteamApiService.getOwnedGames('1').catch(e => e)
+
+    expect(error).toBeInstanceOf(SteamApiError)
+    expect(error.status).toBeUndefined()
+  })
+})
