@@ -419,7 +419,8 @@ export class SteamService {
           finished: isFinished,
           confirmedFinished,
           strongFinished: hasRareAchievement || hasCompletionKeyword,
-          completedAt
+          completedAt,
+          endless: IGDBService.suggestsEndlessForGame(igdbGame)
         }
       )
 
@@ -451,7 +452,8 @@ export class SteamService {
       await this.userRepository.addGameToUserLibrary({
         igdbId: igdbGame.id,
         userId,
-        statusIds: WISHLIST_STATUS_ID
+        statusIds: WISHLIST_STATUS_ID,
+        endless: IGDBService.suggestsEndlessForGame(igdbGame)
       })
       await this.userRepository.createUserGameStats(userId, igdbGame.id, 0)
       imported++

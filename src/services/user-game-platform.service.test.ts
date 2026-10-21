@@ -17,11 +17,13 @@ function userGame(overrides: {
   completedAt?: Date | null
   hours?: number | null
   completions?: number
+  endless?: boolean
   platforms?: Row[]
 }) {
   return {
     id: 'ug-1',
     userGamesStatusId: overrides.statusId ?? 4,
+    endless: overrides.endless ?? false,
     completedAt: overrides.completedAt ?? null,
     UserGameStats:
       overrides.hours === undefined && overrides.completions === undefined
@@ -223,6 +225,26 @@ describe('UserGamePlatformService.updatePlatform', () => {
 })
 
 describe('UserGamePlatformService.importPlatform', () => {
+  it('passes the endless suggestion when it creates the game', async () => {
+    const { service, platformRepository, userRepository } = setup(null)
+    platformRepository.findUserGameWithPlatforms
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(userGame({ statusId: 3 }))
+
+    await service.importPlatform('user-1', 10, 'STEAM', {
+      statusId: 3,
+      activityStatusId: 3,
+      hoursPlayed: 7,
+      finished: false,
+      confirmedFinished: false,
+      endless: true
+    })
+
+    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 10, endless: true })
+    )
+  })
+
   it('creates the game when it is not in the library', async () => {
     const { service, platformRepository, userRepository } = setup(null)
     platformRepository.findUserGameWithPlatforms
@@ -385,6 +407,105 @@ describe('UserGamePlatformService.importPlatform', () => {
       'PLAYSTATION',
       { hoursPlayed: 30, completions: 1, completedAt: importedDate }
     )
+  })
+
+  describe('endless games', () => {
+    const finishedSignals = {
+      statusId: 1,
+      activityStatusId: 3,
+      hoursPlayed: 3000,
+      finished: true,
+      confirmedFinished: true,
+      strongFinished: true,
+      completedAt: new Date('2024-03-01T00:00:00Z')
+    }
+
+    it('creates a new endless game as PLAYING with no completion, ignoring finished signals', async () => {
+      const { service, platformRepository, userRepository } = setup(null)
+      platformRepository.findUserGameWithPlatforms
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(userGame({ statusId: 3 }))
+
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...finishedSignals,
+        endless: true
+      })
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
+        igdbId: 10,
+        userId: 'user-1',
+        statusIds: 3,
+        completedAt: undefined,
+        endless: true
+      })
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        { hoursPlayed: 3000, completions: 0, completedAt: null }
+      )
+    })
+
+    it('keeps a new endless game with no hours on the activity status', async () => {
+      const { service, platformRepository, userRepository } = setup(null)
+      platformRepository.findUserGameWithPlatforms
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(userGame({ statusId: 4 }))
+
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...finishedSignals,
+        hoursPlayed: 0,
+        activityStatusId: 4,
+        endless: true
+      })
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 4 })
+      )
+    })
+
+    it('does not promote an existing endless game to PLAYED or count a completion', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({
+          statusId: 2,
+          endless: true,
+          platforms: [row({ platform: 'STEAM' })]
+        })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', finishedSignals)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        3
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        { hoursPlayed: 3000, completions: 0, completedAt: null }
+      )
+    })
+
+    it('still trusts the signals for an existing game whose endless mark is off', async () => {
+      const { service, userRepository } = setup(
+        userGame({
+          statusId: 4,
+          endless: false,
+          platforms: [row({ platform: 'STEAM' })]
+        })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...finishedSignals,
+        endless: true
+      })
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        1
+      )
+    })
   })
 
   describe('rule for games already in the library', () => {

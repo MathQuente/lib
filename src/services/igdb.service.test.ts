@@ -204,3 +204,105 @@ describe('IGDBService.getGameTypesByIds', () => {
     expect(request).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('IGDBService.suggestsEndless', () => {
+  it.each([
+    [[], false],
+    [[1], false],
+    [[1, 2], false],
+    [[1, 2, 3, 4], false],
+    [[2], true],
+    [[2, 3], false],
+    [[2, 3, 4], false],
+    [[3], false],
+    [[2, 4], true],
+    [[2, 3, 5], true],
+    [[5], true],
+    [[6], true],
+    [[1, 5], true],
+    [[1, 2, 6], true]
+  ])('modes %j -> %s', (gameModes, expected) => {
+    expect(IGDBService.suggestsEndless({ gameModes, name: 'Some Game' })).toBe(
+      expected
+    )
+  })
+
+  it('suggests endless for a known franchise even with single player and no modes', () => {
+    expect(
+      IGDBService.suggestsEndless({
+        gameModes: [1, 2, 3],
+        name: 'EA Sports FC 26'
+      })
+    ).toBe(true)
+    expect(
+      IGDBService.suggestsEndless({
+        gameModes: [],
+        name: 'EA Sports FC 27: Ultimate Plus Edition'
+      })
+    ).toBe(true)
+  })
+})
+
+describe('IGDBService.isEndlessFranchise', () => {
+  it.each([
+    'EA Sports FC 24',
+    'EA Sports FC 26: Icons Edition',
+    'EA Sports FC 27',
+    'FIFA 15',
+    'EA Sports FIFA 18',
+    'FIFA 23',
+    'NBA 2K15',
+    'NBA 2K26',
+    'Madden NFL 16',
+    'Madden NFL 26',
+    'EA Sports Madden NFL 25: Deluxe Edition',
+    'NHL 16',
+    'NHL 26',
+    'NBA 2K30',
+    'Madden NFL 30',
+    'NHL 30'
+  ])('matches %s', name => {
+    expect(IGDBService.isEndlessFranchise(name)).toBe(true)
+  })
+
+  it.each([
+    'FC 26 Quiz',
+    'FIFA 14',
+    'FIFA 24',
+    'NHL 94',
+    'NHL 15',
+    'Madden NFL 15',
+    'NBA 2K14',
+    'EA Sports FIFA 18 & NHL 18 Bundle',
+    'EA Sports FIFA 18 and Need for Speed Payback Bundle',
+    'Elden Ring',
+    'Valorant'
+  ])('does not match %s', name => {
+    expect(IGDBService.isEndlessFranchise(name)).toBe(false)
+  })
+})
+
+describe('IGDBService.toGameCacheInput', () => {
+  it('keeps the numeric game mode ids', () => {
+    const input = IGDBService.toGameCacheInput({
+      id: 1,
+      name: 'Valorant',
+      game_modes: [{ id: 2, name: 'Multiplayer' }, { id: 6, name: 'Battle Royale' }]
+    } as IGDBGame)
+
+    expect(input.gameModes).toEqual([2, 6])
+  })
+
+  it('returns an empty list when the modes are missing or have no id', () => {
+    expect(
+      IGDBService.toGameCacheInput({ id: 1, name: 'A' } as IGDBGame).gameModes
+    ).toEqual([])
+    expect(
+      IGDBService.toGameCacheInput({
+        id: 2,
+        name: 'B',
+        game_modes: [{ name: 'Multiplayer' }]
+      } as IGDBGame).gameModes
+    ).toEqual([])
+  })
+})

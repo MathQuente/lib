@@ -83,6 +83,15 @@ export const UserGameBodySchema = z.object({
   statusId: z.number().int().min(1).max(6)
 })
 
+export const UserGameEndlessBodySchema = z.object({
+  endless: z.boolean()
+})
+
+export const UpdateUserGameEndlessResponseSchema = z.object({
+  igdbId: z.number(),
+  endless: z.boolean()
+})
+
 export const UserGamePlayedCountUpdateBodySchema = z.object({
   incrementValue: z.number().int().min(-1).max(1)
 })
@@ -121,7 +130,10 @@ export const GetUserGameStatusResponse = z.object({
       id: z.number(),
       status: z.string()
     })
-    .nullable()
+    .nullable(),
+  endless: z.boolean(),
+  hoursPlayed: z.number(),
+  completions: z.number()
 })
 
 const UserGameEntrySchema = z.object({
@@ -134,7 +146,8 @@ const UserGameEntrySchema = z.object({
   completions: z.number(),
   hoursPlayed: z.number(),
   playedOn: z.array(z.string()),
-  status: z.string()
+  status: z.string(),
+  endless: z.boolean()
 })
 
 export const GetAllUserGamesResponseSchema = z.object({

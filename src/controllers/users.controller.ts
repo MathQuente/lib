@@ -106,12 +106,21 @@ export class UserController {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
 
-    const { userGameStatus } = await this.userService.findUserGameStatus(
-      igdbId,
-      userId
+    const result = await this.userService.findUserGameStatus(igdbId, userId)
+
+    return reply.status(200).send(result)
+  }
+
+  async setEndless(request: FastifyRequest, reply: FastifyReply) {
+    const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
+    const userId = request.user.userId
+    const { endless } = UserSchema.UserGameEndlessBodySchema.parse(
+      request.body
     )
 
-    return reply.status(200).send({ userGameStatus })
+    const result = await this.userService.setEndless(igdbId, userId, endless)
+
+    return reply.status(200).send(result)
   }
 
   async removeGame(request: FastifyRequest, reply: FastifyReply) {

@@ -382,12 +382,14 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 1,
       userId: 'user-1',
-      statusIds: 4
+      statusIds: 4,
+      endless: false
     })
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 3
+      statusIds: 3,
+      endless: false
     })
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-2',
@@ -435,7 +437,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 4
+      statusIds: 4,
+      endless: false
     })
   })
 
@@ -483,6 +486,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: expect.any(Date)
     })
   })
@@ -637,7 +641,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 3
+      statusIds: 3,
+      endless: false
     })
   })
 
@@ -691,6 +696,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: expect.any(Date)
     })
   })
@@ -747,7 +753,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 3
+      statusIds: 3,
+      endless: true
     })
   })
 
@@ -807,6 +814,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: expect.any(Date)
     })
   })
@@ -875,6 +883,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: expect.any(Date)
     })
   })
@@ -947,6 +956,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: new Date(endingUnlockTime * 1000)
     })
   })
@@ -1016,6 +1026,7 @@ describe('SteamService.runImport', () => {
       igdbId: 2,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: new Date(latestUnlockTime * 1000)
     })
   })
@@ -1082,7 +1093,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 4
+      statusIds: 4,
+      endless: false
     })
   })
 
@@ -1147,7 +1159,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 4
+      statusIds: 4,
+      endless: false
     })
   })
 
@@ -1191,7 +1204,8 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 3,
       userId: 'user-1',
-      statusIds: 5
+      statusIds: 5,
+      endless: false
     })
     expect(userRepository.createUserGameStats).toHaveBeenCalledWith(
       'user-1',

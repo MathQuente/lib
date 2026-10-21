@@ -1,3 +1,4 @@
+import { ClientError } from '../errors/client-error'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { IGDBService } from './igdb.service'
 import { IGDBGame } from '../types/igdb'
@@ -18,11 +19,21 @@ export class GameCacheService {
     return true
   }
 
-  async getReleaseDate(igdbId: number): Promise<number | null> {
-    const cached = await this.gameCacheRepository.findReleaseDateByIgdbId(
+  async assertReleased(igdbId: number): Promise<{ suggestsEndless: boolean }> {
+    const cached = await this.gameCacheRepository.findReleaseInfoByIgdbId(igdbId)
+    if (cached?.releaseDate != null && cached.releaseDate * 1000 > Date.now()) {
+      throw new ClientError('Este jogo ainda não foi lançado.', 400)
+    }
+    return {
+      suggestsEndless: cached ? IGDBService.suggestsEndless(cached) : false
+    }
+  }
+
+  async suggestsEndless(igdbId: number): Promise<boolean> {
+    const cached = await this.gameCacheRepository.findEndlessInputByIgdbId(
       igdbId
     )
-    return cached?.releaseDate ?? null
+    return cached ? IGDBService.suggestsEndless(cached) : false
   }
 
   async cacheMany(games: IGDBGame[]): Promise<void> {

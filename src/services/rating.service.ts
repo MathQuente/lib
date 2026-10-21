@@ -4,6 +4,7 @@ import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 
 const PLAYED_STATUS_ID = 1
+const PLAYING_STATUS_ID = 3
 const WISHLIST_STATUS_ID = 5
 
 export class RatingService {
@@ -25,35 +26,47 @@ export class RatingService {
     const gameExists = await this.gameCacheService.ensureCached(igdbId)
     if (!gameExists) throw new ClientError('Jogo não encontrado.', 404)
 
-    const releaseDate = await this.gameCacheService.getReleaseDate(igdbId)
-    if (releaseDate != null && releaseDate * 1000 > Date.now()) {
-      throw new ClientError('Este jogo ainda não foi lançado.', 400)
-    }
+    const { suggestsEndless } =
+      await this.gameCacheService.assertReleased(igdbId)
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
     let promotedToPlayed = false
+    let addedAsPlaying = false
 
-    if (!userGame) {
-      await this.userRepository.addGameToUserLibrary({
-        igdbId,
-        userId,
-        statusIds: PLAYED_STATUS_ID
-      })
-      await this.userRepository.createUserGameStats(userId, igdbId, 1)
-      promotedToPlayed = true
-    } else if (userGame.UserGamesStatus.id === WISHLIST_STATUS_ID) {
-      await this.userRepository.updateGameStatus(
-        igdbId,
-        userId,
-        PLAYED_STATUS_ID
-      )
-      await this.userRepository.updateUserGamePlayedCount(userId, igdbId, 1)
-      promotedToPlayed = true
+    if (!userGame || userGame.UserGamesStatus.id === WISHLIST_STATUS_ID) {
+      const endless = userGame?.endlessLocked
+        ? userGame.endless
+        : suggestsEndless
+      const statusId = endless ? PLAYING_STATUS_ID : PLAYED_STATUS_ID
+
+      if (!userGame) {
+        await this.userRepository.addGameToUserLibrary({
+          igdbId,
+          userId,
+          statusIds: statusId,
+          ...(endless ? { endless } : {})
+        })
+        await this.userRepository.createUserGameStats(
+          userId,
+          igdbId,
+          endless ? 0 : 1
+        )
+      } else {
+        await this.userRepository.updateGameStatus(igdbId, userId, statusId, {
+          endless
+        })
+        if (!endless) {
+          await this.userRepository.updateUserGamePlayedCount(userId, igdbId, 1)
+        }
+      }
+
+      addedAsPlaying = endless
+      promotedToPlayed = !endless
     }
 
     const rating = await this.ratingRepository.create(igdbId, value, userId)
 
-    return { rating: rating.value, promotedToPlayed }
+    return { rating: rating.value, promotedToPlayed, addedAsPlaying }
   }
 
   async findUniqueByUserGame(igdbId: number, userId: string) {

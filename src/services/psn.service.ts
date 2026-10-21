@@ -376,7 +376,8 @@ export class PsnService {
           hoursPlayed: Math.round((game.playMinutes / 60) * 100) / 100,
           finished: isFinished,
           confirmedFinished,
-          completedAt
+          completedAt,
+          endless: IGDBService.suggestsEndlessForGame(igdbGame)
         }
       )
 

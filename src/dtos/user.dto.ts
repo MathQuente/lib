@@ -9,6 +9,7 @@ export interface AddGameDTO {
   userId: string
   statusIds: number
   completedAt?: Date
+  endless?: boolean
 }
 
 export interface UpdateUserDTO {

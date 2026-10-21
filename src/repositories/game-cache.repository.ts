@@ -136,6 +136,7 @@ export class GameCacheRepository {
       totalRatingCount?: number
       category?: number
       parentGameId?: number | null
+      gameModes?: number[]
     }>
   ) {
     await prisma.gameCache.createMany({
@@ -150,7 +151,8 @@ export class GameCacheRepository {
         hypes: g.hypes ?? 0,
         totalRatingCount: g.totalRatingCount ?? 0,
         category: g.category ?? -1,
-        parentGameId: g.parentGameId ?? null
+        parentGameId: g.parentGameId ?? null,
+        gameModes: g.gameModes ?? []
       })),
       skipDuplicates: true
     })
@@ -163,11 +165,45 @@ export class GameCacheRepository {
     })
   }
 
-  async findReleaseDateByIgdbId(igdbId: number) {
+  async findReleaseInfoByIgdbId(igdbId: number) {
     return prisma.gameCache.findUnique({
       where: { igdbId },
-      select: { releaseDate: true }
+      select: { releaseDate: true, gameModes: true, name: true }
     })
+  }
+
+  async findEndlessInputByIgdbId(
+    igdbId: number
+  ): Promise<{ gameModes: number[]; name: string } | null> {
+    return prisma.gameCache.findUnique({
+      where: { igdbId },
+      select: { gameModes: true, name: true }
+    })
+  }
+
+  async findIgdbIdsAfter(afterId: number, limit: number): Promise<number[]> {
+    const rows = await prisma.gameCache.findMany({
+      where: { igdbId: { gt: afterId } },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true }
+    })
+    return rows.map(r => r.igdbId)
+  }
+
+  async updateGameModes(
+    updates: Array<{ igdbId: number; gameModes: number[] }>
+  ) {
+    if (updates.length === 0) return
+    const rows = JSON.stringify(
+      updates.map(u => ({ id: u.igdbId, modes: u.gameModes }))
+    )
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET game_modes = ARRAY(SELECT jsonb_array_elements_text(v.modes)::int)
+      FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, modes jsonb)
+      WHERE gc.igdb_id = v.id
+    `)
   }
 
   async getMaxIgdbId(): Promise<number> {

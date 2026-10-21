@@ -450,7 +450,8 @@ export class XboxService {
             ? (completedAtByTitleId.get(mostCompleted.titleId) ??
               mostCompleted.lastPlayedAt ??
               undefined)
-            : undefined
+            : undefined,
+          endless: IGDBService.suggestsEndlessForGame(igdbGame)
         }
       )
 

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { UserService } from './users.service'
 import { IGDBService } from './igdb.service'
@@ -37,6 +38,8 @@ function fakeGameCacheService(
   return {
     ensureCached: vi.fn().mockResolvedValue(true),
     cacheMany: vi.fn().mockResolvedValue(undefined),
+    suggestsEndless: vi.fn().mockResolvedValue(false),
+    assertReleased: vi.fn().mockResolvedValue({ suggestsEndless: false }),
     ...overrides
   } as unknown as GameCacheService
 }
@@ -70,9 +73,7 @@ describe('UserService.addGameToUserLibrary', () => {
   })
 
   it('adds the game when the igdbId is a real IGDB game', async () => {
-    const addGameToUserLibrary = vi
-      .fn()
-      .mockResolvedValue({ igdbId: 1022 })
+    const addGameToUserLibrary = vi.fn().mockResolvedValue({ igdbId: 1022 })
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
@@ -92,24 +93,118 @@ describe('UserService.addGameToUserLibrary', () => {
     expect(addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 1022,
       statusIds: 1,
-      userId: 'user-1'
+      userId: 'user-1',
+      endless: false
     })
     expect(result).toEqual({ igdbId: 1022 })
   })
-})
 
-describe('UserService.addGameToUserLibrary completions', () => {
-  it.each([
-    ['played', 1, 1],
-    ['in the queue', 4, 0],
-    ['on the wishlist', 5, 0]
-  ])('creates the stats with the right completions when added as %s', async (_label, statusId, expected) => {
-    const createUserGameStats = vi.fn().mockResolvedValue({ completions: expected })
+  it('marks the game as endless when the cached modes suggest it', async () => {
+    const addGameToUserLibrary = vi.fn().mockResolvedValue({ igdbId: 7 })
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
-      addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1022 }),
-      createUserGameStats
+      addGameToUserLibrary,
+      createUserGameStats: vi.fn().mockResolvedValue(undefined)
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService({
+        suggestsEndless: vi.fn().mockResolvedValue(true)
+      }),
+      fakeFollowRepository()
+    )
+
+    await service.addGameToUserLibrary(7, 'user-1', 3)
+
+    expect(addGameToUserLibrary).toHaveBeenCalledWith({
+      igdbId: 7,
+      statusIds: 3,
+      userId: 'user-1',
+      endless: true
+    })
+  })
+})
+
+describe('UserService.findUserGameStatus', () => {
+  function build(found: unknown) {
+    return new UserService(
+      fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        findUserGameStatus: vi.fn().mockResolvedValue(found)
+      }),
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+  }
+
+  it('returns the status, the endless mark and the totals', async () => {
+    const service = build({
+      endless: true,
+      UserGamesStatus: { id: 4, status: 'BACKLOG' },
+      UserGameStats: {
+        hoursPlayed: new Prisma.Decimal('108.5'),
+        completions: 4
+      }
+    })
+
+    await expect(service.findUserGameStatus(7, 'user-1')).resolves.toEqual({
+      userGameStatus: { id: 4, status: 'BACKLOG' },
+      endless: true,
+      hoursPlayed: 108.5,
+      completions: 4
+    })
+  })
+
+  it.each([
+    [
+      'without stats',
+      {
+        endless: false,
+        UserGamesStatus: { id: 3, status: 'PLAYING' },
+        UserGameStats: null
+      }
+    ],
+    [
+      'with null hours',
+      {
+        endless: false,
+        UserGamesStatus: { id: 3, status: 'PLAYING' },
+        UserGameStats: { hoursPlayed: null, completions: 0 }
+      }
+    ]
+  ])('returns zero totals %s', async (_label, found) => {
+    const service = build(found)
+
+    await expect(
+      service.findUserGameStatus(7, 'user-1')
+    ).resolves.toMatchObject({
+      hoursPlayed: 0,
+      completions: 0
+    })
+  })
+
+  it('returns null status and zero totals when the game is not in the library', async () => {
+    const service = build(null)
+
+    await expect(service.findUserGameStatus(7, 'user-1')).resolves.toEqual({
+      userGameStatus: null,
+      endless: false,
+      hoursPlayed: 0,
+      completions: 0
+    })
+  })
+})
+
+describe('UserService.setEndless', () => {
+  it('toggles the flag for a game in the library', async () => {
+    const setEndless = vi.fn().mockResolvedValue({ igdbId: 7, endless: true })
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ id: 'ug-7' }),
+      setEndless
     })
     const service = new UserService(
       userRepository,
@@ -118,10 +213,87 @@ describe('UserService.addGameToUserLibrary completions', () => {
       fakeFollowRepository()
     )
 
-    await service.addGameToUserLibrary(1022, 'user-1', statusId)
+    const result = await service.setEndless(7, 'user-1', true)
 
-    expect(createUserGameStats).toHaveBeenCalledWith('user-1', 1022, expected)
+    expect(setEndless).toHaveBeenCalledWith(7, 'user-1', true)
+    expect(result).toEqual({ igdbId: 7, endless: true })
   })
+
+  it('throws 404 when the game is not in the library', async () => {
+    const setEndless = vi.fn()
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue(null),
+      setEndless
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+
+    await expect(service.setEndless(7, 'user-1', true)).rejects.toThrow(
+      ClientError
+    )
+    expect(setEndless).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserService.setEndless race', () => {
+  it('throws 404 when the game leaves the library between the check and the update', async () => {
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({ id: 'ug-7' }),
+      setEndless: vi.fn().mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('not found', {
+          code: 'P2025',
+          clientVersion: 'test'
+        })
+      )
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+
+    await expect(service.setEndless(7, 'user-1', true)).rejects.toMatchObject({
+      statusCode: 404
+    })
+  })
+})
+
+describe('UserService.addGameToUserLibrary completions', () => {
+  it.each([
+    ['played', 1, 1],
+    ['in the queue', 4, 0],
+    ['on the wishlist', 5, 0]
+  ])(
+    'creates the stats with the right completions when added as %s',
+    async (_label, statusId, expected) => {
+      const createUserGameStats = vi
+        .fn()
+        .mockResolvedValue({ completions: expected })
+      const userRepository = fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        findUserGame: vi.fn().mockResolvedValue(null),
+        addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1022 }),
+        createUserGameStats
+      })
+      const service = new UserService(
+        userRepository,
+        fakeRatingRepository(),
+        fakeGameCacheService(),
+        fakeFollowRepository()
+      )
+
+      await service.addGameToUserLibrary(1022, 'user-1', statusId)
+
+      expect(createUserGameStats).toHaveBeenCalledWith('user-1', 1022, expected)
+    }
+  )
 })
 
 describe('UserService.updateGame keeps the completion history', () => {
@@ -136,10 +308,12 @@ describe('UserService.updateGame keeps the completion history', () => {
         UserGamesStatus: { id: currentStatus },
         _count: { platforms: 0 }
       }),
-      updateGameStatus: vi.fn().mockImplementation(async (igdbId, _u, statusId) => ({
-        igdbId,
-        UserGamesStatus: { id: statusId, status: 'X' }
-      })),
+      updateGameStatus: vi
+        .fn()
+        .mockImplementation(async (igdbId, _u, statusId) => ({
+          igdbId,
+          UserGamesStatus: { id: statusId, status: 'X' }
+        })),
       findUserGameStats: vi.fn().mockResolvedValue({ stats: { completions } }),
       ensureAtLeastOneCompletion
     })
@@ -156,13 +330,16 @@ describe('UserService.updateGame keeps the completion history', () => {
     ['playing', 3],
     ['dropped', 6],
     ['paused', 2]
-  ])('keeps the completions when a played game without platforms moves to %s', async (_label, statusId) => {
-    const { service } = serviceFor(1, 2)
+  ])(
+    'keeps the completions when a played game without platforms moves to %s',
+    async (_label, statusId) => {
+      const { service } = serviceFor(1, 2)
 
-    const result = await service.updateGame(1, 'user-1', statusId)
+      const result = await service.updateGame(1, 'user-1', statusId)
 
-    expect(result.playedCountUpdated).toBe(2)
-  })
+      expect(result.playedCountUpdated).toBe(2)
+    }
+  )
 
   it('keeps a higher count when the game comes back to played', async () => {
     const { service, ensureAtLeastOneCompletion } = serviceFor(3, 2)
@@ -195,7 +372,14 @@ describe('UserService.findManyUserGames', () => {
     )
 
     await expect(
-      service.findManyUserGames('missing-user', 0, undefined, undefined, 'gameName', 'asc')
+      service.findManyUserGames(
+        'missing-user',
+        0,
+        undefined,
+        undefined,
+        'gameName',
+        'asc'
+      )
     ).rejects.toThrow(ClientError)
   })
 
@@ -213,7 +397,14 @@ describe('UserService.findManyUserGames', () => {
       fakeFollowRepository()
     )
 
-    await service.findManyUserGames('user-1', 2, 'PLAYED', undefined, 'rating', 'desc')
+    await service.findManyUserGames(
+      'user-1',
+      2,
+      'PLAYED',
+      undefined,
+      'rating',
+      'desc'
+    )
 
     expect(findManyGamesOfUser).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -240,7 +431,14 @@ describe('UserService.findManyUserGames', () => {
       fakeFollowRepository()
     )
 
-    await service.findManyUserGames('user-1', 0, undefined, undefined, 'rating', 'desc')
+    await service.findManyUserGames(
+      'user-1',
+      0,
+      undefined,
+      undefined,
+      'rating',
+      'desc'
+    )
 
     expect(findManyGamesOfUser).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -265,7 +463,8 @@ describe('UserService.findManyUserGames', () => {
         rating: 4,
         completions: 0,
         hoursPlayed: 0,
-        playedOn: []
+        playedOn: [],
+        endless: false
       },
       {
         igdbId: 2,
@@ -277,7 +476,8 @@ describe('UserService.findManyUserGames', () => {
         rating: null,
         completions: 0,
         hoursPlayed: 0,
-        playedOn: []
+        playedOn: [],
+        endless: false
       }
     ]
     const userRepository = fakeUserRepository({
@@ -320,7 +520,8 @@ describe('UserService.findManyUserGames', () => {
         rating: 4,
         completions: 0,
         hoursPlayed: 0,
-        playedOn: []
+        playedOn: [],
+        endless: false
       },
       {
         igdbId: 99,
@@ -332,7 +533,8 @@ describe('UserService.findManyUserGames', () => {
         rating: null,
         completions: 0,
         hoursPlayed: 0,
-        playedOn: []
+        playedOn: [],
+        endless: false
       }
     ]
     const userRepository = fakeUserRepository({
@@ -391,7 +593,8 @@ describe('UserService.findManyUserGames', () => {
         rating: null,
         completions: 0,
         hoursPlayed: 0,
-        playedOn: []
+        playedOn: [],
+        endless: false
       }
     ]
     const userRepository = fakeUserRepository({
@@ -559,9 +762,7 @@ describe('UserService.findById', () => {
         psnOnlineId: 'psn-user',
         _count: { userGames: 3 }
       }),
-      countUserGames: vi
-        .fn()
-        .mockResolvedValue({ _count: { userGames: 3 } }),
+      countUserGames: vi.fn().mockResolvedValue({ _count: { userGames: 3 } }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
     })
     const followRepository = fakeFollowRepository({
@@ -593,10 +794,12 @@ describe('UserService.findById', () => {
 })
 
 describe('UserService.findMe', () => {
-  function build(options: {
-    steamId?: string | null
-    cache?: Partial<CacheRepository>
-  } = {}) {
+  function build(
+    options: {
+      steamId?: string | null
+      cache?: Partial<CacheRepository>
+    } = {}
+  ) {
     const cache = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn().mockResolvedValue(undefined),
@@ -774,7 +977,9 @@ describe('UserService.updateUserGamePlayedCount', () => {
   function serviceFor(statusId: number, completions: number) {
     const updateUserGamePlayedCount = vi
       .fn()
-      .mockImplementation(async (_u, _g, inc) => ({ completions: completions + inc }))
+      .mockImplementation(async (_u, _g, inc) => ({
+        completions: completions + inc
+      }))
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue({
@@ -796,7 +1001,9 @@ describe('UserService.updateUserGamePlayedCount', () => {
   it('lets a game that is not played go down to zero completions', async () => {
     const { service } = serviceFor(3, 1)
 
-    await expect(service.updateUserGamePlayedCount('user-1', 1, -1)).resolves.toEqual({
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, -1)
+    ).resolves.toEqual({
       playedCount: 0
     })
   })
@@ -821,7 +1028,9 @@ describe('UserService.updateUserGamePlayedCount', () => {
   it('adds a completion to a game being replayed', async () => {
     const { service } = serviceFor(3, 2)
 
-    await expect(service.updateUserGamePlayedCount('user-1', 1, 1)).resolves.toEqual({
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, 1)
+    ).resolves.toEqual({
       playedCount: 3
     })
   })

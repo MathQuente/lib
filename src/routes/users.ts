@@ -267,6 +267,23 @@ export async function userRoutes(app: FastifyInstance) {
     async (request, reply) => userController.getUserGameStatus(request, reply)
   )
 
+  app.withTypeProvider<ZodTypeProvider>().put(
+    '/endless/:igdbId',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: UserSchema.UserGameParamsSchema,
+        body: UserSchema.UserGameEndlessBodySchema,
+        response: {
+          200: UserSchema.UpdateUserGameEndlessResponseSchema,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => userController.setEndless(request, reply)
+  )
+
   app.withTypeProvider<ZodTypeProvider>().get(
     '/userGames',
     {

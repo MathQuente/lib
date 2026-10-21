@@ -72,6 +72,8 @@ Table user_games {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   completedAt DateTime
+  endless Boolean [not null, default: false]
+  endlessLocked Boolean [not null, default: false]
   user users [not null]
   UserGameStats user_game_stats
   UserGamesStatus users_games_status [not null]
@@ -116,6 +118,7 @@ Table games_cache {
   totalRatingCount Int
   category Int
   parentGameId Int
+  gameModes Int[] [not null]
   syncedAt DateTime [default: `now()`, not null]
 }
 

@@ -10,13 +10,10 @@ export class RatingController {
     const { value } = RatingSchema.RatingBodySchema.parse(request.body)
     const userId = request.user.userId
 
-    const { rating, promotedToPlayed } = await this.ratingService.createRating(
-      igdbId,
-      value,
-      userId
-    )
+    const { rating, promotedToPlayed, addedAsPlaying } =
+      await this.ratingService.createRating(igdbId, value, userId)
 
-    return reply.status(201).send({ rating, promotedToPlayed })
+    return reply.status(201).send({ rating, promotedToPlayed, addedAsPlaying })
   }
 
   async getUserGameRating(request: FastifyRequest, reply: FastifyReply) {

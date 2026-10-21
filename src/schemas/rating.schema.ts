@@ -10,7 +10,8 @@ export const RatingBodySchema = z.object({
 
 export const CreateRatingResponseSchema = z.object({
   rating: z.number(),
-  promotedToPlayed: z.boolean()
+  promotedToPlayed: z.boolean(),
+  addedAsPlaying: z.boolean()
 })
 
 export const GetRatingResponseSchema = z.object({

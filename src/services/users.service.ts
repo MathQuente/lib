@@ -1,7 +1,7 @@
 import { Status } from '@prisma/client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
-import { isUniqueViolation } from '../utils/prisma-errors'
+import { isRecordNotFound, isUniqueViolation } from '../utils/prisma-errors'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { FollowRepository } from '../repositories/follow.repository'
@@ -56,12 +56,15 @@ export class UserService {
     if (existing)
       throw new ClientError('Este jogo já está na sua biblioteca.', 409)
 
+    const endless = await this.gameCacheService.suggestsEndless(igdbId)
+
     let addedId: number
     try {
       ;({ igdbId: addedId } = await this.userRepository.addGameToUserLibrary({
         igdbId,
         statusIds,
-        userId
+        userId,
+        endless
       }))
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -178,7 +181,29 @@ export class UserService {
       userId
     )
 
-    return { userGameStatus: userGameStatus?.UserGamesStatus || null }
+    return {
+      userGameStatus: userGameStatus?.UserGamesStatus || null,
+      endless: userGameStatus?.endless ?? false,
+      hoursPlayed: Number(userGameStatus?.UserGameStats?.hoursPlayed ?? 0),
+      completions: userGameStatus?.UserGameStats?.completions ?? 0
+    }
+  }
+
+  async setEndless(igdbId: number, userId: string, endless: boolean) {
+    await this.requireUser(userId)
+
+    const userGame = await this.userRepository.findUserGame(igdbId, userId)
+    if (!userGame)
+      throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+
+    try {
+      return await this.userRepository.setEndless(igdbId, userId, endless)
+    } catch (error) {
+      if (isRecordNotFound(error)) {
+        throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+      }
+      throw error
+    }
   }
 
   async findManyUsers(pageIndex: number, query: string | undefined) {
@@ -323,7 +348,8 @@ export class UserService {
             completions: r.completions,
             hoursPlayed: r.hoursPlayed,
             playedOn: r.playedOn ?? [],
-            status: r.status as string
+            status: r.status as string,
+            endless: r.endless
           }
         }
 
@@ -340,7 +366,8 @@ export class UserService {
           completions: r.completions,
           hoursPlayed: r.hoursPlayed,
           playedOn: r.playedOn ?? [],
-          status: r.status as string
+          status: r.status as string,
+          endless: r.endless
         }
       })
       .filter((g): g is NonNullable<typeof g> => g !== null)

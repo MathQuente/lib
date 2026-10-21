@@ -28,6 +28,7 @@ export interface ImportedPlatformData {
   confirmedFinished: boolean
   strongFinished?: boolean
   completedAt?: Date
+  endless?: boolean
 }
 
 export interface PlatformPatch {
@@ -196,23 +197,31 @@ export class UserGamePlatformService {
       userGame.userGamesStatusId === PLAYING_STATUS_ID &&
       !!data.strongFinished &&
       hasNoCompletion
+    const isEndless = isNew ? !!data.endless : !!userGame?.endless
     const trustsHeuristic = isNew || isUndecided || isPromotableInProgress
-    const countsAsCompletion = trustsHeuristic
-      ? data.finished
-      : data.confirmedFinished
+    const countsAsCompletion =
+      !isEndless &&
+      (trustsHeuristic ? data.finished : data.confirmedFinished)
 
     if (!userGame) {
       await this.userRepository.addGameToUserLibrary({
         igdbId,
         userId,
-        statusIds: data.statusId,
-        completedAt: data.completedAt
+        statusIds: isEndless
+          ? (data.hoursPlayed ?? 0) > 0
+            ? PLAYING_STATUS_ID
+            : data.activityStatusId
+          : data.statusId,
+        completedAt: isEndless ? undefined : data.completedAt,
+        endless: data.endless
       })
       await this.userRepository.createUserGameStats(userId, igdbId, 0)
       userGame = await this.requireUserGame(igdbId, userId)
     } else {
       const targetStatusId =
-        data.confirmedFinished || ((isUndecided || isPromotableInProgress) && data.finished)
+        !isEndless &&
+        (data.confirmedFinished ||
+          ((isUndecided || isPromotableInProgress) && data.finished))
           ? PLAYED_STATUS_ID
           : data.activityStatusId
       if (

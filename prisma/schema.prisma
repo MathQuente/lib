@@ -87,6 +87,8 @@ model UserGame {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   completedAt       DateTime? @map("completed_at")
+  endless           Boolean   @default(false)
+  endlessLocked     Boolean   @default(false) @map("endless_locked")
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   UserGameStats   UserGameStats?
@@ -152,6 +154,7 @@ model GameCache {
   totalRatingCount Int?     @map("total_rating_count")
   category         Int?     @map("category")
   parentGameId     Int?     @map("parent_game_id")
+  gameModes        Int[]    @default([]) @map("game_modes")
   syncedAt         DateTime @default(now()) @updatedAt @map("synced_at")
 
   @@index([name])

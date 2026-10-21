@@ -25,7 +25,8 @@ export class UserRepository {
         igdbId: data.igdbId,
         userId: data.userId,
         userGamesStatusId: data.statusIds,
-        completedAt
+        completedAt,
+        endless: data.endless ?? false
       },
       select: { igdbId: true }
     })
@@ -226,7 +227,9 @@ export class UserRepository {
     return prisma.userGame.findUnique({
       where: { userId_igdbId: { igdbId, userId } },
       select: {
+        endless: true,
         UserGamesStatus: { select: { id: true, status: true } },
+        UserGameStats: { select: { completions: true, hoursPlayed: true } },
         _count: { select: { platforms: true } }
       }
     })
@@ -238,6 +241,8 @@ export class UserRepository {
       select: {
         id: true,
         igdbId: true,
+        endless: true,
+        endlessLocked: true,
         UserGamesStatus: { select: { id: true } },
         _count: { select: { platforms: true } }
       }
@@ -313,6 +318,7 @@ export class UserRepository {
       SELECT
         ug.igdb_id                    AS "igdbId",
         ugs.status                    AS "status",
+        ug.endless                    AS "endless",
         gc.name                       AS "name",
         gc.cover_url                  AS "coverUrl",
         gc.platforms                  AS "platforms",
@@ -368,6 +374,14 @@ export class UserRepository {
     })
   }
 
+  async setEndless(igdbId: number, userId: string, endless: boolean) {
+    return prisma.userGame.update({
+      where: { userId_igdbId: { igdbId, userId } },
+      data: { endless, endlessLocked: true },
+      select: { igdbId: true, endless: true }
+    })
+  }
+
   async removeGame(igdbId: number, userId: string) {
     return prisma.userGame.delete({
       where: { userId_igdbId: { igdbId, userId } },
@@ -402,11 +416,17 @@ export class UserRepository {
     })
   }
 
-  async updateGameStatus(igdbId: number, userId: string, statusId: number) {
+  async updateGameStatus(
+    igdbId: number,
+    userId: string,
+    statusId: number,
+    options: { endless?: boolean } = {}
+  ) {
     return prisma.userGame.update({
       where: { userId_igdbId: { igdbId, userId } },
       data: {
         userGamesStatusId: statusId,
+        endless: options.endless,
         updatedAt: new Date(),
         completedAt: statusId === PLAYED_STATUS_ID ? new Date() : undefined
       },

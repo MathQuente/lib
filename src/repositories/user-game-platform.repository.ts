@@ -21,6 +21,7 @@ export class UserGamePlatformRepository {
       select: {
         id: true,
         userGamesStatusId: true,
+        endless: true,
         completedAt: true,
         UserGameStats: { select: { hoursPlayed: true, completions: true } },
         platforms: { select: platformSelect, orderBy: { platform: 'asc' } }

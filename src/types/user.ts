@@ -20,4 +20,5 @@ export type PaginatedUserGameRow = {
   completions: number
   hoursPlayed: number
   playedOn: string[]
+  endless: boolean
 }

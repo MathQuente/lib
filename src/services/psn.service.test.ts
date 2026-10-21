@@ -341,6 +341,7 @@ describe('PsnService.runImport', () => {
       igdbId: 10,
       userId: 'user-1',
       statusIds: 1,
+      endless: false,
       completedAt: lastTrophyAt
     })
   })

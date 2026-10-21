@@ -112,8 +112,52 @@ export class IGDBService {
       hypes: g.hypes ?? 0,
       totalRatingCount: g.total_rating_count ?? 0,
       category: g.category ?? -1,
-      parentGameId: this.getParentGameId(g)
+      parentGameId: this.getParentGameId(g),
+      gameModes: this.getGameModeIds(g)
     }
+  }
+
+  static readonly SINGLE_PLAYER_MODE = 1
+  static readonly COOP_MODE = 3
+  static readonly ALWAYS_ENDLESS_MODES = [5, 6]
+
+  static getGameModeIds(g: IGDBGame): number[] {
+    return (
+      g.game_modes
+        ?.map(m => m.id)
+        .filter((id): id is number => typeof id === 'number') ?? []
+    )
+  }
+
+  private static readonly ENDLESS_FRANCHISE_PATTERNS = [
+    /^EA Sports FC \d{2}\b/i,
+    /^(EA Sports )?FIFA (1[5-9]|2[0-3])\b/i,
+    /^(EA Sports )?NBA 2K(1[5-9]|[2-9]\d)\b/i,
+    /^(EA Sports )?Madden NFL (1[6-9]|[2-8]\d)\b/i,
+    /^(EA Sports )?NHL (1[6-9]|[2-8]\d)\b/i
+  ]
+
+  static isEndlessFranchise(name: string): boolean {
+    if (/\bbundle\b/i.test(name)) return false
+    return this.ENDLESS_FRANCHISE_PATTERNS.some(pattern => pattern.test(name))
+  }
+
+  static suggestsEndless(game: { gameModes: number[]; name: string }): boolean {
+    if (this.isEndlessFranchise(game.name)) return true
+    const { gameModes } = game
+    if (gameModes.length === 0) return false
+    if (gameModes.some(m => this.ALWAYS_ENDLESS_MODES.includes(m))) return true
+    return (
+      !gameModes.includes(this.SINGLE_PLAYER_MODE) &&
+      !gameModes.includes(this.COOP_MODE)
+    )
+  }
+
+  static suggestsEndlessForGame(g: IGDBGame): boolean {
+    return this.suggestsEndless({
+      gameModes: this.getGameModeIds(g),
+      name: g.name
+    })
   }
 
   static readonly MIN_HYPES = 5
@@ -139,7 +183,7 @@ export class IGDBService {
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
-      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name,screenshots.image_id,screenshots.width,screenshots.height,videos.video_id,videos.name; limit 1;`
+      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name,screenshots.image_id,screenshots.width,screenshots.height,videos.video_id,videos.name; limit 1;`
     )
     return results[0] ?? null
   }
@@ -247,7 +291,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
     )
   }
 
@@ -258,7 +302,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
     )
   }
 
@@ -326,6 +370,17 @@ export class IGDBService {
       `where id = (${ids.join(',')}); fields id,total_rating_count; limit ${Math.min(ids.length, 500)};`
     )
     return new Map(results.map(r => [r.id, r.total_rating_count ?? 0]))
+  }
+
+  static async getGameModesByIds(ids: number[]): Promise<Map<number, number[]>> {
+    if (ids.length === 0) return new Map()
+    const results = await this.request<
+      { id: number; game_modes?: number[] }[]
+    >(
+      'games',
+      `where id = (${ids.join(',')}); fields id,game_modes; limit ${Math.min(ids.length, 500)};`
+    )
+    return new Map(results.map(r => [r.id, r.game_modes ?? []]))
   }
 
   static async getCategoryAndParentByIds(
