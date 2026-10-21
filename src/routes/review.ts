@@ -4,18 +4,19 @@ import { ReviewService } from '../services/review.service'
 import { ReviewController } from '../controllers/review.controller'
 import { ReviewRepository } from '../repositories/review.repository'
 import { UserRepository } from '../repositories/users.repository'
-import { RatingRepository } from '../repositories/rating.repository'
+import { GameCacheRepository } from '../repositories/game-cache.repository'
+import { GameCacheService } from '../services/game-cache.service'
 import * as ReviewSchema from '../schemas/review.schema'
 import { ErrorSchemas } from '../schemas/error.schema'
 
 export async function reviewRoutes(app: FastifyInstance) {
   const reviewRepository = new ReviewRepository()
   const userRepository = new UserRepository()
-  const ratingRepository = new RatingRepository()
+  const gameCacheService = new GameCacheService(new GameCacheRepository())
   const reviewService = new ReviewService(
     reviewRepository,
     userRepository,
-    ratingRepository
+    gameCacheService
   )
   const reviewController = new ReviewController(reviewService)
 

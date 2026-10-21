@@ -1,15 +1,26 @@
 import { ClientError } from '../errors/client-error'
 import { ReviewRepository } from '../repositories/review.repository'
 import { UserRepository } from '../repositories/users.repository'
-import { RatingRepository } from '../repositories/rating.repository'
+import { GameCacheService } from './game-cache.service'
 
 const PLAYED_STATUS_ID = 1
+const PAUSED_STATUS_ID = 2
+const PLAYING_STATUS_ID = 3
+const BACKLOG_STATUS_ID = 4
+const DROPPED_STATUS_ID = 6
+
+const REVIEWABLE_STATUS_IDS = [
+  PLAYED_STATUS_ID,
+  PAUSED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  DROPPED_STATUS_ID
+]
 
 export class ReviewService {
   constructor(
     private reviewRepository: ReviewRepository,
     private userRepository: UserRepository,
-    private ratingRepository: RatingRepository
+    private gameCacheService: GameCacheService
   ) {}
 
   private async requireUser(userId: string) {
@@ -29,22 +40,24 @@ export class ReviewService {
         userId
       )
       if (!userGame) {
-        throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
-      }
-      if (userGame.UserGamesStatus?.id !== PLAYED_STATUS_ID) {
         throw new ClientError(
-          'Você só pode escrever uma resenha de um jogo marcado como Jogado.',
-          400
+          'Adicione o jogo à sua biblioteca para escrever uma resenha.',
+          404
         )
       }
 
-      const rating = await this.ratingRepository.findUniqueByUserGame(
-        igdbId,
-        userId
-      )
-      if (!rating) {
+      await this.gameCacheService.assertReleased(igdbId)
+
+      const statusId = userGame.UserGamesStatus?.id as number
+      const stats = userGame.UserGameStats
+      const hasExperience =
+        Number(stats?.hoursPlayed ?? 0) > 0 || (stats?.completions ?? 0) > 0
+      const canReview =
+        REVIEWABLE_STATUS_IDS.includes(statusId) ||
+        (statusId === BACKLOG_STATUS_ID && hasExperience)
+      if (!canReview) {
         throw new ClientError(
-          'Você precisa avaliar este jogo antes de escrever uma resenha.',
+          'Você só pode escrever uma resenha de um jogo que já começou (Jogado, Jogando, Pausado ou Larguei) ou de um jogo na sua fila com horas ou finalizações registradas.',
           400
         )
       }
@@ -98,6 +111,8 @@ export class ReviewService {
         rating: r.rating,
         hoursPlayed: r.hoursPlayed,
         completions: r.completions,
+        status: r.status,
+        endless: r.endless,
         text: r.text,
         createdAt: r.createdAt
       })),

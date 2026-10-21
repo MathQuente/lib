@@ -35,6 +35,10 @@ const CommunityReviewSchema = z.object({
   rating: z.number().nullable(),
   hoursPlayed: z.number(),
   completions: z.number(),
+  status: z
+    .enum(['PLAYED', 'PAUSED', 'PLAYING', 'BACKLOG', 'WISHLIST', 'DROPPED'])
+    .nullable(),
+  endless: z.boolean(),
   text: z.string(),
   createdAt: z.date()
 })

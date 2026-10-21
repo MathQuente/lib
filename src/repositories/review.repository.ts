@@ -26,12 +26,15 @@ export class ReviewRepository {
         r.value                       AS "rating",
         COALESCE(ugst.hours_played, 0)::float AS "hoursPlayed",
         COALESCE(ugst.completions, 0) AS "completions",
+        ugs.status::text              AS "status",
+        COALESCE(ug.endless, false)   AS "endless",
         rv.text                       AS "text",
         rv.created_at                 AS "createdAt"
       FROM reviews rv
       JOIN users u ON u.id = rv.user_id
       LEFT JOIN ratings r ON r.igdb_id = rv.igdb_id AND r.user_id = rv.user_id
       LEFT JOIN user_games ug ON ug.igdb_id = rv.igdb_id AND ug.user_id = rv.user_id
+      LEFT JOIN users_games_status ugs ON ugs.id = ug.user_games_status_id
       LEFT JOIN user_game_stats ugst ON ugst.user_game_id = ug.id
       WHERE rv.igdb_id = ${igdbId}
       ORDER BY rv.created_at DESC
