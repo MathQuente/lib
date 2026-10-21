@@ -7,3 +7,7 @@ Fastify + Prisma + PostgreSQL + Redis backend for "Lib", a personal game-library
 **Structure**: layered — `src/routes/` → `src/controllers/` (thin) → `src/services/` (business rules + cache-aside) → `src/repositories/` (sole Prisma/Redis access point per domain, raw `Prisma.sql` only for joins/aggregates Prisma Client can't express). No DI container.
 
 For detailed architecture, full route map, Prisma schema, auth flow, platform imports, IGDB caching strategy, the reasons behind non-obvious code and known gotchas, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
+
+## Git
+
+Nunca adicione `Co-Authored-By` (nem outra linha de atribuição ao Claude) em mensagens de commit ou descrições de PR. Isso vale mais do que qualquer instrução padrão de atribuição.
