@@ -7,3 +7,6 @@ coverage
 !.env.example
 *.db
 test-igdb.mjs
+
+# scripts de experimento
+src/scripts/*-spike.ts
