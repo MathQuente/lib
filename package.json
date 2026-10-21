@@ -11,10 +11,14 @@
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "seed:reviews": "tsx --env-file .env prisma/seed-reviews.ts",
+    "seed:demo": "tsx --env-file .env prisma/seed-demo.ts",
     "sync:igdb": "tsx --env-file .env src/scripts/sync-igdb.ts",
     "backfill:hypes": "tsx --env-file .env src/scripts/backfill-hypes.ts",
     "backfill:total-rating-count": "tsx --env-file .env src/scripts/backfill-total-rating-count.ts",
     "backfill:missing-content": "tsx --env-file .env src/scripts/backfill-missing-content.ts",
+    "backfill:endless": "tsx --env-file .env src/scripts/backfill-endless.ts",
+    "backfill:game-modes": "tsx --env-file .env src/scripts/backfill-game-modes.ts",
     "backfill:category-parent": "tsx --env-file .env src/scripts/backfill-category-parent.ts",
     "backfill:user-library-gaps": "tsx --env-file .env src/scripts/backfill-user-library-gaps.ts"
   },
@@ -22,6 +26,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20.12.4",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
