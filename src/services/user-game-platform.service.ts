@@ -1,10 +1,11 @@
-import { Platform } from '@prisma/client'
+import { Console, Platform } from '@prisma/client'
 import { ClientError } from '../errors/client-error'
 import {
   PlatformValues,
   UserGamePlatformRepository
 } from '../repositories/user-game-platform.repository'
 import { UserRepository } from '../repositories/users.repository'
+import { isConsoleAllowed } from '../utils/platform-consoles'
 
 const PLAYED_STATUS_ID = 1
 const WISHLIST_STATUS_ID = 5
@@ -41,6 +42,39 @@ type UserGameWithPlatforms = NonNullable<
   Awaited<ReturnType<UserGamePlatformRepository['findUserGameWithPlatforms']>>
 >
 
+type PlatformRow = UserGameWithPlatforms['platforms'][number]
+
+export type RowResolution =
+  | { action: 'update'; row: PlatformRow }
+  | { action: 'adopt'; row: PlatformRow }
+  | { action: 'create' }
+  | { action: 'skip' }
+
+export function resolveRow(
+  rows: PlatformRow[],
+  platform: Platform,
+  gameConsole: Console,
+  options: { fromImport?: boolean } = {}
+): RowResolution {
+  const sameEcosystem = rows.filter(r => r.platform === platform)
+  const exact = sameEcosystem.find(r => r.console === gameConsole)
+  if (exact) return { action: 'update', row: exact }
+
+  if (gameConsole === 'UNKNOWN') {
+    if (sameEcosystem.length === 0) return { action: 'create' }
+    return sameEcosystem.length === 1
+      ? { action: 'update', row: sameEcosystem[0] }
+      : { action: 'skip' }
+  }
+
+  const unknown = sameEcosystem.find(r => r.console === 'UNKNOWN')
+  if (unknown) return { action: 'adopt', row: unknown }
+  if (options.fromImport && sameEcosystem.length === 1) {
+    return { action: 'update', row: sameEcosystem[0] }
+  }
+  return { action: 'create' }
+}
+
 function toDateString(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : null
 }
@@ -76,6 +110,7 @@ export class UserGamePlatformService {
     return {
       platforms: userGame.platforms.map(p => ({
         platform: p.platform,
+        console: p.console,
         hoursPlayed: p.hoursPlayed != null ? Number(p.hoursPlayed) : null,
         completions: p.completions,
         completedAt: toDateString(p.completedAt)
@@ -94,7 +129,19 @@ export class UserGamePlatformService {
     return this.toResponse(await this.requireUserGame(igdbId, userId))
   }
 
-  async addPlatform(userId: string, igdbId: number, platform: Platform) {
+  private assertConsole(platform: Platform, gameConsole: Console) {
+    if (!isConsoleAllowed(platform, gameConsole)) {
+      throw new ClientError('Console inválido para esta plataforma.', 400)
+    }
+  }
+
+  async addPlatform(
+    userId: string,
+    igdbId: number,
+    platform: Platform,
+    gameConsole: Console
+  ) {
+    this.assertConsole(platform, gameConsole)
     const userGame = await this.requireUserGame(igdbId, userId)
 
     if (userGame.userGamesStatusId === WISHLIST_STATUS_ID) {
@@ -104,7 +151,27 @@ export class UserGamePlatformService {
       )
     }
 
-    if (!userGame.platforms.some(p => p.platform === platform)) {
+    const resolution = resolveRow(userGame.platforms, platform, gameConsole)
+
+    if (
+      resolution.action === 'skip' ||
+      (resolution.action === 'update' && resolution.row.console !== gameConsole)
+    ) {
+      throw new ClientError(
+        'Este jogo já tem consoles registrados nesta plataforma. Informe o console.',
+        400
+      )
+    }
+
+    if (resolution.action === 'adopt') {
+      await this.platformRepository.adoptConsole(
+        userGame.id,
+        platform,
+        resolution.row.console,
+        gameConsole,
+        {}
+      )
+    } else if (resolution.action === 'create') {
       const isPlayed = userGame.userGamesStatusId === PLAYED_STATUS_ID
       const inherited: PlatformValues =
         userGame.platforms.length === 0 ? legacyValues(userGame) : {}
@@ -114,7 +181,12 @@ export class UserGamePlatformService {
             completions: Math.max(inherited.completions ?? 0, 1)
           }
         : inherited
-      await this.platformRepository.savePlatform(userGame.id, platform, values)
+      await this.platformRepository.savePlatform(
+        userGame.id,
+        platform,
+        gameConsole,
+        values
+      )
     }
 
     return this.getPlatforms(userId, igdbId)
@@ -124,11 +196,17 @@ export class UserGamePlatformService {
     userId: string,
     igdbId: number,
     platform: Platform,
+    gameConsole: Console,
     patch: PlatformPatch
   ) {
+    this.assertConsole(platform, gameConsole)
     const userGame = await this.requireUserGame(igdbId, userId)
 
-    if (!userGame.platforms.some(p => p.platform === platform)) {
+    if (
+      !userGame.platforms.some(
+        p => p.platform === platform && p.console === gameConsole
+      )
+    ) {
       throw new ClientError('Plataforma não encontrada neste jogo.', 404)
     }
 
@@ -158,19 +236,38 @@ export class UserGamePlatformService {
       }
     }
 
-    await this.platformRepository.savePlatform(userGame.id, platform, values)
+    await this.platformRepository.savePlatform(
+      userGame.id,
+      platform,
+      gameConsole,
+      values
+    )
 
     return this.getPlatforms(userId, igdbId)
   }
 
-  async removePlatform(userId: string, igdbId: number, platform: Platform) {
+  async removePlatform(
+    userId: string,
+    igdbId: number,
+    platform: Platform,
+    gameConsole: Console
+  ) {
+    this.assertConsole(platform, gameConsole)
     const userGame = await this.requireUserGame(igdbId, userId)
 
-    if (!userGame.platforms.some(p => p.platform === platform)) {
+    if (
+      !userGame.platforms.some(
+        p => p.platform === platform && p.console === gameConsole
+      )
+    ) {
       throw new ClientError('Plataforma não encontrada neste jogo.', 404)
     }
 
-    await this.platformRepository.deletePlatform(userGame.id, platform)
+    await this.platformRepository.deletePlatform(
+      userGame.id,
+      platform,
+      gameConsole
+    )
 
     return this.getPlatforms(userId, igdbId)
   }
@@ -179,12 +276,21 @@ export class UserGamePlatformService {
     userId: string,
     igdbId: number,
     platform: Platform,
-    data: ImportedPlatformData
-  ): Promise<'imported' | 'updated'> {
+    data: ImportedPlatformData,
+    gameConsole: Console = 'UNKNOWN'
+  ): Promise<'imported' | 'updated' | 'skipped'> {
+    this.assertConsole(platform, gameConsole)
     let userGame = await this.platformRepository.findUserGameWithPlatforms(
       igdbId,
       userId
     )
+    const existingResolution = userGame
+      ? resolveRow(userGame.platforms, platform, gameConsole, {
+          fromImport: true
+        })
+      : null
+    if (existingResolution?.action === 'skip') return 'skipped'
+
     const isNew = !userGame
     const isUndecided =
       !!userGame &&
@@ -207,11 +313,7 @@ export class UserGamePlatformService {
       await this.userRepository.addGameToUserLibrary({
         igdbId,
         userId,
-        statusIds: isEndless
-          ? (data.hoursPlayed ?? 0) > 0
-            ? PLAYING_STATUS_ID
-            : data.activityStatusId
-          : data.statusId,
+        statusIds: isEndless ? data.activityStatusId : data.statusId,
         completedAt: isEndless ? undefined : data.completedAt,
         endless: data.endless
       })
@@ -236,7 +338,13 @@ export class UserGamePlatformService {
       }
     }
 
-    const existing = userGame.platforms.find(p => p.platform === platform)
+    const resolution: RowResolution = existingResolution ?? {
+      action: 'create'
+    }
+    const existing =
+      resolution.action === 'update' || resolution.action === 'adopt'
+        ? resolution.row
+        : undefined
     const base: PlatformValues = existing
       ? {
           completions: existing.completions,
@@ -246,7 +354,7 @@ export class UserGamePlatformService {
         ? legacyValues(userGame)
         : { completions: 0, completedAt: null }
 
-    await this.platformRepository.savePlatform(userGame.id, platform, {
+    const values: PlatformValues = {
       hoursPlayed: data.hoursPlayed,
       completions: countsAsCompletion
         ? Math.max(base.completions ?? 0, 1)
@@ -254,7 +362,24 @@ export class UserGamePlatformService {
       completedAt:
         base.completedAt ??
         (countsAsCompletion ? (data.completedAt ?? new Date()) : null)
-    })
+    }
+
+    if (resolution.action === 'adopt') {
+      await this.platformRepository.adoptConsole(
+        userGame.id,
+        platform,
+        resolution.row.console,
+        gameConsole,
+        values
+      )
+    } else {
+      await this.platformRepository.savePlatform(
+        userGame.id,
+        platform,
+        resolution.action === 'update' ? resolution.row.console : gameConsole,
+        values
+      )
+    }
 
     return isNew ? 'imported' : 'updated'
   }

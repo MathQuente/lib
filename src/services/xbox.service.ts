@@ -27,6 +27,7 @@ import {
 import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { consoleFromXboxDevices } from '../utils/console-inference'
 
 const PLAYED_STATUS_ID = 1
 const PLAYING_STATUS_ID = 3
@@ -49,6 +50,7 @@ const RATE_LIMITED_MESSAGE =
 interface MergedXboxGame {
   igdbGame: IGDBGame
   titleIds: string[]
+  devices: string[]
   lastPlayedAt: Date | null
   mostCompleted: XboxTitle
 }
@@ -363,6 +365,7 @@ export class XboxService {
         byIgdbId.set(igdbGame.id, {
           igdbGame,
           titleIds: [title.titleId],
+          devices: [...title.devices],
           lastPlayedAt: title.lastPlayedAt,
           mostCompleted: title
         })
@@ -371,6 +374,7 @@ export class XboxService {
 
       skipped++
       existing.titleIds.push(title.titleId)
+      existing.devices = [...new Set([...existing.devices, ...title.devices])]
       if (
         title.lastPlayedAt &&
         (!existing.lastPlayedAt || title.lastPlayedAt > existing.lastPlayedAt)
@@ -418,9 +422,16 @@ export class XboxService {
     const total = toImport.length
     let imported = 0
     let updated = 0
+    let processed = 0
     const now = Date.now()
 
-    for (const { igdbGame, titleIds, lastPlayedAt, mostCompleted } of toImport) {
+    for (const {
+      igdbGame,
+      titleIds,
+      devices,
+      lastPlayedAt,
+      mostCompleted
+    } of toImport) {
       const minutes = titleIds.flatMap(id => minutesByTitleId.get(id) ?? [])
       const isFinished = finishedTitleIds.has(mostCompleted.titleId)
       const isRecent =
@@ -452,12 +463,15 @@ export class XboxService {
               undefined)
             : undefined,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
-        }
+        },
+        consoleFromXboxDevices(devices)
       )
 
       if (outcome === 'imported') imported++
+      else if (outcome === 'skipped') skipped++
       else updated++
-      onProgress?.(Math.round(((imported + updated) / total) * 100))
+      processed++
+      onProgress?.(Math.round((processed / total) * 100))
     }
 
     onProgress?.(100)

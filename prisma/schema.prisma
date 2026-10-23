@@ -109,10 +109,53 @@ enum Platform {
   OTHER
 }
 
+enum Console {
+  UNKNOWN
+  PS1
+  PS2
+  PS3
+  PS4
+  PS5
+  PSP
+  PS_VITA
+  XBOX_ORIGINAL
+  XBOX_360
+  XBOX_ONE
+  XBOX_SERIES
+  NES
+  SNES
+  N64
+  GAMECUBE
+  WII
+  WII_U
+  SWITCH
+  SWITCH_2
+  GAME_BOY
+  GAME_BOY_COLOR
+  GAME_BOY_ADVANCE
+  DS
+  N3DS
+  PC
+  STEAM_DECK
+  MASTER_SYSTEM
+  MEGA_DRIVE
+  SEGA_CD
+  SATURN
+  DREAMCAST
+  GAME_GEAR
+  ATARI_2600
+  ATARI_7800
+  NEO_GEO
+  TURBOGRAFX
+  MOBILE
+  ARCADE
+}
+
 model UserGamePlatform {
   id          String    @id @default(uuid())
   userGameId  String    @map("user_game_id")
   platform    Platform
+  console     Console   @default(UNKNOWN)
   hoursPlayed Decimal?  @map("hours_played") @db.Decimal(6, 2)
   completions Int       @default(0)
   completedAt DateTime? @map("completed_at")
@@ -121,7 +164,7 @@ model UserGamePlatform {
 
   userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
 
-  @@unique([userGameId, platform])
+  @@unique([userGameId, platform, console])
   @@map("user_game_platforms")
 }
 

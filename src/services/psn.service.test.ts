@@ -69,6 +69,7 @@ function summary(overrides: Partial<PsnTrophySummary> = {}): PsnTrophySummary {
 function played(overrides: Partial<PsnPlayedGame>): PsnPlayedGame {
   return {
     titleId: 'CUSA00001_00',
+    category: 'ps4_game',
     conceptId: '100',
     name: 'Game',
     playMinutes: 60,
@@ -307,6 +308,7 @@ describe('PsnService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'PLAYSTATION',
+      'PS4',
       expect.objectContaining({ hoursPlayed: 2 })
     )
     expect(result.library).toEqual({
@@ -428,6 +430,128 @@ describe('PsnService.runImport', () => {
     )
   })
 
+  it.each([
+    ['one PS5 title', [{ category: 'ps5_native_game' }], 'PS5'],
+    ['one PS4 title', [{ category: 'ps4_game' }], 'PS4'],
+    ['an unknown category', [{ category: 'unknown' }], 'UNKNOWN'],
+    [
+      'a PS4 and a PS5 title of the same concept',
+      [
+        { titleId: 'CUSA1_00', category: 'ps4_game' },
+        { titleId: 'PPSA1_00', category: 'ps5_native_game' }
+      ],
+      'UNKNOWN'
+    ]
+  ])('imports %s with the console %s', async (_name, titles, expected) => {
+    mockIgdb([['100', 10]])
+    const service = makeService(
+      fakeUserRepository(),
+      fakePsnApi({
+        getPlayedGames: vi
+          .fn()
+          .mockResolvedValue(
+            titles.map(t => played({ conceptId: '100', name: 'Game', ...t }))
+          )
+      })
+    )
+
+    await service.runImport('user-1')
+
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-10',
+      'PLAYSTATION',
+      expected,
+      expect.anything()
+    )
+  })
+
+  it('counts a game with an unknown console and several PlayStation consoles as skipped and leaves it untouched', async () => {
+    mockIgdb([['100', 10]])
+    const updateGameStatus = vi.fn().mockResolvedValue(null)
+    const service = makeService(
+      fakeUserRepository({
+        findUserGame: vi
+          .fn()
+          .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } }),
+        updateGameStatus
+      }),
+      fakePsnApi({
+        getPlayedGames: vi
+          .fn()
+          .mockResolvedValue([
+            played({ conceptId: '100', name: 'Owned', category: 'unknown' })
+          ])
+      })
+    )
+    const platformRow = (console: string) => ({
+      platform: 'PLAYSTATION',
+      console,
+      hoursPlayed: null,
+      completions: 0,
+      completedAt: null
+    })
+    lastPlatformRepository.findUserGameWithPlatforms.mockResolvedValue({
+      id: 'ug-10',
+      userGamesStatusId: 4,
+      endless: false,
+      completedAt: null,
+      UserGameStats: null,
+      platforms: [platformRow('PS4'), platformRow('PS5')]
+    })
+
+    const result = await service.runImport('user-1')
+
+    expect(result.library).toEqual({
+      imported: 0,
+      updated: 0,
+      skipped: 1,
+      notFound: []
+    })
+    expect(updateGameStatus).not.toHaveBeenCalled()
+    expect(lastPlatformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+
+  it('updates the PS4 row of a game that also has a PS5 row when the console is known', async () => {
+    mockIgdb([['100', 10]])
+    const service = makeService(
+      fakeUserRepository({
+        findUserGame: vi
+          .fn()
+          .mockResolvedValue({ id: 'existing', UserGamesStatus: { id: 4 } })
+      }),
+      fakePsnApi({
+        getPlayedGames: vi
+          .fn()
+          .mockResolvedValue([played({ conceptId: '100', name: 'Owned' })])
+      })
+    )
+    const platformRow = (console: string) => ({
+      platform: 'PLAYSTATION',
+      console,
+      hoursPlayed: null,
+      completions: 0,
+      completedAt: null
+    })
+    lastPlatformRepository.findUserGameWithPlatforms.mockResolvedValue({
+      id: 'ug-10',
+      userGamesStatusId: 4,
+      endless: false,
+      completedAt: null,
+      UserGameStats: null,
+      platforms: [platformRow('PS4'), platformRow('PS5')]
+    })
+
+    const result = await service.runImport('user-1')
+
+    expect(result.library).toMatchObject({ updated: 1, skipped: 0 })
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-10',
+      'PLAYSTATION',
+      'PS4',
+      expect.anything()
+    )
+  })
+
   it('reports unmatched and concept-less games as not found and updates owned ones', async () => {
     mockIgdb([['100', 10]])
     const updateGameStatus = vi.fn().mockResolvedValue(null)
@@ -504,6 +628,7 @@ describe('PsnService.runImport', () => {
       expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-10',
         'PLAYSTATION',
+        'PS4',
         expect.objectContaining({
           completions: expectedStatusId === 1 ? 1 : 0
         })
@@ -532,6 +657,7 @@ describe('PsnService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'PLAYSTATION',
+      'PS4',
       expect.objectContaining({ hoursPlayed: 1 })
     )
   })

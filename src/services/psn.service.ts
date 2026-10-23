@@ -30,6 +30,7 @@ import {
 import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { consoleFromPsnCategories } from '../utils/console-inference'
 
 const PLAYED_STATUS_ID = 1
 const PLAYING_STATUS_ID = 3
@@ -97,6 +98,7 @@ interface MergedPsnGame {
   conceptId: string
   name: string
   titleIds: string[]
+  categories: string[]
   playMinutes: number
   lastPlayedAt: Date | null
 }
@@ -117,6 +119,7 @@ function mergeByConcept(games: PsnPlayedGame[]) {
         conceptId: game.conceptId,
         name: game.name,
         titleIds: [game.titleId],
+        categories: [game.category],
         playMinutes: game.playMinutes,
         lastPlayedAt: game.lastPlayedAt
       })
@@ -124,6 +127,7 @@ function mergeByConcept(games: PsnPlayedGame[]) {
     }
 
     existing.titleIds.push(game.titleId)
+    existing.categories.push(game.category)
     existing.playMinutes += game.playMinutes
     if (
       game.lastPlayedAt &&
@@ -343,6 +347,7 @@ export class PsnService {
     const total = toImport.length
     let imported = 0
     let updated = 0
+    let processed = 0
     const now = Date.now()
 
     for (const { game, igdbGame } of toImport) {
@@ -378,12 +383,15 @@ export class PsnService {
           confirmedFinished,
           completedAt,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
-        }
+        },
+        consoleFromPsnCategories(game.categories)
       )
 
       if (outcome === 'imported') imported++
+      else if (outcome === 'skipped') skipped++
       else updated++
-      onProgress?.(Math.round(((imported + updated) / total) * 100))
+      processed++
+      onProgress?.(Math.round((processed / total) * 100))
     }
 
     onProgress?.(100)

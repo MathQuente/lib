@@ -257,6 +257,7 @@ describe('findBasesOfFinishedExpansions', () => {
     return {
       igdbGame: igdb(id, { parent_game: parent }),
       titleIds: [titleId],
+      devices: ['XboxOne'],
       lastPlayedAt: null,
       mostCompleted: title({ titleId, achievementsEarned: earned })
     }
@@ -503,6 +504,7 @@ describe('XboxService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'XBOX',
+      'XBOX_ONE',
       { hoursPlayed: undefined, completions: 0, completedAt: null }
     )
     expect(result).toEqual({
@@ -668,7 +670,36 @@ describe('XboxService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-11071',
       'XBOX',
+      'UNKNOWN',
       expect.objectContaining({ hoursPlayed: 1.5 })
+    )
+  })
+
+  it.each([
+    ['only XboxSeries', ['XboxSeries'], 'XBOX_SERIES'],
+    ['PC and XboxSeries', ['PC', 'XboxSeries'], 'XBOX_SERIES'],
+    ['XboxOne and XboxSeries', ['XboxOne', 'XboxSeries'], 'UNKNOWN'],
+    ['Xbox360, XboxOne and XboxSeries', ['Xbox360', 'XboxOne', 'XboxSeries'], 'UNKNOWN'],
+    ['only PC', ['PC'], 'PC']
+  ])('imports a title with %s with the console %s', async (_name, devices, expected) => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({ titleId: '1', name: 'Some Game', pfn: null, devices })
+      ])
+    })
+    mockExternal([])
+    vi.spyOn(IGDBService, 'searchGamesByName').mockResolvedValue([
+      igdb(11071, { name: 'Some Game' })
+    ] as IGDBGame[])
+    const service = makeService(fakeUserRepository(), xboxApi)
+
+    await service.runImport('user-1')
+
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-11071',
+      'XBOX',
+      expected,
+      expect.anything()
     )
   })
 
@@ -752,7 +783,8 @@ describe('XboxService.runImport', () => {
         'user-1',
         10,
         'XBOX',
-        expect.objectContaining({ finished: true, strongFinished: true })
+        expect.objectContaining({ finished: true, strongFinished: true }),
+        'XBOX_360'
       )
     })
 
@@ -908,11 +940,13 @@ describe('XboxService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'XBOX',
+      'XBOX_ONE',
       expect.objectContaining({ hoursPlayed: 2.25 })
     )
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-20',
       'XBOX',
+      'XBOX_ONE',
       expect.objectContaining({ hoursPlayed: undefined })
     )
   })
@@ -933,6 +967,7 @@ describe('XboxService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'XBOX',
+      'XBOX_ONE',
       expect.objectContaining({ hoursPlayed: undefined })
     )
   })
@@ -997,6 +1032,7 @@ describe('XboxService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'XBOX',
+      'XBOX_ONE',
       { hoursPlayed: undefined, completions: 1, completedAt: lastPlayedAt }
     )
   })
@@ -1262,6 +1298,7 @@ describe('XboxService.runImport', () => {
       expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-10',
         'XBOX',
+        'XBOX_ONE',
         expect.objectContaining({
           completions: expectedStatusId === 1 ? 1 : 0
         })

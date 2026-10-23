@@ -133,6 +133,7 @@ describe('PsnApiService.getPlayedGames', () => {
     expect(games).toEqual([
       {
         titleId: 'CUSA1_00',
+        category: 'ps4_game',
         conceptId: '111',
         name: 'Game One',
         playMinutes: 120,
@@ -140,6 +141,7 @@ describe('PsnApiService.getPlayedGames', () => {
       },
       {
         titleId: 'PPSA3_00',
+        category: 'ps5_native_game',
         conceptId: '333',
         name: 'Game Three',
         playMinutes: 30,

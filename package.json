@@ -20,6 +20,7 @@
     "backfill:endless": "tsx --env-file .env src/scripts/backfill-endless.ts",
     "backfill:game-modes": "tsx --env-file .env src/scripts/backfill-game-modes.ts",
     "backfill:category-parent": "tsx --env-file .env src/scripts/backfill-category-parent.ts",
+    "backfill:console": "tsx --env-file .env src/scripts/backfill-console.ts",
     "backfill:user-library-gaps": "tsx --env-file .env src/scripts/backfill-user-library-gaps.ts"
   },
   "keywords": [],

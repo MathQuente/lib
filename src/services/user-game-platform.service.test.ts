@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { Prisma } from '@prisma/client'
-import { UserGamePlatformService } from './user-game-platform.service'
+import {
+  UserGamePlatformService,
+  resolveRow
+} from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { ClientError } from '../errors/client-error'
 
 type Row = {
   platform: string
+  console: string
   hoursPlayed: Prisma.Decimal | null
   completions: number
   completedAt: Date | null
@@ -41,6 +45,7 @@ function userGame(overrides: {
 
 function row(overrides: Partial<Row> & { platform: string }): Row {
   return {
+    console: 'UNKNOWN',
     hoursPlayed: null,
     completions: 0,
     completedAt: null,
@@ -52,6 +57,7 @@ function setup(found: ReturnType<typeof userGame> | null) {
   const platformRepository = {
     findUserGameWithPlatforms: vi.fn().mockResolvedValue(found),
     savePlatform: vi.fn().mockResolvedValue(undefined),
+    adoptConsole: vi.fn().mockResolvedValue(undefined),
     deletePlatform: vi.fn().mockResolvedValue(undefined)
   }
   const userRepository = {
@@ -77,11 +83,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       userGame({ statusId: 1, completedAt, hours: 40, completions: 2 })
     )
 
-    await service.addPlatform('user-1', 10, 'STEAM')
+    await service.addPlatform('user-1', 10, 'STEAM', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 40, completions: 2, completedAt }
     )
   })
@@ -97,11 +104,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       })
     )
 
-    await service.addPlatform('user-1', 10, 'STEAM')
+    await service.addPlatform('user-1', 10, 'STEAM', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 45, completions: 2, completedAt }
     )
   })
@@ -116,11 +124,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       })
     )
 
-    await service.addPlatform('user-1', 10, 'STEAM')
+    await service.addPlatform('user-1', 10, 'STEAM', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 5, completions: 0, completedAt: null }
     )
   })
@@ -130,11 +139,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       userGame({ statusId: 1, hours: 12, completions: 0 })
     )
 
-    await service.addPlatform('user-1', 10, 'STEAM')
+    await service.addPlatform('user-1', 10, 'STEAM', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 12, completions: 1, completedAt: null }
     )
   })
@@ -144,11 +154,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       userGame({ statusId: 1, platforms: [row({ platform: 'STEAM' })] })
     )
 
-    await service.addPlatform('user-1', 10, 'PLAYSTATION')
+    await service.addPlatform('user-1', 10, 'PLAYSTATION', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'PLAYSTATION',
+      'UNKNOWN',
       { completions: 1 }
     )
   })
@@ -158,11 +169,12 @@ describe('UserGamePlatformService.addPlatform', () => {
       userGame({ statusId: 2, platforms: [row({ platform: 'STEAM' })] })
     )
 
-    await service.addPlatform('user-1', 10, 'PLAYSTATION')
+    await service.addPlatform('user-1', 10, 'PLAYSTATION', 'UNKNOWN')
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'PLAYSTATION',
+      'UNKNOWN',
       {}
     )
   })
@@ -171,7 +183,7 @@ describe('UserGamePlatformService.addPlatform', () => {
     const { service } = setup(userGame({ statusId: 5 }))
 
     await expect(
-      service.addPlatform('user-1', 10, 'STEAM')
+      service.addPlatform('user-1', 10, 'STEAM', 'UNKNOWN')
     ).rejects.toBeInstanceOf(ClientError)
   })
 })
@@ -183,7 +195,7 @@ describe('UserGamePlatformService.updatePlatform', () => {
     )
 
     await expect(
-      service.updatePlatform('user-1', 10, 'STEAM', {
+      service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
         completedAt: '2024-01-01'
       })
     ).rejects.toMatchObject({ statusCode: 400 })
@@ -195,7 +207,7 @@ describe('UserGamePlatformService.updatePlatform', () => {
     )
 
     await expect(
-      service.updatePlatform('user-1', 10, 'STEAM', {
+      service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
         completedAt: '2999-01-01'
       })
     ).rejects.toMatchObject({ statusCode: 400 })
@@ -205,7 +217,9 @@ describe('UserGamePlatformService.updatePlatform', () => {
     const { service } = setup(userGame({ statusId: 1 }))
 
     await expect(
-      service.updatePlatform('user-1', 10, 'XBOX', { hoursPlayed: 3 })
+      service.updatePlatform('user-1', 10, 'XBOX', 'UNKNOWN', {
+        hoursPlayed: 3
+      })
     ).rejects.toMatchObject({ statusCode: 404 })
   })
 
@@ -214,11 +228,14 @@ describe('UserGamePlatformService.updatePlatform', () => {
       userGame({ statusId: 1, platforms: [row({ platform: 'STEAM' })] })
     )
 
-    await service.updatePlatform('user-1', 10, 'STEAM', { hoursPlayed: 12.5 })
+    await service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+      hoursPlayed: 12.5
+    })
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 12.5 }
     )
   })
@@ -266,6 +283,7 @@ describe('UserGamePlatformService.importPlatform', () => {
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 7, completions: 0, completedAt: null }
     )
   })
@@ -357,6 +375,7 @@ describe('UserGamePlatformService.importPlatform', () => {
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'STEAM',
+      'UNKNOWN',
       { hoursPlayed: 25, completions: 3, completedAt: existingDate }
     )
   })
@@ -383,6 +402,7 @@ describe('UserGamePlatformService.importPlatform', () => {
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'PLAYSTATION',
+      'UNKNOWN',
       { hoursPlayed: 30, completions: 2, completedAt: legacyDate }
     )
   })
@@ -405,6 +425,7 @@ describe('UserGamePlatformService.importPlatform', () => {
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
       'PLAYSTATION',
+      'UNKNOWN',
       { hoursPlayed: 30, completions: 1, completedAt: importedDate }
     )
   })
@@ -420,7 +441,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       completedAt: new Date('2024-03-01T00:00:00Z')
     }
 
-    it('creates a new endless game as PLAYING with no completion, ignoring finished signals', async () => {
+    it('creates a new endless game with the activity status and no completion, ignoring finished signals', async () => {
       const { service, platformRepository, userRepository } = setup(null)
       platformRepository.findUserGameWithPlatforms
         .mockResolvedValueOnce(null)
@@ -441,27 +462,35 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'STEAM',
+        'UNKNOWN',
         { hoursPlayed: 3000, completions: 0, completedAt: null }
       )
     })
 
-    it('keeps a new endless game with no hours on the activity status', async () => {
-      const { service, platformRepository, userRepository } = setup(null)
-      platformRepository.findUserGameWithPlatforms
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(userGame({ statusId: 4 }))
+    it.each([
+      ['has many hours but was not opened recently', 3000, 4],
+      ['has no hours', 0, 4],
+      ['was opened recently', 3000, 3]
+    ])(
+      'gives a new endless game the activity status when it %s',
+      async (_label, hours, activityStatusId) => {
+        const { service, platformRepository, userRepository } = setup(null)
+        platformRepository.findUserGameWithPlatforms
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(userGame({ statusId: activityStatusId }))
 
-      await service.importPlatform('user-1', 10, 'STEAM', {
-        ...finishedSignals,
-        hoursPlayed: 0,
-        activityStatusId: 4,
-        endless: true
-      })
+        await service.importPlatform('user-1', 10, 'STEAM', {
+          ...finishedSignals,
+          hoursPlayed: hours,
+          activityStatusId,
+          endless: true
+        })
 
-      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
-        expect.objectContaining({ statusIds: 4 })
-      )
-    })
+        expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+          expect.objectContaining({ statusIds: activityStatusId })
+        )
+      }
+    )
 
     it('does not promote an existing endless game to PLAYED or count a completion', async () => {
       const { service, platformRepository, userRepository } = setup(
@@ -482,6 +511,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'STEAM',
+        'UNKNOWN',
         { hoursPlayed: 3000, completions: 0, completedAt: null }
       )
     })
@@ -533,6 +563,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'STEAM',
+        'UNKNOWN',
         { hoursPlayed: 12, completions: 0, completedAt: null }
       )
     })
@@ -555,6 +586,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'STEAM',
+        'UNKNOWN',
         {
           hoursPlayed: 12,
           completions: 1,
@@ -595,6 +627,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'XBOX',
+        'UNKNOWN',
         {
           hoursPlayed: 12,
           completions: 1,
@@ -621,6 +654,7 @@ describe('UserGamePlatformService.importPlatform', () => {
         expect(platformRepository.savePlatform).toHaveBeenCalledWith(
           'ug-1',
           'STEAM',
+          'UNKNOWN',
           {
             hoursPlayed: 12,
             completions: 1,
@@ -655,19 +689,22 @@ describe('UserGamePlatformService.importPlatform', () => {
       it.each([
         ['paused', 2],
         ['dropped', 6]
-      ])('does not move a %s game on a strong signal', async (_label, statusId) => {
-        const { service, userRepository } = setup(
-          userGame({ statusId, platforms: [row({ platform: 'STEAM' })] })
-        )
+      ])(
+        'does not move a %s game on a strong signal',
+        async (_label, statusId) => {
+          const { service, userRepository } = setup(
+            userGame({ statusId, platforms: [row({ platform: 'STEAM' })] })
+          )
 
-        await service.importPlatform('user-1', 10, 'STEAM', strong)
+          await service.importPlatform('user-1', 10, 'STEAM', strong)
 
-        expect(userRepository.updateGameStatus).not.toHaveBeenCalledWith(
-          10,
-          'user-1',
-          1
-        )
-      })
+          expect(userRepository.updateGameStatus).not.toHaveBeenCalledWith(
+            10,
+            'user-1',
+            1
+          )
+        }
+      )
     })
 
     it('leaves a game in progress alone on the heuristic', async () => {
@@ -695,6 +732,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'XBOX',
+        'UNKNOWN',
         {
           hoursPlayed: 12,
           completions: 1,
@@ -727,6 +765,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       expect(platformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-1',
         'STEAM',
+        'UNKNOWN',
         {
           hoursPlayed: 12,
           completions: 1,
@@ -734,5 +773,499 @@ describe('UserGamePlatformService.importPlatform', () => {
         }
       )
     })
+  })
+})
+
+describe('console per platform', () => {
+  const imported = {
+    statusId: 3,
+    activityStatusId: 3,
+    hoursPlayed: 5,
+    finished: false,
+    confirmedFinished: false
+  }
+
+  describe('resolveRow', () => {
+    const rows = (...entries: [string, string][]) =>
+      entries.map(([platform, console]) => row({ platform, console })) as never
+
+    it('uses the row with the exact platform and console', () => {
+      const found = resolveRow(
+        rows(['XBOX', 'XBOX_360'], ['XBOX', 'XBOX_ONE']),
+        'XBOX',
+        'XBOX_ONE'
+      )
+      expect(found).toMatchObject({
+        action: 'update',
+        row: { console: 'XBOX_ONE' }
+      })
+    })
+
+    it('updates the only row of the platform when the import has no console', () => {
+      const found = resolveRow(rows(['XBOX', 'XBOX_360']), 'XBOX', 'UNKNOWN')
+      expect(found).toMatchObject({
+        action: 'update',
+        row: { console: 'XBOX_360' }
+      })
+    })
+
+    it('skips an UNKNOWN import when the platform has several known-console rows', () => {
+      const found = resolveRow(
+        rows(['XBOX', 'XBOX_360'], ['XBOX', 'XBOX_ONE']),
+        'XBOX',
+        'UNKNOWN'
+      )
+      expect(found).toEqual({ action: 'skip' })
+    })
+
+    it('ignores rows of other platforms', () => {
+      const found = resolveRow(rows(['STEAM', 'PC']), 'XBOX', 'UNKNOWN')
+      expect(found).toEqual({ action: 'create' })
+    })
+
+    it('adopts the UNKNOWN row when a known console arrives', () => {
+      const found = resolveRow(
+        rows(['PLAYSTATION', 'UNKNOWN'], ['PLAYSTATION', 'PS5']),
+        'PLAYSTATION',
+        'PS4'
+      )
+      expect(found).toMatchObject({
+        action: 'adopt',
+        row: { console: 'UNKNOWN' }
+      })
+    })
+
+    it('creates a row when a known console arrives and there is no UNKNOWN row', () => {
+      const found = resolveRow(
+        rows(['PLAYSTATION', 'PS5']),
+        'PLAYSTATION',
+        'PS4'
+      )
+      expect(found).toEqual({ action: 'create' })
+    })
+  })
+
+  it('adds a second console of the same platform', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 2,
+        platforms: [row({ platform: 'XBOX', console: 'XBOX_360' })]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'XBOX', 'XBOX_ONE')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE',
+      {}
+    )
+  })
+
+  it('does not add a console that the game already has', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 2,
+        platforms: [row({ platform: 'XBOX', console: 'XBOX_360' })]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'XBOX', 'XBOX_360')
+
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'add',
+      (s: ReturnType<typeof setup>['service']) =>
+        s.addPlatform('user-1', 10, 'XBOX', 'PS5')
+    ],
+    [
+      'update',
+      (s: ReturnType<typeof setup>['service']) =>
+        s.updatePlatform('user-1', 10, 'XBOX', 'PS5', { hoursPlayed: 1 })
+    ],
+    [
+      'remove',
+      (s: ReturnType<typeof setup>['service']) =>
+        s.removePlatform('user-1', 10, 'XBOX', 'PS5')
+    ],
+    [
+      'import',
+      (s: ReturnType<typeof setup>['service']) =>
+        s.importPlatform('user-1', 10, 'XBOX', imported, 'PS5')
+    ]
+  ])(
+    'rejects a console that does not belong to the platform on %s',
+    async (_name, call) => {
+      const { service, platformRepository } = setup(userGame({ statusId: 2 }))
+
+      await expect(call(service)).rejects.toMatchObject({ statusCode: 400 })
+      expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+    }
+  )
+
+  it('removes only the row of the given console', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 2,
+        platforms: [
+          row({ platform: 'XBOX', console: 'XBOX_360' }),
+          row({ platform: 'XBOX', console: 'XBOX_ONE' })
+        ]
+      })
+    )
+
+    await service.removePlatform('user-1', 10, 'XBOX', 'XBOX_ONE')
+
+    expect(platformRepository.deletePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE'
+    )
+  })
+
+  it('import without console updates the only console row instead of creating UNKNOWN', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 3,
+        platforms: [row({ platform: 'XBOX', console: 'XBOX_360' })]
+      })
+    )
+
+    await service.importPlatform('user-1', 10, 'XBOX', imported)
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_360',
+      expect.objectContaining({ hoursPlayed: 5 })
+    )
+    expect(platformRepository.adoptConsole).not.toHaveBeenCalled()
+  })
+
+  it('import without console writes nothing when the platform has several consoles', async () => {
+    const { service, platformRepository, userRepository } = setup(
+      userGame({
+        statusId: 3,
+        platforms: [
+          row({ platform: 'XBOX', console: 'XBOX_360' }),
+          row({ platform: 'XBOX', console: 'XBOX_ONE' })
+        ]
+      })
+    )
+
+    const outcome = await service.importPlatform('user-1', 10, 'XBOX', imported)
+
+    expect(outcome).toBe('skipped')
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+    expect(platformRepository.adoptConsole).not.toHaveBeenCalled()
+    expect(userRepository.addGameToUserLibrary).not.toHaveBeenCalled()
+  })
+
+  it('import with a known console adopts the UNKNOWN row and keeps its completions', async () => {
+    const completedAt = new Date('2022-02-02T00:00:00Z')
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        platforms: [
+          row({ platform: 'PLAYSTATION', completions: 2, completedAt })
+        ]
+      })
+    )
+
+    await service.importPlatform('user-1', 10, 'PLAYSTATION', imported, 'PS4')
+
+    expect(platformRepository.adoptConsole).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'UNKNOWN',
+      'PS4',
+      { hoursPlayed: 5, completions: 2, completedAt }
+    )
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+
+  it('starts a second console of the same platform with one completion on a played game', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        platforms: [
+          row({ platform: 'XBOX', console: 'XBOX_360', completions: 1 })
+        ]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'XBOX', 'XBOX_ONE')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE',
+      { completions: 1 }
+    )
+  })
+
+  it('still counts one completion on a played game when the platform has no row yet', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        platforms: [
+          row({ platform: 'XBOX', console: 'XBOX_360', completions: 1 })
+        ]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'STEAM', 'PC')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'STEAM',
+      'PC',
+      { completions: 1 }
+    )
+  })
+
+  it('adding a known console adopts the only row of the platform when it is UNKNOWN', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        platforms: [
+          row({
+            platform: 'PLAYSTATION',
+            completions: 1,
+            hoursPlayed: new Prisma.Decimal(40)
+          })
+        ]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'PLAYSTATION', 'PS5')
+
+    expect(platformRepository.adoptConsole).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'UNKNOWN',
+      'PS5',
+      {}
+    )
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+
+  it('adding a known console adopts the UNKNOWN row even when the platform has other consoles', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 2,
+        platforms: [
+          row({ platform: 'PLAYSTATION' }),
+          row({ platform: 'PLAYSTATION', console: 'PS5' })
+        ]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'PLAYSTATION', 'PS4')
+
+    expect(platformRepository.adoptConsole).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'UNKNOWN',
+      'PS4',
+      {}
+    )
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['one known console', [row({ platform: 'PLAYSTATION', console: 'PS4' })]],
+    [
+      'several known consoles',
+      [
+        row({ platform: 'PLAYSTATION', console: 'PS4' }),
+        row({ platform: 'PLAYSTATION', console: 'PS5' })
+      ]
+    ]
+  ])(
+    'adding UNKNOWN next to %s is rejected instead of doing nothing',
+    async (_name, platforms) => {
+      const { service, platformRepository } = setup(
+        userGame({ statusId: 2, platforms })
+      )
+
+      await expect(
+        service.addPlatform('user-1', 10, 'PLAYSTATION', 'UNKNOWN')
+      ).rejects.toMatchObject({ statusCode: 400 })
+      expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+      expect(platformRepository.adoptConsole).not.toHaveBeenCalled()
+    }
+  )
+
+  it('import skips before changing the status when the platform has several known consoles', async () => {
+    const { service, platformRepository, userRepository } = setup(
+      userGame({
+        statusId: 4,
+        platforms: [
+          row({ platform: 'PLAYSTATION', console: 'PS4' }),
+          row({ platform: 'PLAYSTATION', console: 'PS5' })
+        ]
+      })
+    )
+
+    const outcome = await service.importPlatform('user-1', 10, 'PLAYSTATION', {
+      ...imported,
+      statusId: 1,
+      finished: true,
+      confirmedFinished: true
+    })
+
+    expect(outcome).toBe('skipped')
+    expect(userRepository.updateGameStatus).not.toHaveBeenCalled()
+    expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveRow for an import with a known console', () => {
+  const rows = (...consoles: string[]) =>
+    consoles.map(c => row({ platform: 'PLAYSTATION', console: c })) as never
+  const resolve = (existing: string[], fromImport = true) =>
+    resolveRow(rows(...existing), 'PLAYSTATION', 'PS4', { fromImport })
+
+  it('updates the exact row', () => {
+    expect(resolve(['PS4', 'PS5'])).toMatchObject({
+      action: 'update',
+      row: { console: 'PS4' }
+    })
+  })
+
+  it('adopts the UNKNOWN row, even next to other known rows', () => {
+    expect(resolve(['UNKNOWN'])).toMatchObject({ action: 'adopt' })
+    expect(resolve(['UNKNOWN', 'PS5'])).toMatchObject({
+      action: 'adopt',
+      row: { console: 'UNKNOWN' }
+    })
+  })
+
+  it('updates the only other known row and keeps its console', () => {
+    expect(resolve(['PS5'])).toMatchObject({
+      action: 'update',
+      row: { console: 'PS5' }
+    })
+  })
+
+  it('creates the row when the platform has none or two other known rows', () => {
+    expect(resolve([])).toEqual({ action: 'create' })
+    expect(resolve(['PS3', 'PS5'])).toEqual({ action: 'create' })
+  })
+
+  it('ignores rows of another platform', () => {
+    expect(
+      resolveRow(
+        [row({ platform: 'XBOX', console: 'XBOX_ONE' })] as never,
+        'PLAYSTATION',
+        'PS4',
+        {
+          fromImport: true
+        }
+      )
+    ).toEqual({ action: 'create' })
+  })
+
+  it('still creates when the same input comes from a manual add', () => {
+    expect(resolve(['PS5'], false)).toEqual({ action: 'create' })
+  })
+})
+
+describe('importPlatform with an inferred console', () => {
+  const imported = {
+    statusId: 3,
+    activityStatusId: 3,
+    hoursPlayed: 5,
+    finished: false,
+    confirmedFinished: false
+  }
+
+  it('fills the console of an UNKNOWN row and keeps its completions', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 3,
+        platforms: [row({ platform: 'PLAYSTATION', completions: 2 })]
+      })
+    )
+
+    await service.importPlatform('user-1', 10, 'PLAYSTATION', imported, 'PS5')
+
+    expect(platformRepository.adoptConsole).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'UNKNOWN',
+      'PS5',
+      expect.objectContaining({ hoursPlayed: 5, completions: 2 })
+    )
+  })
+
+  it('writes the hours into the only other known row and keeps its console', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 3,
+        platforms: [row({ platform: 'PLAYSTATION', console: 'PS5' })]
+      })
+    )
+
+    await service.importPlatform('user-1', 10, 'PLAYSTATION', imported, 'PS4')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'PS5',
+      expect.objectContaining({ hoursPlayed: 5 })
+    )
+    expect(platformRepository.adoptConsole).not.toHaveBeenCalled()
+  })
+
+  it('creates the row of the console when two other known rows exist', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 3,
+        platforms: [
+          row({ platform: 'PLAYSTATION', console: 'PS3' }),
+          row({ platform: 'PLAYSTATION', console: 'PS5' })
+        ]
+      })
+    )
+
+    const outcome = await service.importPlatform(
+      'user-1',
+      10,
+      'PLAYSTATION',
+      imported,
+      'PS4'
+    )
+
+    expect(outcome).toBe('updated')
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'PS4',
+      expect.objectContaining({ hoursPlayed: 5 })
+    )
+  })
+
+  it('a manual add of a second console still creates a row', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 2,
+        platforms: [row({ platform: 'PLAYSTATION', console: 'PS5' })]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'PLAYSTATION', 'PS4')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'PLAYSTATION',
+      'PS4',
+      {}
+    )
   })
 })

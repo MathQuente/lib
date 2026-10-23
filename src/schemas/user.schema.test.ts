@@ -3,6 +3,8 @@ import {
   QueryStringSchema,
   UpdateUserBodySchema,
   UserGameBodySchema,
+  UserGamePlatformParamsSchema,
+  ConsoleEnumSchema,
   UserGamePlayedCountUpdateBodySchema
 } from './user.schema'
 
@@ -62,6 +64,44 @@ describe('library schemas', () => {
     expect(QueryStringSchema.safeParse({ pageIndex: '-1' }).success).toBe(false)
     expect(QueryStringSchema.safeParse({ pageIndex: '999999' }).success).toBe(
       false
+    )
+  })
+})
+
+describe('UserGamePlatformParamsSchema', () => {
+  const parse = (platform: string, console: string) =>
+    UserGamePlatformParamsSchema.safeParse({ igdbId: '10', platform, console })
+
+  it('accepts a console that belongs to the platform', () => {
+    expect(parse('XBOX', 'XBOX_360').success).toBe(true)
+  })
+
+  it('accepts UNKNOWN on every platform', () => {
+    for (const platform of [
+      'STEAM',
+      'PLAYSTATION',
+      'XBOX',
+      'NINTENDO',
+      'EPIC',
+      'GOG',
+      'OTHER'
+    ]) {
+      expect(parse(platform, 'UNKNOWN').success).toBe(true)
+    }
+  })
+
+  it('rejects a console from another platform', () => {
+    expect(parse('XBOX', 'PS5').success).toBe(false)
+  })
+
+  it('rejects a console that does not exist', () => {
+    expect(parse('XBOX', 'DREAMBOX').success).toBe(false)
+  })
+
+  it('keeps the enum in sync with the Prisma enum', async () => {
+    const { Console } = await import('@prisma/client')
+    expect([...ConsoleEnumSchema.options].sort()).toEqual(
+      Object.values(Console).sort()
     )
   })
 })

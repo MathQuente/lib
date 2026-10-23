@@ -1,4 +1,4 @@
-import { Platform, Prisma } from '@prisma/client'
+import { Console, Platform, Prisma } from '@prisma/client'
 import { prisma } from '../database/db'
 
 export interface PlatformValues {
@@ -9,6 +9,7 @@ export interface PlatformValues {
 
 const platformSelect = {
   platform: true,
+  console: true,
   hoursPlayed: true,
   completions: true,
   completedAt: true
@@ -24,7 +25,10 @@ export class UserGamePlatformRepository {
         endless: true,
         completedAt: true,
         UserGameStats: { select: { hoursPlayed: true, completions: true } },
-        platforms: { select: platformSelect, orderBy: { platform: 'asc' } }
+        platforms: {
+          select: platformSelect,
+          orderBy: [{ platform: 'asc' }, { console: 'asc' }]
+        }
       }
     })
   }
@@ -32,38 +36,88 @@ export class UserGamePlatformRepository {
   async savePlatform(
     userGameId: string,
     platform: Platform,
+    gameConsole: Console,
     values: PlatformValues
   ) {
     return prisma.$transaction(async tx => {
       await tx.userGamePlatform.upsert({
-        where: { userGameId_platform: { userGameId, platform } },
+        where: {
+          userGameId_platform_console: {
+            userGameId,
+            platform,
+            console: gameConsole
+          }
+        },
         update: values,
-        create: { userGameId, platform, ...values }
+        create: { userGameId, platform, console: gameConsole, ...values }
       })
       await this.recomputeTotals(tx, userGameId)
     })
   }
 
-  async deletePlatform(userGameId: string, platform: Platform) {
+  async adoptConsole(
+    userGameId: string,
+    platform: Platform,
+    from: Console,
+    to: Console,
+    values: PlatformValues
+  ) {
+    return prisma.$transaction(async tx => {
+      await tx.userGamePlatform.update({
+        where: {
+          userGameId_platform_console: { userGameId, platform, console: from }
+        },
+        data: { console: to, ...values }
+      })
+      await this.recomputeTotals(tx, userGameId)
+    })
+  }
+
+  async deletePlatform(
+    userGameId: string,
+    platform: Platform,
+    gameConsole: Console
+  ) {
     return prisma.$transaction(async tx => {
       await tx.userGamePlatform.delete({
-        where: { userGameId_platform: { userGameId, platform } }
+        where: {
+          userGameId_platform_console: {
+            userGameId,
+            platform,
+            console: gameConsole
+          }
+        }
       })
       await this.recomputeTotals(tx, userGameId)
     })
   }
 
-  async markSinglePlatformCompleted(userGameId: string, completedAt: Date) {
+  async markSinglePlatformCompleted(
+    userGameId: string,
+    completedAt: Date,
+    platform?: Platform
+  ) {
     return prisma.$transaction(async tx => {
       const platforms = await tx.userGamePlatform.findMany({
-        where: { userGameId },
-        select: { platform: true, completions: true, completedAt: true }
+        where: { userGameId, ...(platform ? { platform } : {}) },
+        select: {
+          platform: true,
+          console: true,
+          completions: true,
+          completedAt: true
+        }
       })
       if (platforms.length !== 1) return
 
       const [only] = platforms
       await tx.userGamePlatform.update({
-        where: { userGameId_platform: { userGameId, platform: only.platform } },
+        where: {
+          userGameId_platform_console: {
+            userGameId,
+            platform: only.platform,
+            console: only.console
+          }
+        },
         data: {
           completions: Math.max(only.completions, 1),
           completedAt: only.completedAt ?? completedAt

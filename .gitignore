@@ -10,3 +10,5 @@ test-igdb.mjs
 
 # scripts de experimento
 src/scripts/*-spike.ts
+
+backfill-console-*.json

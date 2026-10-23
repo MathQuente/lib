@@ -71,7 +71,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().put(
-    '/platforms/:igdbId/:platform',
+    '/platforms/:igdbId/:platform/:console',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -84,7 +84,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().patch(
-    '/platforms/:igdbId/:platform',
+    '/platforms/:igdbId/:platform/:console',
     {
       preHandler: [app.authenticate],
       schema: {
@@ -97,7 +97,7 @@ export async function userRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/platforms/:igdbId/:platform',
+    '/platforms/:igdbId/:platform/:console',
     {
       preHandler: [app.authenticate],
       schema: {

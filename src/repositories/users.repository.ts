@@ -327,9 +327,12 @@ export class UserRepository {
         COALESCE(ugst.completions, 0) AS "completions",
         COALESCE(ugst.hours_played, 0)::float AS "hoursPlayed",
         COALESCE(
-          (SELECT array_agg(ugp.platform::text ORDER BY ugp.platform)
-           FROM user_game_platforms ugp
-           WHERE ugp.user_game_id = ug.id),
+          (SELECT array_agg(p.platform::text ORDER BY p.platform)
+           FROM (
+             SELECT DISTINCT ugp.platform
+             FROM user_game_platforms ugp
+             WHERE ugp.user_game_id = ug.id
+           ) p),
           '{}'
         )                             AS "playedOn"
       FROM user_games ug

@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
-import { Platform } from '@prisma/client'
+import { Console, Platform } from '@prisma/client'
 import { prisma } from '../src/database/db'
 import { IGDBService } from '../src/services/igdb.service'
 import { getSeedPassword } from '../src/utils/seed-password'
@@ -19,6 +19,7 @@ const DROPPED = 6
 
 interface PlatformSeed {
   platform: Platform
+  console?: Console
   hoursPlayed: number
   completions: number
 }
@@ -88,7 +89,18 @@ const SCENARIOS: Scenario[] = [
     platforms: [
       { platform: 'STEAM', hoursPlayed: 60, completions: 2 },
       { platform: 'PLAYSTATION', hoursPlayed: 30, completions: 1 },
-      { platform: 'XBOX', hoursPlayed: 18, completions: 1 }
+      {
+        platform: 'XBOX',
+        console: 'XBOX_360',
+        hoursPlayed: 10,
+        completions: 1
+      },
+      {
+        platform: 'XBOX',
+        console: 'XBOX_ONE',
+        hoursPlayed: 8,
+        completions: 0
+      }
     ]
   },
   {
@@ -245,6 +257,7 @@ async function main() {
           data: {
             userGameId: userGame.id,
             platform: p.platform,
+            console: p.console,
             hoursPlayed: p.hoursPlayed,
             completions: p.completions,
             completedAt: p.completions > 0 ? completedAt : null

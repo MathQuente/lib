@@ -19,6 +19,7 @@ const GAME_CATEGORIES = new Set(['ps4_game', 'ps5_native_game', 'unknown'])
 
 export interface PsnPlayedGame {
   titleId: string
+  category: string
   conceptId: string | null
   name: string
   playMinutes: number
@@ -157,6 +158,7 @@ export class PsnApiService {
         if (!GAME_CATEGORIES.has(title.category)) continue
         games.push({
           titleId: title.titleId,
+          category: title.category,
           conceptId: title.concept?.id != null ? String(title.concept.id) : null,
           name: title.name,
           playMinutes: parseIsoDurationToMinutes(title.playDuration),

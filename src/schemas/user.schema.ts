@@ -1,4 +1,5 @@
 import z from 'zod'
+import { isConsoleAllowed } from '../utils/platform-consoles'
 
 export const DeleteUserResponseSchema = z.object({
   user: z.object({
@@ -230,10 +231,58 @@ export const PlatformEnumSchema = z.enum([
   'OTHER'
 ])
 
-export const UserGamePlatformParamsSchema = z.object({
-  igdbId: z.coerce.number().int(),
-  platform: PlatformEnumSchema
-})
+export const ConsoleEnumSchema = z.enum([
+  'UNKNOWN',
+  'PS1',
+  'PS2',
+  'PS3',
+  'PS4',
+  'PS5',
+  'PSP',
+  'PS_VITA',
+  'XBOX_ORIGINAL',
+  'XBOX_360',
+  'XBOX_ONE',
+  'XBOX_SERIES',
+  'NES',
+  'SNES',
+  'N64',
+  'GAMECUBE',
+  'WII',
+  'WII_U',
+  'SWITCH',
+  'SWITCH_2',
+  'GAME_BOY',
+  'GAME_BOY_COLOR',
+  'GAME_BOY_ADVANCE',
+  'DS',
+  'N3DS',
+  'PC',
+  'STEAM_DECK',
+  'MASTER_SYSTEM',
+  'MEGA_DRIVE',
+  'SEGA_CD',
+  'SATURN',
+  'DREAMCAST',
+  'GAME_GEAR',
+  'ATARI_2600',
+  'ATARI_7800',
+  'NEO_GEO',
+  'TURBOGRAFX',
+  'MOBILE',
+  'ARCADE'
+])
+
+export const UserGamePlatformParamsSchema = z
+  .object({
+    igdbId: z.coerce.number().int(),
+    platform: PlatformEnumSchema,
+    console: ConsoleEnumSchema
+  })
+  .refine(params => isConsoleAllowed(params.platform, params.console), {
+    message: 'Console inválido para esta plataforma.',
+    path: ['console']
+  })
 
 export const UserGamePlatformUpdateBodySchema = z
   .object({
@@ -249,6 +298,7 @@ export const UserGamePlatformsResponseSchema = z.object({
   platforms: z.array(
     z.object({
       platform: PlatformEnumSchema,
+      console: ConsoleEnumSchema,
       hoursPlayed: z.number().nullable(),
       completions: z.number(),
       completedAt: z.string().nullable()

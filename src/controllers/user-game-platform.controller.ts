@@ -18,24 +18,29 @@ export class UserGamePlatformController {
   }
 
   async addPlatform(request: FastifyRequest, reply: FastifyReply) {
-    const { igdbId, platform } = UserSchema.UserGamePlatformParamsSchema.parse(
-      request.params
-    )
+    const {
+      igdbId,
+      platform,
+      console: gameConsole
+    } = UserSchema.UserGamePlatformParamsSchema.parse(request.params)
     const userId = request.user.userId
 
     const result = await this.userGamePlatformService.addPlatform(
       userId,
       igdbId,
-      platform
+      platform,
+      gameConsole
     )
 
     return reply.status(200).send(result)
   }
 
   async updatePlatform(request: FastifyRequest, reply: FastifyReply) {
-    const { igdbId, platform } = UserSchema.UserGamePlatformParamsSchema.parse(
-      request.params
-    )
+    const {
+      igdbId,
+      platform,
+      console: gameConsole
+    } = UserSchema.UserGamePlatformParamsSchema.parse(request.params)
     const patch = UserSchema.UserGamePlatformUpdateBodySchema.parse(
       request.body
     )
@@ -45,6 +50,7 @@ export class UserGamePlatformController {
       userId,
       igdbId,
       platform,
+      gameConsole,
       patch
     )
 
@@ -52,15 +58,18 @@ export class UserGamePlatformController {
   }
 
   async removePlatform(request: FastifyRequest, reply: FastifyReply) {
-    const { igdbId, platform } = UserSchema.UserGamePlatformParamsSchema.parse(
-      request.params
-    )
+    const {
+      igdbId,
+      platform,
+      console: gameConsole
+    } = UserSchema.UserGamePlatformParamsSchema.parse(request.params)
     const userId = request.user.userId
 
     const result = await this.userGamePlatformService.removePlatform(
       userId,
       igdbId,
-      platform
+      platform,
+      gameConsole
     )
 
     return reply.status(200).send(result)
