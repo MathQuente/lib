@@ -13,6 +13,9 @@ import { IGDBGame } from '../types/igdb'
 import {
   COMPLETION_KEYWORD_PATTERN,
   canInferCompletion,
+  evaluateFinishSuggestion,
+  hasLockedPlainEndAchievement,
+  hasPracticalEnd,
   MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
   meetsCompletionRatio,
   meetsPlaytimeSignal,
@@ -29,6 +32,8 @@ import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
+import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
+import { STEAM_CONSOLE } from '../utils/console-inference'
 
 const UNAVAILABLE_MESSAGE =
   'Não foi possível consultar a Steam agora. Tente novamente mais tarde.'
@@ -106,7 +111,8 @@ export class SteamService {
     private userGamePlatformService: UserGamePlatformService = new UserGamePlatformService(
       new UserGamePlatformRepository(),
       userRepository
-    )
+    ),
+    private completionSuggestionRecorder?: CompletionSuggestionRecorder
   ) {}
 
   private async requireUser(userId: string) {
@@ -343,6 +349,7 @@ export class SteamService {
 
     let imported = 0
     let updated = 0
+    let suggestions = 0
 
     for (let i = 0; i < toImport.length; i++) {
       const { item: owned, igdbGame } = toImport[i]
@@ -379,29 +386,39 @@ export class SteamService {
 
       const hoursPlayed = Math.round((owned.playtime_forever / 60) * 100) / 100
       const normallySeconds = timeToBeatByGame.get(igdbGame.id)
+      const normallyHours = normallySeconds ? normallySeconds / 3600 : undefined
       const meetsPlaytime =
         achievements != null &&
         meetsPlaytimeSignal({
           hoursPlayed,
-          normallyHours: normallySeconds ? normallySeconds / 3600 : undefined,
+          normallyHours,
           achieved: achievements.achieved,
           total: achievements.total
         })
 
+      const confirmedFinished =
+        achievements != null &&
+        achievements.total >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
+        achievements.achieved >= achievements.total
+
+      const weakSignalsBlocked =
+        !hasPracticalEnd(normallyHours) ||
+        (achievements != null &&
+          hasLockedPlainEndAchievement(schema, achievements.achievedApiNames))
+      const hasWeakSignal =
+        !weakSignalsBlocked && (meetsRatioThreshold || meetsPlaytime)
+      const looksFinished =
+        hasRareAchievement || hasCompletionKeyword || hasWeakSignal
       const isFinished =
         hasRareAchievement ||
         hasCompletionKeyword ||
-        meetsRatioThreshold ||
-        meetsPlaytime
+        confirmedFinished ||
+        (hasWeakSignal && !recentlyPlayed)
 
       const activityStatusId = recentlyPlayed
         ? PLAYING_STATUS_ID
         : BACKLOG_STATUS_ID
       const statusId = isFinished ? PLAYED_STATUS_ID : activityStatusId
-      const confirmedFinished =
-        achievements != null &&
-        achievements.total >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
-        achievements.achieved >= achievements.total
 
       const completedAt =
         isFinished && achievements
@@ -421,15 +438,60 @@ export class SteamService {
           strongFinished: hasRareAchievement || hasCompletionKeyword,
           completedAt,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
-        }
+        },
+        STEAM_CONSOLE
       )
 
       if (outcome === 'imported') imported++
+      else if (outcome === 'skipped') skipped++
       else updated++
+
+      if (outcome !== 'skipped' && this.completionSuggestionRecorder) {
+        const evaluation = evaluateFinishSuggestion({
+          game: igdbGame,
+          hoursPlayed,
+          normallyHours,
+          achieved: achievements?.achieved ?? null,
+          total: achievements?.total ?? null,
+          heuristicFinished: looksFinished,
+          weakSignalsBlocked
+        })
+        if (evaluation.suggest) {
+          try {
+            const recorded = await this.completionSuggestionRecorder.record(
+              userId,
+              igdbGame.id,
+              'STEAM',
+              {
+                hoursPlayed,
+                normallyHours: normallyHours
+                  ? Math.round(normallyHours * 10) / 10
+                  : null,
+                achieved: achievements?.achieved ?? null,
+                total: achievements?.total ?? null,
+                signals: evaluation.signals
+              },
+              evaluation.lowConfidence
+            )
+            if (recorded) suggestions++
+          } catch (error) {
+            console.error('[SteamImport] completion suggestion failed', {
+              igdbId: igdbGame.id,
+              error: error instanceof Error ? error.message : error
+            })
+          }
+        }
+      }
       onItemDone()
     }
 
-    return { imported, updated, skipped, notFound }
+    return {
+      imported,
+      updated,
+      skipped,
+      notFound,
+      ...(suggestions > 0 ? { suggestions } : {})
+    }
   }
 
   private async importWishlist(

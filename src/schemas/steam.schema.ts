@@ -14,7 +14,8 @@ const SteamImportSectionResultSchema = z.object({
   imported: z.number(),
   updated: z.number(),
   skipped: z.number(),
-  notFound: z.array(z.string())
+  notFound: z.array(z.string()),
+  suggestions: z.number().optional()
 })
 
 export const ImportStatusResponseSchema = z.object({

@@ -94,6 +94,7 @@ model UserGame {
   UserGameStats   UserGameStats?
   UserGamesStatus UserGamesStatus    @relation(fields: [userGamesStatusId], references: [id])
   platforms       UserGamePlatform[]
+  suggestion      CompletionSuggestion?
 
   @@unique([userId, igdbId])
   @@map("user_games")
@@ -166,6 +167,29 @@ model UserGamePlatform {
 
   @@unique([userGameId, platform, console])
   @@map("user_game_platforms")
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+}
+
+model CompletionSuggestion {
+  id            String           @id @default(uuid())
+  userGameId    String           @unique @map("user_game_id")
+  platform      Platform
+  status        SuggestionStatus @default(PENDING)
+  evidence      Json
+  lowConfidence Boolean          @default(false) @map("low_confidence")
+  undoSnapshot  Json?            @map("undo_snapshot")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  resolvedAt    DateTime?        @map("resolved_at")
+
+  userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
+
+  @@map("completion_suggestions")
 }
 
 model UserGamesStatus {

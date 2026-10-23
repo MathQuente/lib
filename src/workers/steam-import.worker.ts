@@ -8,6 +8,13 @@ import { SteamService } from '../services/steam.service'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
+import { CompletionSuggestionRepository } from '../repositories/completion-suggestion.repository'
+import { CompletionSuggestionService } from '../services/completion-suggestion.service'
+import { FollowRepository } from '../repositories/follow.repository'
+import { RatingRepository } from '../repositories/rating.repository'
+import { UserService } from '../services/users.service'
+import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
+import { UserGamePlatformService } from '../services/user-game-platform.service'
 import { ClientError } from '../errors/client-error'
 import { withTimeout } from '../utils/with-timeout'
 
@@ -19,7 +26,22 @@ const IMPORT_TIMEOUT_MS = 5 * 60 * 1000
 export function startSteamImportWorker() {
   const userRepository = new UserRepository()
   const gameCacheService = new GameCacheService(new GameCacheRepository())
-  const steamService = new SteamService(userRepository, gameCacheService)
+  const userService = new UserService(
+    userRepository,
+    new RatingRepository(),
+    gameCacheService,
+    new FollowRepository()
+  )
+  const steamService = new SteamService(
+    userRepository,
+    gameCacheService,
+    new UserGamePlatformService(new UserGamePlatformRepository(), userRepository),
+    new CompletionSuggestionService(
+      new CompletionSuggestionRepository(),
+      userService,
+      new UserGamePlatformRepository()
+    )
+  )
 
   const worker = new Worker(
     STEAM_IMPORT_QUEUE_NAME,

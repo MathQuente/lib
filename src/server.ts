@@ -16,6 +16,7 @@ import { steamRoutes } from './routes/steam'
 import { psnRoutes } from './routes/psn'
 import { xboxRoutes } from './routes/xbox'
 import { followRoutes } from './routes/follow'
+import { completionSuggestionRoutes } from './routes/completion-suggestions'
 import { errorHandler } from './error-handler'
 import { userGameStatusRoutes } from './routes/userGameStatus'
 import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
@@ -114,6 +115,9 @@ export class Server {
     this.app.register(gameRoutes, { prefix: '/games' })
     this.app.register(ratingRoutes, { prefix: '/rating' })
     this.app.register(reviewRoutes, { prefix: '/reviews' })
+    this.app.register(completionSuggestionRoutes, {
+      prefix: '/users/suggestions'
+    })
     this.app.register(steamRoutes, { prefix: '/users/steam' })
     this.app.register(psnRoutes, { prefix: '/users/psn' })
     this.app.register(xboxRoutes, { prefix: '/users/xbox' })

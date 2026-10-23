@@ -16,7 +16,9 @@ export interface SteamImportJobData {
   userId: string
 }
 
-export type SteamImportSectionResult = ImportSectionResult
+export type SteamImportSectionResult = ImportSectionResult & {
+  suggestions?: number
+}
 
 export interface SteamImportJobResult {
   library: SteamImportSectionResult

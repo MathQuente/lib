@@ -199,7 +199,7 @@ describe('SteamService.runImport', () => {
     return userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>
   }
 
-  it('marks a new game as PLAYED when playtime reaches the usual time to beat and enough achievements are earned', async () => {
+  it('marks a new game as PLAYED when playtime reaches the usual time to beat and enough achievements are earned, if it was not opened recently', async () => {
     const addGame = await importSingleGame({
       playtimeMinutes: 108 * 60,
       normallySeconds: 89.5 * 3600,
@@ -209,6 +209,52 @@ describe('SteamService.runImport', () => {
 
     expect(addGame).toHaveBeenCalledWith(
       expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it('keeps a game out of PLAYED when its main story achievement is still locked (Shadow of the Tomb Raider-shaped)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 25.5 * 60,
+      normallySeconds: 22.1 * 3600,
+      achieved: 52,
+      total: 99,
+      achievedApiNames: ['ACH_A'],
+      schema: new Map([
+        ['ACH_A', 'Complete 3 main game Challenge Tombs'],
+        ['TheLesserEvil', 'Finish the main storyline']
+      ])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('marks the game as PLAYED when the main story achievement is unlocked', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 25.5 * 60,
+      normallySeconds: 22.1 * 3600,
+      achieved: 52,
+      total: 99,
+      achievedApiNames: ['TheLesserEvil'],
+      schema: new Map([['TheLesserEvil', 'Finish the main storyline']])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it('keeps a game with no practical end out of PLAYED (Sea of Thieves-shaped)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 22.1 * 60,
+      normallySeconds: 2020 * 3600,
+      achieved: 54,
+      total: 293
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
     )
   })
 
@@ -394,6 +440,7 @@ describe('SteamService.runImport', () => {
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-2',
       'STEAM',
+      'PC',
       expect.objectContaining({ hoursPlayed: 2 })
     )
   })
@@ -442,7 +489,11 @@ describe('SteamService.runImport', () => {
     })
   })
 
-  it('marks a game as PLAYED when achievement completion is at or above 90%', async () => {
+  it.each([
+    ['90% of the achievements and opened today, so the game stays in progress', 18, 0, 3],
+    ['90% of the achievements and not opened for 30 days, so the game is marked as played', 18, 30, 1],
+    ['every achievement is earned, so the game is marked as played even if opened today', 20, 0, 1]
+  ])('for a new game, %s', async (_label, achieved, daysSinceLastPlayed, expectedStatusId) => {
     const userRepository = fakeUserRepository({
       findUserById: vi
         .fn()
@@ -458,14 +509,14 @@ describe('SteamService.runImport', () => {
         appid: 730,
         name: 'Counter-Strike 2',
         playtime_forever: 500,
-        rtime_last_played: Math.floor(Date.now() / 1000)
+        rtime_last_played: Math.floor(Date.now() / 1000) - daysSinceLastPlayed * 86400
       }
     ])
     vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
       { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
     ] as never)
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
-      achieved: 18,
+      achieved,
       total: 20,
       achievedApiNames: [],
       unlockTimesByName: new Map()
@@ -485,9 +536,155 @@ describe('SteamService.runImport', () => {
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
       igdbId: 2,
       userId: 'user-1',
-      statusIds: 1,
+      statusIds: expectedStatusId,
       endless: false,
-      completedAt: expect.any(Date)
+      completedAt: expectedStatusId === 1 ? expect.any(Date) : undefined
+    })
+  })
+
+  describe('completion suggestions', () => {
+    function arrange(
+      recorder: { record: ReturnType<typeof vi.fn> },
+      progress = { achieved: 7, total: 45, minutes: 2030, normallyHours: 33.14 }
+    ) {
+      const userRepository = fakeUserRepository({
+        findUserById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', steamId: '76561197960287930' }),
+        findUserGame: vi
+          .fn()
+          .mockResolvedValue({ igdbId: 26472, UserGamesStatus: { id: 3 } })
+      })
+      vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+        {
+          appid: 632470,
+          name: 'Disco Elysium',
+          playtime_forever: progress.minutes,
+          rtime_last_played: Math.floor(Date.now() / 1000)
+        }
+      ])
+      vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+        {
+          appId: 632470,
+          game: {
+            id: 26472,
+            name: 'Disco Elysium',
+            game_modes: [{ name: 'Single player' }]
+          }
+        }
+      ] as never)
+      vi.spyOn(IGDBService, 'getTimeToBeatByGameIds').mockResolvedValue(
+        new Map([[26472, progress.normallyHours * 3600]])
+      )
+      vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
+        achieved: progress.achieved,
+        total: progress.total,
+        achievedApiNames: [],
+        unlockTimesByName: new Map()
+      })
+      vi.spyOn(
+        SteamApiService,
+        'getGlobalAchievementPercentages'
+      ).mockResolvedValue(null)
+      vi.spyOn(SteamApiService, 'getUnlockedAchievementTexts').mockResolvedValue(
+        null
+      )
+      return new SteamService(
+        userRepository,
+        fakeGameCacheService(),
+        platformServiceFor(userRepository),
+        recorder as never
+      )
+    }
+
+    it('records a suggestion for a game past its time to beat and counts it in the result', async () => {
+      const recorder = { record: vi.fn().mockResolvedValue(true) }
+
+      const result = await arrange(recorder).runImport('user-1')
+
+      expect(recorder.record).toHaveBeenCalledWith(
+        'user-1',
+        26472,
+        'STEAM',
+        {
+          hoursPlayed: 33.83,
+          normallyHours: 33.1,
+          achieved: 7,
+          total: 45,
+          signals: ['playtime']
+        },
+        false
+      )
+      expect(result.library.suggestions).toBe(1)
+    })
+
+    it('routes a share of the achievements alone to a suggestion instead of marking the game as played (Replaced-shaped)', async () => {
+      const recorder = { record: vi.fn().mockResolvedValue(true) }
+
+      const result = await arrange(recorder, {
+        achieved: 15,
+        total: 34,
+        minutes: 572,
+        normallyHours: 13
+      }).runImport('user-1')
+
+      expect(recorder.record).toHaveBeenCalledWith(
+        'user-1',
+        26472,
+        'STEAM',
+        expect.objectContaining({ achieved: 15, total: 34, signals: ['heuristic'] }),
+        false
+      )
+      expect(result.library.suggestions).toBe(1)
+    })
+
+    it('does not count a suggestion the service ignored', async () => {
+      const recorder = { record: vi.fn().mockResolvedValue(false) }
+
+      const result = await arrange(recorder).runImport('user-1')
+
+      expect(recorder.record).toHaveBeenCalledTimes(1)
+      expect(result.library.suggestions).toBeUndefined()
+    })
+
+    it('finishes the import when recording a suggestion fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const recorder = { record: vi.fn().mockRejectedValue(new Error('db down')) }
+
+      const result = await arrange(recorder).runImport('user-1')
+
+      expect(result.library.updated).toBe(1)
+      expect(result.library.suggestions).toBeUndefined()
+    })
+
+    it('updates the PC row of a game that also has a Steam Deck row instead of skipping it', async () => {
+      const recorder = { record: vi.fn().mockResolvedValue(true) }
+      const service = arrange(recorder)
+      const row = (console: string) => ({
+        platform: 'STEAM',
+        console,
+        hoursPlayed: null,
+        completions: 0,
+        completedAt: null
+      })
+      lastPlatformRepository.findUserGameWithPlatforms.mockResolvedValue({
+        id: 'ug-1',
+        userGamesStatusId: 3,
+        endless: false,
+        completedAt: null,
+        UserGameStats: null,
+        platforms: [row('PC'), row('STEAM_DECK')]
+      })
+
+      const result = await service.runImport('user-1')
+
+      expect(result.library.skipped).toBe(0)
+      expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'PC',
+        expect.anything()
+      )
     })
   })
 
@@ -547,6 +744,7 @@ describe('SteamService.runImport', () => {
       expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
         'ug-2',
         'STEAM',
+        'PC',
         expect.objectContaining({
           completions: expectedStatusId === 1 ? 1 : 0
         })
@@ -792,7 +990,7 @@ describe('SteamService.runImport', () => {
       }
     ] as never)
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
-      achieved: 40,
+      achieved: 41,
       total: 41,
       achievedApiNames: [],
       unlockTimesByName: new Map()
@@ -961,7 +1159,7 @@ describe('SteamService.runImport', () => {
     })
   })
 
-  it('falls back to the latest unlock time when only the ratio threshold matches (no specific completion achievement)', async () => {
+  it('falls back to the latest unlock time when every achievement is earned but none reads as the ending', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi
         .fn()
@@ -995,7 +1193,7 @@ describe('SteamService.runImport', () => {
     const latestUnlockTime = 1_701_000_000
 
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
-      achieved: 9,
+      achieved: 10,
       total: 10,
       achievedApiNames: ['ACH_1', 'ACH_2'],
       unlockTimesByName: new Map([
