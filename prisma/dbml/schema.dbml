@@ -78,6 +78,7 @@ Table user_games {
   UserGameStats user_game_stats
   UserGamesStatus users_games_status [not null]
   platforms user_game_platforms [not null]
+  suggestion completion_suggestions
 
   indexes {
     (userId, igdbId) [unique]
@@ -88,6 +89,7 @@ Table user_game_platforms {
   id String [pk]
   userGameId String [not null]
   platform Platform [not null]
+  console Console [not null, default: 'UNKNOWN']
   hoursPlayed Decimal
   completions Int [not null, default: 0]
   completedAt DateTime
@@ -96,8 +98,22 @@ Table user_game_platforms {
   userGame user_games [not null]
 
   indexes {
-    (userGameId, platform) [unique]
+    (userGameId, platform, console) [unique]
   }
+}
+
+Table completion_suggestions {
+  id String [pk]
+  userGameId String [unique, not null]
+  platform Platform [not null]
+  status SuggestionStatus [not null, default: 'PENDING']
+  evidence Json [not null]
+  lowConfidence Boolean [not null, default: false]
+  undoSnapshot Json
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  resolvedAt DateTime
+  userGame user_games [not null]
 }
 
 Table users_games_status {
@@ -119,6 +135,7 @@ Table games_cache {
   category Int
   parentGameId Int
   gameModes Int[] [not null]
+  gameStatus Int
   syncedAt DateTime [default: `now()`, not null]
 }
 
@@ -154,6 +171,54 @@ Enum Platform {
   OTHER
 }
 
+Enum Console {
+  UNKNOWN
+  PS1
+  PS2
+  PS3
+  PS4
+  PS5
+  PSP
+  PS_VITA
+  XBOX_ORIGINAL
+  XBOX_360
+  XBOX_ONE
+  XBOX_SERIES
+  NES
+  SNES
+  N64
+  GAMECUBE
+  WII
+  WII_U
+  SWITCH
+  SWITCH_2
+  GAME_BOY
+  GAME_BOY_COLOR
+  GAME_BOY_ADVANCE
+  DS
+  N3DS
+  PC
+  STEAM_DECK
+  MASTER_SYSTEM
+  MEGA_DRIVE
+  SEGA_CD
+  SATURN
+  DREAMCAST
+  GAME_GEAR
+  ATARI_2600
+  ATARI_7800
+  NEO_GEO
+  TURBOGRAFX
+  MOBILE
+  ARCADE
+}
+
+Enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+}
+
 Enum Status {
   PLAYED
   PAUSED
@@ -176,6 +241,8 @@ Ref: user_games.userId > users.id [delete: Cascade]
 Ref: user_games.userGamesStatusId > users_games_status.id
 
 Ref: user_game_platforms.userGameId > user_games.id [delete: Cascade]
+
+Ref: completion_suggestions.userGameId - user_games.id [delete: Cascade]
 
 Ref: reviews.userId > users.id [delete: Cascade]
 
