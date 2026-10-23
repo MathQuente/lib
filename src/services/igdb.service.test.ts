@@ -306,3 +306,127 @@ describe('IGDBService.toGameCacheInput', () => {
     ).toEqual([])
   })
 })
+
+describe('IGDBService.getGameStatusByIds', () => {
+  it('returns an empty map without calling IGDB when no ids are given', async () => {
+    const request = mockRequest([])
+
+    expect((await IGDBService.getGameStatusByIds([])).size).toBe(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('maps the status id and uses null when IGDB omits the field', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValue([
+        { id: 288169, game_status: 7 },
+        { id: 81249 }
+      ])
+
+    const result = await IGDBService.getGameStatusByIds([288169, 81249])
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('where id = (288169,81249); fields id,game_status;')
+    )
+    expect(result.get(288169)).toBe(7)
+    expect(result.get(81249)).toBeNull()
+  })
+})
+
+describe('IGDBService status in the cache input and listings', () => {
+  it('keeps the game status in the cache input, null when missing', () => {
+    expect(
+      IGDBService.toGameCacheInput({ id: 1, name: 'A', game_status: 7 } as IGDBGame)
+        .gameStatus
+    ).toBe(7)
+    expect(
+      IGDBService.toGameCacheInput({ id: 2, name: 'B' } as IGDBGame).gameStatus
+    ).toBeNull()
+  })
+
+  it('asks IGDB for game_status when syncing', async () => {
+    const request = mockRequest([])
+
+    await IGDBService.fetchForSync(0, 500)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('parent_game,game_status;')
+    )
+  })
+
+  it('leaves rumored games out of the coming soon list and its count', async () => {
+    const request = mockRequest([])
+    const count = vi
+      .spyOn(IGDBService as unknown as { countRequest: RequestFn }, 'countRequest')
+      .mockResolvedValue(0 as never)
+
+    await IGDBService.getComingSoonGames(20, 0)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('& game_status != 7;')
+    )
+    expect(count).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('& game_status != 7;')
+    )
+  })
+})
+
+describe('IGDBService lookups that feed games_cache', () => {
+  it.each([
+    ['getGameById', () => IGDBService.getGameById(1)],
+    ['getGamesByIds', () => IGDBService.getGamesByIds([1])],
+    ['searchGamesByName', () => IGDBService.searchGamesByName('zelda', [6])]
+  ])('%s requests game_status', async (_name, call) => {
+    const request = mockRequest([])
+
+    await call()
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('game_status')
+    )
+  })
+
+  it('asks for twelve similar games so hidden ones can be dropped', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValueOnce([
+        { similar_games: Array.from({ length: 20 }, (_, i) => i + 1) }
+      ])
+      .mockResolvedValueOnce([])
+
+    await IGDBService.getSimilarGames(5)
+
+    expect(request).toHaveBeenLastCalledWith(
+      'games',
+      expect.stringContaining('where id = (1,2,3,4,5,6,7,8,9,10,11,12);')
+    )
+    expect(request).toHaveBeenLastCalledWith(
+      'games',
+      expect.stringContaining('limit 12;')
+    )
+  })
+})
+
+describe('IGDBService.getRelatedGames', () => {
+  it('drops bundles, rumored games and cancelled games without a date', async () => {
+    vi.spyOn(
+      IGDBService as unknown as { request: RequestFn },
+      'request'
+    ).mockResolvedValue([
+      { id: 1, name: 'Expansion', game_status: 0, first_release_date: 1 },
+      { id: 2, name: 'Big Bundle', game_status: 0 },
+      { id: 3, name: 'Rumored DLC', game_status: 7 },
+      { id: 4, name: 'Cancelled DLC', game_status: 6 },
+      { id: 5, name: 'Cancelled but dated', game_status: 6, first_release_date: 1 }
+    ])
+
+    const result = await IGDBService.getRelatedGames(10)
+
+    expect(result.map(g => g.id)).toEqual([1, 5])
+  })
+})

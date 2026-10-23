@@ -222,12 +222,14 @@ model GameCache {
   category         Int?     @map("category")
   parentGameId     Int?     @map("parent_game_id")
   gameModes        Int[]    @default([]) @map("game_modes")
+  gameStatus       Int?     @map("game_status")
   syncedAt         DateTime @default(now()) @updatedAt @map("synced_at")
 
   @@index([name])
   @@index([releaseDate])
   @@index([hypes])
   @@index([totalRatingCount])
+  @@index([gameStatus])
   @@map("games_cache")
 }
 

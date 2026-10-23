@@ -1,6 +1,7 @@
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBGame } from '../types/igdb'
 import { fetchWithTimeout } from '../utils/fetch-with-timeout'
+import { GAME_STATUS, isHiddenFromCatalog } from '../utils/game-status'
 
 export class IGDBService {
   private static accessToken: string | null = null
@@ -113,7 +114,8 @@ export class IGDBService {
       totalRatingCount: g.total_rating_count ?? 0,
       category: g.category ?? -1,
       parentGameId: this.getParentGameId(g),
-      gameModes: this.getGameModeIds(g)
+      gameModes: this.getGameModeIds(g),
+      gameStatus: g.game_status ?? null
     }
   }
 
@@ -183,7 +185,7 @@ export class IGDBService {
   static async getGameById(igdbId: number): Promise<IGDBGame | null> {
     const results = await this.request<IGDBGame[]>(
       'games',
-      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name,screenshots.image_id,screenshots.width,screenshots.height,videos.video_id,videos.name; limit 1;`
+      `where id = ${igdbId}; fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,game_type,parent_game.id,parent_game.name,parent_game.cover.url,rating,follows,similar_games,game_status,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.date,release_dates.platform.name,screenshots.image_id,screenshots.width,screenshots.height,videos.video_id,videos.name; limit 1;`
     )
     return results[0] ?? null
   }
@@ -191,17 +193,21 @@ export class IGDBService {
   static async getRelatedGames(igdbId: number): Promise<IGDBGame[]> {
     const games = await this.request<IGDBGame[]>(
       'games',
-      `where parent_game = ${igdbId} & game_type != (5,12); fields id,name,cover.url,category,game_type,parent_game,first_release_date,rating; sort first_release_date asc; limit 50;`
+      `where parent_game = ${igdbId} & game_type != (5,12); fields id,name,cover.url,category,game_type,parent_game,first_release_date,rating,game_status; sort first_release_date asc; limit 50;`
     )
 
-    return games.filter(g => !/\bbundle\b/i.test(g.name))
+    return games.filter(
+      g =>
+        !/\bbundle\b/i.test(g.name) &&
+        !isHiddenFromCatalog(g.game_status, g.first_release_date)
+    )
   }
 
   static async getGamesByIds(ids: number[]): Promise<IGDBGame[]> {
     if (ids.length === 0) return []
     return this.request(
       'games',
-      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows; limit ${Math.min(ids.length, 500)};`
+      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,game_status; limit ${Math.min(ids.length, 500)};`
     )
   }
 
@@ -263,7 +269,7 @@ export class IGDBService {
     if (!term) return []
     return this.request(
       'games',
-      `search "${term}"; fields id,name,alternative_names.name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,total_rating_count; where platforms = (${platformIds.join(',')}); limit 10;`
+      `search "${term}"; fields id,name,alternative_names.name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,total_rating_count,game_status; where platforms = (${platformIds.join(',')}); limit 10;`
     )
   }
 
@@ -291,7 +297,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
     )
   }
 
@@ -302,7 +308,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
     )
   }
 
@@ -383,6 +389,17 @@ export class IGDBService {
     return new Map(results.map(r => [r.id, r.game_modes ?? []]))
   }
 
+  static async getGameStatusByIds(
+    ids: number[]
+  ): Promise<Map<number, number | null>> {
+    if (ids.length === 0) return new Map()
+    const results = await this.request<{ id: number; game_status?: number }[]>(
+      'games',
+      `where id = (${ids.join(',')}); fields id,game_status; limit ${Math.min(ids.length, 500)};`
+    )
+    return new Map(results.map(r => [r.id, r.game_status ?? null]))
+  }
+
   static async getCategoryAndParentByIds(
     ids: number[]
   ): Promise<Map<number, { category: number; parentGameId: number | null }>> {
@@ -406,7 +423,7 @@ export class IGDBService {
     pageIndex = 0
   ): Promise<{ games: IGDBGame[]; total: number }> {
     const cutoff = this.getReleaseCutoffEpoch()
-    const where = `where first_release_date >= ${cutoff} & cover != null & hypes >= ${this.MIN_HYPES}`
+    const where = `where first_release_date >= ${cutoff} & cover != null & hypes >= ${this.MIN_HYPES} & game_status != ${GAME_STATUS.RUMORED}`
     const [games, rawTotal] = await Promise.all([
       this.request<IGDBGame[]>(
         'games',
@@ -428,7 +445,7 @@ export class IGDBService {
 
     return this.request(
       'games',
-      `where id = (${similarIds.slice(0, 6).join(',')}); fields id,name,cover.url,rating,platforms.name,category,parent_game; limit 6;`
+      `where id = (${similarIds.slice(0, 12).join(',')}); fields id,name,cover.url,rating,platforms.name,category,parent_game,first_release_date,game_status; limit 12;`
     )
   }
 }

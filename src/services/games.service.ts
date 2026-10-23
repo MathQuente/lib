@@ -5,6 +5,7 @@ import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { IGDBService } from './igdb.service'
 import { CacheRepository } from '../repositories/cache.repository'
+import { isHiddenFromCatalog } from '../utils/game-status'
 
 const TRENDING_WINDOW_DAYS = 30
 const GAME_CACHE_TTL_SECONDS = 60 * 60
@@ -302,7 +303,10 @@ export class GameService {
       .map(id => gamesById.get(id))
       .filter(
         (g): g is IGDBGame =>
-          !!g && g.first_release_date != null && g.first_release_date < cutoff
+          !!g &&
+          g.first_release_date != null &&
+          g.first_release_date < cutoff &&
+          !isHiddenFromCatalog(g.game_status, g.first_release_date)
       )
 
     return ordered.map(g => this.formatGame(g, ratings.get(g.id) ?? null))
@@ -348,7 +352,9 @@ export class GameService {
 
       games = parsed.games
     } else {
-      games = await IGDBService.getSimilarGames(igdbId)
+      games = (await IGDBService.getSimilarGames(igdbId))
+        .filter(g => !isHiddenFromCatalog(g.game_status, g.first_release_date))
+        .slice(0, 6)
 
       await this.cacheRepository.set(key, { games }, GAME_CACHE_TTL_SECONDS)
     }

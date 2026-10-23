@@ -21,6 +21,7 @@ export interface IGDBGame {
   follows?: number
   hypes?: number
   total_rating_count?: number
+  game_status?: number
   similar_games?: number[]
   involved_companies?: IGDBInvolvedCompany[]
   release_dates?: { date?: number; platform?: { name: string } }[]

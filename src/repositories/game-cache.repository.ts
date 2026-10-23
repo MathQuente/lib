@@ -1,9 +1,25 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../database/db'
 import { GameCacheSortBy, GameCacheSortOrder } from '../types/game-cache'
+import { GAME_STATUS } from '../utils/game-status'
 
 const MIN_TOTAL_RATING_COUNT = 10
 const MIN_HYPES = 5
+const HIDDEN_STATUS_IDS = [GAME_STATUS.CANCELLED, GAME_STATUS.RUMORED]
+
+export function catalogVisibilityWhere(): Prisma.GameCacheWhereInput {
+  return {
+    OR: [
+      { gameStatus: null },
+      { gameStatus: { notIn: HIDDEN_STATUS_IDS } },
+      { gameStatus: GAME_STATUS.CANCELLED, releaseDate: { not: null } }
+    ]
+  }
+}
+
+export function catalogVisibilitySql() {
+  return Prisma.sql`(gc.game_status IS NULL OR gc.game_status NOT IN (${Prisma.join(HIDDEN_STATUS_IDS)}) OR (gc.game_status = ${GAME_STATUS.CANCELLED} AND gc.release_date IS NOT NULL))`
+}
 
 export class GameCacheRepository {
   async findMany({
@@ -21,9 +37,14 @@ export class GameCacheRepository {
   }) {
     const offset = pageIndex * limit
     const where: Prisma.GameCacheWhereInput = {
-      OR: [
-        { totalRatingCount: { gte: MIN_TOTAL_RATING_COUNT } },
-        { hypes: { gte: MIN_HYPES } }
+      AND: [
+        {
+          OR: [
+            { totalRatingCount: { gte: MIN_TOTAL_RATING_COUNT } },
+            { hypes: { gte: MIN_HYPES } }
+          ]
+        },
+        catalogVisibilityWhere()
       ],
       ...(query ? { name: { contains: query, mode: 'insensitive' } } : {})
     }
@@ -76,7 +97,7 @@ export class GameCacheRepository {
     const nameFilter = query
       ? Prisma.sql`AND gc.name ILIKE ${`%${query}%`}`
       : Prisma.empty
-    const where = Prisma.sql`WHERE (gc.total_rating_count >= ${MIN_TOTAL_RATING_COUNT} OR gc.hypes >= ${MIN_HYPES}) ${nameFilter}`
+    const where = Prisma.sql`WHERE (gc.total_rating_count >= ${MIN_TOTAL_RATING_COUNT} OR gc.hypes >= ${MIN_HYPES}) AND ${catalogVisibilitySql()} ${nameFilter}`
 
     const [games, countResult] = await Promise.all([
       prisma.$queryRaw<
@@ -137,6 +158,7 @@ export class GameCacheRepository {
       category?: number
       parentGameId?: number | null
       gameModes?: number[]
+      gameStatus?: number | null
     }>
   ) {
     await prisma.gameCache.createMany({
@@ -152,7 +174,8 @@ export class GameCacheRepository {
         totalRatingCount: g.totalRatingCount ?? 0,
         category: g.category ?? -1,
         parentGameId: g.parentGameId ?? null,
-        gameModes: g.gameModes ?? []
+        gameModes: g.gameModes ?? [],
+        gameStatus: g.gameStatus ?? null
       })),
       skipDuplicates: true
     })
@@ -204,6 +227,34 @@ export class GameCacheRepository {
       FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, modes jsonb)
       WHERE gc.igdb_id = v.id
     `)
+  }
+
+  async updateGameStatuses(
+    updates: Array<{ igdbId: number; gameStatus: number | null }>
+  ) {
+    if (updates.length === 0) return
+    const rows = JSON.stringify(
+      updates.map(u => ({ id: u.igdbId, status: u.gameStatus }))
+    )
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET game_status = v.status
+      FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, status int)
+      WHERE gc.igdb_id = v.id
+    `)
+  }
+
+  async findHiddenStatusIdsAfter(
+    afterId: number,
+    limit: number
+  ): Promise<number[]> {
+    const rows = await prisma.gameCache.findMany({
+      where: { igdbId: { gt: afterId }, gameStatus: { in: HIDDEN_STATUS_IDS } },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true }
+    })
+    return rows.map(r => r.igdbId)
   }
 
   async getMaxIgdbId(): Promise<number> {
