@@ -21,6 +21,35 @@ export function catalogVisibilitySql() {
   return Prisma.sql`(gc.game_status IS NULL OR gc.game_status NOT IN (${Prisma.join(HIDDEN_STATUS_IDS)}) OR (gc.game_status = ${GAME_STATUS.CANCELLED} AND gc.release_date IS NOT NULL))`
 }
 
+export function normalizeSearchTerm(query: string | undefined) {
+  return query?.trim().replace(/\s+/g, ' ') ?? ''
+}
+
+export function escapeLike(term: string) {
+  return term.replace(/[\\%_]/g, '\\$&')
+}
+
+const FOLDED_NAME = Prisma.sql`unaccent(lower(gc.name))`
+
+export function relevanceMatchSql(query: string) {
+  return Prisma.sql`${FOLDED_NAME} LIKE unaccent(lower(${`%${escapeLike(query)}%`})) ESCAPE '\\'`
+}
+
+export function relevanceOrderSql(query: string) {
+  const term = escapeLike(query)
+  return Prisma.sql`CASE
+      WHEN ${FOLDED_NAME} = unaccent(lower(${query})) THEN 0
+      WHEN ${FOLDED_NAME} LIKE unaccent(lower(${`${term}%`})) ESCAPE '\\' THEN 1
+      WHEN ${FOLDED_NAME} LIKE unaccent(lower(${`% ${term}%`})) ESCAPE '\\' THEN 2
+      ELSE 3
+    END,
+    (gc.parent_game_id IS NOT NULL),
+    gc.total_rating_count DESC NULLS LAST,
+    gc.hypes DESC NULLS LAST,
+    gc.name ASC,
+    gc.igdb_id ASC`
+}
+
 export class GameCacheRepository {
   async findMany({
     limit = 20,
@@ -36,6 +65,16 @@ export class GameCacheRepository {
     query?: string
   }) {
     const offset = pageIndex * limit
+
+    if (sortBy === 'rating') {
+      return this.findManyByRating({ limit, offset, sortOrder, query })
+    }
+
+    const searchTerm = normalizeSearchTerm(query)
+    if (sortBy === 'relevance' && searchTerm) {
+      return this.findManyByRelevance({ limit, offset, query: searchTerm })
+    }
+
     const where: Prisma.GameCacheWhereInput = {
       AND: [
         {
@@ -47,10 +86,6 @@ export class GameCacheRepository {
         catalogVisibilityWhere()
       ],
       ...(query ? { name: { contains: query, mode: 'insensitive' } } : {})
-    }
-
-    if (sortBy === 'rating') {
-      return this.findManyByRating({ limit, offset, sortOrder, query })
     }
 
     const orderBy: Prisma.GameCacheOrderByWithRelationInput =
@@ -80,6 +115,59 @@ export class GameCacheRepository {
     ])
 
     return { games, total }
+  }
+
+  private async findManyByRelevance({
+    limit,
+    offset,
+    query
+  }: {
+    limit: number
+    offset: number
+    query: string
+  }) {
+    const where = Prisma.sql`WHERE (gc.total_rating_count >= ${MIN_TOTAL_RATING_COUNT} OR gc.hypes >= ${MIN_HYPES}) AND ${catalogVisibilitySql()} AND ${relevanceMatchSql(query)}`
+
+    const [games, countResult] = await Promise.all([
+      prisma.$queryRaw<
+        Array<{
+          igdb_id: number
+          name: string
+          cover_url: string | null
+          summary: string | null
+          genres: string[]
+          platforms: string[]
+          release_date: number | null
+          category: number | null
+          parent_game_id: number | null
+        }>
+      >(Prisma.sql`
+        SELECT gc.igdb_id, gc.name, gc.cover_url, gc.summary, gc.genres, gc.platforms, gc.release_date,
+               gc.category, gc.parent_game_id
+        FROM games_cache gc
+        ${where}
+        ORDER BY ${relevanceOrderSql(query)}
+        LIMIT ${limit} OFFSET ${offset}
+      `),
+      prisma.$queryRaw<[{ count: bigint }]>(Prisma.sql`
+        SELECT COUNT(*) FROM games_cache gc ${where}
+      `)
+    ])
+
+    return {
+      games: games.map(g => ({
+        igdbId: g.igdb_id,
+        name: g.name,
+        coverUrl: g.cover_url,
+        summary: g.summary,
+        genres: g.genres,
+        platforms: g.platforms,
+        releaseDate: g.release_date,
+        category: g.category,
+        parentGameId: g.parent_game_id
+      })),
+      total: Number(countResult[0].count)
+    }
   }
 
   private async findManyByRating({

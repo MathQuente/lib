@@ -47,7 +47,9 @@ export const GameQueryStringSchema = z.object({
   query: z.string().max(100).optional(),
   pageIndex: z.coerce.number().int().min(0).max(10000).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['name', 'release_date', 'rating']).catch('release_date'),
+  sortBy: z
+    .enum(['name', 'release_date', 'rating', 'relevance'])
+    .catch('release_date'),
   sortOrder: z.enum(['asc', 'desc']).catch('desc')
 })
 

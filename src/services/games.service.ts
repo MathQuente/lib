@@ -116,7 +116,7 @@ export class GameService {
     query: string | undefined,
     limit: number,
     pageIndex: number,
-    sortBy: 'name' | 'release_date' | 'rating',
+    sortBy: 'name' | 'release_date' | 'rating' | 'relevance',
     sortOrder: 'asc' | 'desc',
     userId?: string
   ) {
