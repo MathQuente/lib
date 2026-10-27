@@ -217,7 +217,7 @@ export class IGDBService {
     if (ids.length === 0) return []
     return this.request(
       'games',
-      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,game_status; limit ${Math.min(ids.length, 500)};`
+      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,themes.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,game_status; limit ${Math.min(ids.length, 500)};`
     )
   }
 

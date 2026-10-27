@@ -10,6 +10,7 @@ export interface IGDBGame {
   summary?: string
   cover?: { url: string }
   genres?: { name: string }[]
+  themes?: { name: string }[]
   platforms?: { name: string }[]
   game_modes?: { id?: number; name: string }[]
   alternative_names?: { name: string }[]

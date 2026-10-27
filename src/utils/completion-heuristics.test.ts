@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { IGDBGame } from '../types/igdb'
 import {
   canInferCompletion,
+  completedChapterSequenceEnd,
   COMPLETION_KEYWORD_PATTERN,
   evaluateFinishSuggestion,
   hasLockedPlainEndAchievement,
@@ -156,13 +157,30 @@ describe('evaluateFinishSuggestion', () => {
   it('flags a game that also has a multiplayer mode as low confidence', () => {
     const result = evaluateFinishSuggestion({
       ...base,
-      game: game(['Party'], ['Single player', 'Multiplayer']),
+      game: game(['Adventure'], ['Single player', 'Multiplayer']),
       hoursPlayed: 5.1,
       normallyHours: 4,
       achieved: 4,
       total: 33
     })
     expect(result).toMatchObject({ suggest: true, lowConfidence: true })
+  })
+
+  it('does not suggest a party game with no campaign', () => {
+    const among = {
+      ...game(['Strategy', 'Indie'], ['Single player', 'Multiplayer', 'Co-operative']),
+      themes: [{ name: 'Party' }]
+    }
+    expect(
+      evaluateFinishSuggestion({
+        ...base,
+        game: among,
+        hoursPlayed: 5.1,
+        normallyHours: 4,
+        achieved: 4,
+        total: 33
+      }).suggest
+    ).toBe(false)
   })
 })
 
@@ -246,5 +264,83 @@ describe('evaluateFinishSuggestion with blocked weak signals', () => {
       weakSignalsBlocked: true
     })
     expect(result.suggest).toBe(false)
+  })
+})
+
+describe('canInferCompletion for multiplayer games without a campaign', () => {
+  const withThemes = (genres: string[], modes: string[], themes: string[]): IGDBGame => ({
+    ...game(genres, modes),
+    themes: themes.map(name => ({ name }))
+  })
+
+  it('rejects a party game that lists single player', () => {
+    expect(
+      canInferCompletion(
+        withThemes(['Strategy', 'Indie'], ['Single player', 'Multiplayer'], ['Party'])
+      )
+    ).toBe(false)
+  })
+
+  it('rejects a multiplayer shooter with no narrative genre', () => {
+    expect(
+      canInferCompletion(game(['Shooter', 'Tactical'], ['Single player', 'Multiplayer']))
+    ).toBe(false)
+  })
+
+  it('accepts a multiplayer game with an adventure or RPG genre', () => {
+    expect(
+      canInferCompletion(
+        game(['Platform', 'Adventure'], ['Single player', 'Multiplayer', 'Co-operative'])
+      )
+    ).toBe(true)
+  })
+
+  it('keeps single-player games without narrative genre', () => {
+    expect(canInferCompletion(game(['Puzzle'], ['Single player']))).toBe(true)
+  })
+
+  it('does not decide when genres are unknown', () => {
+    expect(canInferCompletion(game([], ['Single player', 'Multiplayer']))).toBe(true)
+  })
+})
+
+describe('completedChapterSequenceEnd', () => {
+  const names = ['ACH_PROLOGUE', ...Array.from({ length: 10 }, (_, i) => `ACH_C${i + 1}`), 'ACH_X']
+  const times = (n: number, step = 10) =>
+    new Map(Array.from({ length: n }, (_, i) => [`ACH_C${i + 1}`, 100 + i * step]))
+
+  it('returns the last chapter when the whole sequence is unlocked in order', () => {
+    const apiNames = names.filter(n => n.startsWith('ACH_C'))
+    expect(
+      completedChapterSequenceEnd(names, { apiNames, unlockTimes: times(10) })
+    ).toBe('ACH_C10')
+  })
+
+  it('returns null while a chapter is still locked', () => {
+    const apiNames = Array.from({ length: 9 }, (_, i) => `ACH_C${i + 1}`)
+    expect(
+      completedChapterSequenceEnd(names, { apiNames, unlockTimes: times(9) })
+    ).toBeNull()
+  })
+
+  it('returns null when unlocks are out of order', () => {
+    const apiNames = names.filter(n => n.startsWith('ACH_C'))
+    expect(
+      completedChapterSequenceEnd(names, { apiNames, unlockTimes: times(10, -10) })
+    ).toBeNull()
+  })
+
+  it('ignores sequences shorter than five chapters', () => {
+    const short = ['ACH_C1', 'ACH_C2', 'ACH_C3']
+    expect(
+      completedChapterSequenceEnd(short, { apiNames: short, unlockTimes: times(3) })
+    ).toBeNull()
+  })
+
+  it('ignores a sequence with a gap', () => {
+    const gap = ['ACH_C1', 'ACH_C2', 'ACH_C4', 'ACH_C5', 'ACH_C6', 'ACH_C7']
+    expect(
+      completedChapterSequenceEnd(gap, { apiNames: gap, unlockTimes: new Map(gap.map((n, i) => [n, 100 + i])) })
+    ).toBeNull()
   })
 })

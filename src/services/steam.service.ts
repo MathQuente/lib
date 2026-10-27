@@ -13,6 +13,7 @@ import { IGDBGame } from '../types/igdb'
 import {
   COMPLETION_KEYWORD_PATTERN,
   canInferCompletion,
+  completedChapterSequenceEnd,
   evaluateFinishSuggestion,
   hasLockedPlainEndAchievement,
   hasPracticalEnd,
@@ -375,13 +376,23 @@ export class SteamService {
         achievements != null &&
         meetsCompletionRatio(achievements.achieved, achievements.total)
 
-      const matchedKeywordNames = achievements
-        ? matchingCompletionKeywordNames(
-            achievements.achievedApiNames,
-            schema,
-            communityTexts
-          )
-        : []
+      const chapterEnd =
+        achievements && schema
+          ? completedChapterSequenceEnd([...schema.keys()], {
+              apiNames: achievements.achievedApiNames,
+              unlockTimes: achievements.unlockTimesByName
+            })
+          : null
+      const matchedKeywordNames = [
+        ...(achievements
+          ? matchingCompletionKeywordNames(
+              achievements.achievedApiNames,
+              schema,
+              communityTexts
+            )
+          : []),
+        ...(chapterEnd ? [chapterEnd] : [])
+      ]
       const hasCompletionKeyword = matchedKeywordNames.length > 0
 
       const hoursPlayed = Math.round((owned.playtime_forever / 60) * 100) / 100
