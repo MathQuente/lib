@@ -41,6 +41,8 @@ Table users {
   xboxXuid String [unique]
   xboxGamertag String
   emailVerifiedAt DateTime
+  termsAcceptedAt DateTime
+  termsVersion String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   userGames user_games [not null]

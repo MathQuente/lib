@@ -85,9 +85,17 @@ export class UserService {
   async delete(userId: string) {
     await this.requireUser(userId)
 
-    await markSessionsRevoked(this.cacheRepository, userId)
+    const user = await this.userRepository.deleteUser(userId)
 
-    return { user: await this.userRepository.deleteUser(userId) }
+    try {
+      await markSessionsRevoked(this.cacheRepository, userId)
+    } catch (error) {
+      console.error('Session revocation after account deletion failed:', {
+        error: error instanceof Error ? error.message : 'unknown error'
+      })
+    }
+
+    return { user }
   }
 
   private async getSteamPersonaName(

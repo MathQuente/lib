@@ -23,6 +23,13 @@ import fastifyOauth2, { FastifyOAuth2Options } from '@fastify/oauth2'
 import { startSteamImportWorker } from './workers/steam-import.worker'
 import { startPsnImportWorker } from './workers/psn-import.worker'
 import { startXboxImportWorker } from './workers/xbox-import.worker'
+import closeWithGrace from 'close-with-grace'
+import { prisma } from './database/db'
+import { bullConnection } from './queues/connection'
+import { healthRoutes } from './routes/health'
+import { shutdown } from './shutdown'
+
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000
 
 function parseTrustProxy(value: string | undefined): boolean | number | string {
   if (!value || value === 'false') return false
@@ -56,15 +63,40 @@ export class Server {
     await this.initOAuth2()
     await this.initRateLimit()
     this.initRoutes()
-    startSteamImportWorker()
-    startPsnImportWorker()
-    startXboxImportWorker()
+    const workers = [
+      startSteamImportWorker(),
+      startPsnImportWorker(),
+      startXboxImportWorker()
+    ]
+    this.initGracefulShutdown(workers)
 
     await this.app.listen({
       port: Server.port,
       host: Server.host
     })
     console.log(`🚀 Server running on http://${Server.host}:${Server.port}`)
+  }
+
+  private static initGracefulShutdown(workers: Array<{ close: () => Promise<unknown> }>) {
+    const configuredDelay = Number(process.env.SHUTDOWN_TIMEOUT_MS)
+    closeWithGrace(
+      {
+        delay:
+          configuredDelay > 0 ? configuredDelay : DEFAULT_SHUTDOWN_TIMEOUT_MS
+      },
+      async ({ err }) => {
+        if (err) console.error('Shutting down after error:', err)
+        await shutdown({
+          app: this.app,
+          workers,
+          connections: [
+            () => prisma.$disconnect(),
+            () => redis.quit(),
+            () => bullConnection.quit()
+          ]
+        })
+      }
+    )
   }
 
   private static setupZodTypeProvider() {
@@ -110,6 +142,12 @@ export class Server {
   }
 
   private static initRoutes() {
+    this.app.register(healthRoutes, {
+      checks: {
+        database: () => prisma.$queryRaw`SELECT 1`,
+        redis: () => redis.ping()
+      }
+    })
     this.app.register(authRoutes, { prefix: '/auth' })
     this.app.register(userRoutes, { prefix: '/users' })
     this.app.register(gameRoutes, { prefix: '/games' })

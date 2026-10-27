@@ -945,31 +945,42 @@ describe('UserService.delete', () => {
     return { service, deleteUser }
   }
 
-  it('revokes the sessions that were already issued and then deletes the account', async () => {
+  it('deletes the account and then revokes the sessions that were already issued', async () => {
     const set = vi.fn().mockResolvedValue(undefined)
     const { service, deleteUser } = build(set)
 
     const result = await service.delete('user-1')
 
+    expect(deleteUser).toHaveBeenCalledWith('user-1')
     expect(set).toHaveBeenCalledWith(
       'sessions-revoked-at:user-1',
       expect.any(Number),
       expect.any(Number)
     )
-    expect(deleteUser).toHaveBeenCalledWith('user-1')
-    expect(set.mock.invocationCallOrder[0]).toBeLessThan(
-      deleteUser.mock.invocationCallOrder[0]
+    expect(deleteUser.mock.invocationCallOrder[0]).toBeLessThan(
+      set.mock.invocationCallOrder[0]
     )
     expect(result).toEqual({ user: { id: 'user-1', userName: 'someone' } })
   })
 
-  it('keeps the account when the revocation cannot be stored', async () => {
-    const { service, deleteUser } = build(
+  it('does not revoke the sessions when the account cannot be deleted', async () => {
+    const set = vi.fn().mockResolvedValue(undefined)
+    const { service, deleteUser } = build(set)
+    deleteUser.mockRejectedValue(new Error('db down'))
+
+    await expect(service.delete('user-1')).rejects.toThrow('db down')
+    expect(set).not.toHaveBeenCalled()
+  })
+
+  it('still reports the deletion when the revocation cannot be stored', async () => {
+    const { service } = build(
       vi.fn().mockRejectedValue(new Error('redis down'))
     )
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-    await expect(service.delete('user-1')).rejects.toThrow('redis down')
-    expect(deleteUser).not.toHaveBeenCalled()
+    await expect(service.delete('user-1')).resolves.toEqual({
+      user: { id: 'user-1', userName: 'someone' }
+    })
   })
 })
 

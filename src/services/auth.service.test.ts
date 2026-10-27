@@ -5,6 +5,7 @@ import { AuthService, revokedAccessTokenKey } from './auth.service'
 import { AuthRepository } from '../repositories/auth.repository'
 import { CacheRepository } from '../repositories/cache.repository'
 import { ClientError } from '../errors/client-error'
+import { TermsRequiredError } from '../errors/terms-required-error'
 import { EmailService } from './email.service'
 
 function fakeJwt(overrides: Partial<JWT> = {}): JWT {
@@ -198,6 +199,68 @@ describe('AuthService.validateRefreshToken', () => {
     )
   })
 
+  it('does not turn a database failure into an invalid session', async () => {
+    const databaseDown = new Error('Can not reach database server')
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockRejectedValue(databaseDown)
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt(),
+      fakeCacheRepository
+    )
+
+    const error = await service.validateRefreshToken('some-token').catch(e => e)
+
+    expect(error).toBe(databaseDown)
+    expect(error).not.toBeInstanceOf(ClientError)
+  })
+
+  it('does not turn a failure while rotating into an invalid session', async () => {
+    const databaseDown = new Error('Connection closed')
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockResolvedValue({
+        isValid: true,
+        expiresAt: new Date(Date.now() + 60_000)
+      }),
+      invalidateToken: vi.fn().mockRejectedValue(databaseDown)
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt({ verify: vi.fn(() => ({ userId: 'user-1' })) }),
+      fakeCacheRepository
+    )
+
+    const error = await service.validateRefreshToken('some-token').catch(e => e)
+
+    expect(error).toBe(databaseDown)
+    expect(error).not.toBeInstanceOf(ClientError)
+  })
+
+  it('still reports a bad signature as an invalid session', async () => {
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockResolvedValue({
+        isValid: true,
+        expiresAt: new Date(Date.now() + 60_000)
+      })
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt({
+        verify: vi.fn(() => {
+          throw Object.assign(new Error('bad signature'), {
+            code: 'FAST_JWT_INVALID_SIGNATURE'
+          })
+        })
+      }),
+      fakeCacheRepository
+    )
+
+    await expect(service.validateRefreshToken('some-token')).rejects.toThrow(
+      ClientError
+    )
+  })
+
   it('returns the userId and rotates the token when it is valid', async () => {
     const invalidateToken = vi.fn()
     const authRepository = fakeAuthRepository({
@@ -300,7 +363,7 @@ describe('AuthService.loginWithGoogle', () => {
     const service = new AuthService(authRepository, fakeJwt(), recordingCache())
 
     await expect(
-      service.loginWithGoogle({ ...profile, email_verified: false })
+      service.loginWithGoogle({ ...profile, email_verified: false }, true)
     ).rejects.toMatchObject({ statusCode: 403 })
     expect(findByEmail).not.toHaveBeenCalled()
   })
@@ -323,7 +386,7 @@ describe('AuthService.loginWithGoogle', () => {
     })
     const service = new AuthService(authRepository, fakeJwt(), cache)
 
-    await service.loginWithGoogle({ ...profile, email_verified: true })
+    await service.loginWithGoogle({ ...profile, email_verified: true }, true)
 
     expect(updatePassword).toHaveBeenCalledWith('user-1', expect.any(String))
     expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
@@ -351,7 +414,7 @@ describe('AuthService.loginWithGoogle', () => {
     const result = await service.loginWithGoogle({
       ...profile,
       email_verified: false
-    })
+    }, true)
 
     expect(result.user).toEqual({ id: 'user-1' })
     expect(updatePassword).not.toHaveBeenCalled()
@@ -374,7 +437,7 @@ describe('AuthService.loginWithDiscord', () => {
         verified: false,
         username: 'x',
         avatar: null
-      })
+      }, true)
     ).rejects.toMatchObject({ statusCode: 403 })
     expect(findByEmail).not.toHaveBeenCalled()
   })
@@ -1010,7 +1073,7 @@ describe('AuthService provider linking', () => {
     const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
       googleSetup({ discordId: null })
 
-    await service.loginWithGoogle(googleProfile)
+    await service.loginWithGoogle(googleProfile, true)
 
     expect(updatePassword).toHaveBeenCalledWith('user-1', expect.any(String))
     expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
@@ -1021,7 +1084,7 @@ describe('AuthService provider linking', () => {
     const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
       googleSetup({ discordId: 'discord-1' })
 
-    await service.loginWithGoogle(googleProfile)
+    await service.loginWithGoogle(googleProfile, true)
 
     expect(updatePassword).not.toHaveBeenCalled()
     expect(deleteTokensByUserId).not.toHaveBeenCalled()
@@ -1057,7 +1120,7 @@ describe('AuthService provider linking', () => {
       verified: true,
       username: 'user',
       avatar: null
-    })
+    }, true)
 
     expect(linkDiscord).toHaveBeenCalledWith('user-1', 'discord-1', null)
     expect(updatePassword).toHaveBeenCalledTimes(expectsTakeOver ? 1 : 0)
@@ -1091,7 +1154,7 @@ describe('AuthService provider already linked', () => {
         email_verified: true,
         name: 'User',
         picture: 'https://example.com/p.png'
-      })
+      }, true)
     ).rejects.toMatchObject({ statusCode: 409 })
     expect(linkGoogle).not.toHaveBeenCalled()
     expect(updatePassword).not.toHaveBeenCalled()
@@ -1122,7 +1185,7 @@ describe('AuthService provider already linked', () => {
         verified: true,
         username: 'user',
         avatar: null
-      })
+      }, true)
     ).rejects.toMatchObject({ statusCode: 409 })
     expect(linkDiscord).not.toHaveBeenCalled()
     expect(updatePassword).not.toHaveBeenCalled()
@@ -1150,7 +1213,7 @@ describe('AuthService provider emails', () => {
       email_verified: true,
       name: 'Ana',
       picture: 'https://example.com/p.png'
-    })
+    }, true)
 
     expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
     expect(createUserWithGoogle).toHaveBeenCalledWith(
@@ -1179,7 +1242,7 @@ describe('AuthService provider emails', () => {
       verified: true,
       username: 'ana',
       avatar: null
-    })
+    }, true)
 
     expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
     expect(createWithDiscord).toHaveBeenCalledWith(
@@ -1262,5 +1325,169 @@ describe('AuthService token types', () => {
     )
 
     expect(await service.isRefreshTokenActive('some-token')).toBe('user-1')
+  })
+})
+
+describe('AuthService OAuth terms acceptance', () => {
+  const googleProfile = {
+    sub: 'google-1',
+    email: 'ana@mail.com',
+    email_verified: true,
+    name: 'Ana',
+    picture: 'https://example.com/p.png'
+  }
+  const discordProfile = {
+    id: 'discord-1',
+    email: 'ana@mail.com',
+    verified: true,
+    username: 'ana',
+    avatar: null
+  }
+
+  it('creates a new Google account when the terms were accepted', async () => {
+    const createUserWithGoogle = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const saveToken = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createUserWithGoogle,
+        saveToken
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithGoogle(googleProfile, true)
+
+    expect(createUserWithGoogle).toHaveBeenCalledTimes(1)
+    expect(saveToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a new Google account without acceptance and issues no session', async () => {
+    const createUserWithGoogle = vi.fn()
+    const saveToken = vi.fn()
+    const cache = fakeCache()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createUserWithGoogle,
+        saveToken
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(
+      service.loginWithGoogle(googleProfile, false)
+    ).rejects.toBeInstanceOf(TermsRequiredError)
+    expect(createUserWithGoogle).not.toHaveBeenCalled()
+    expect(saveToken).not.toHaveBeenCalled()
+    expect(cache.set).not.toHaveBeenCalled()
+  })
+
+  it('lets an existing Google account in without acceptance', async () => {
+    const createUserWithGoogle = vi.fn()
+    const saveToken = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        createUserWithGoogle,
+        saveToken
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    const result = await service.loginWithGoogle(googleProfile, false)
+
+    expect(result.user).toEqual({ id: 'user-1' })
+    expect(createUserWithGoogle).not.toHaveBeenCalled()
+    expect(saveToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('links a Google login to an existing email without acceptance', async () => {
+    const createUserWithGoogle = vi.fn()
+    const linkGoogle = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const service = new AuthService(
+      fakeAuthRepository({
+        findUserByGoogleId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
+        updatePassword: vi.fn(),
+        deleteTokensByUserId: vi.fn(),
+        markEmailVerified: vi.fn(),
+        linkGoogle,
+        createUserWithGoogle,
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithGoogle(googleProfile, false)
+
+    expect(linkGoogle).toHaveBeenCalledTimes(1)
+    expect(createUserWithGoogle).not.toHaveBeenCalled()
+  })
+
+  it('creates a new Discord account when the terms were accepted', async () => {
+    const createWithDiscord = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createWithDiscord,
+        saveToken: vi.fn()
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithDiscord(discordProfile, true)
+
+    expect(createWithDiscord).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a new Discord account without acceptance and issues no session', async () => {
+    const createWithDiscord = vi.fn()
+    const saveToken = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue(null),
+        createWithDiscord,
+        saveToken
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await expect(
+      service.loginWithDiscord(discordProfile, false)
+    ).rejects.toBeInstanceOf(TermsRequiredError)
+    expect(createWithDiscord).not.toHaveBeenCalled()
+    expect(saveToken).not.toHaveBeenCalled()
+  })
+
+  it('lets an existing Discord account in without acceptance', async () => {
+    const createWithDiscord = vi.fn()
+    const saveToken = vi.fn()
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        createWithDiscord,
+        saveToken
+      }),
+      fakeJwt(),
+      fakeCache()
+    )
+
+    await service.loginWithDiscord(discordProfile, false)
+
+    expect(createWithDiscord).not.toHaveBeenCalled()
+    expect(saveToken).toHaveBeenCalledTimes(1)
   })
 })

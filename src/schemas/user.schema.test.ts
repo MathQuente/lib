@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  DeleteUserResponseSchema,
   QueryStringSchema,
   UpdateUserBodySchema,
   UserGameBodySchema,
@@ -102,6 +103,24 @@ describe('UserGamePlatformParamsSchema', () => {
     const { Console } = await import('@prisma/client')
     expect([...ConsoleEnumSchema.options].sort()).toEqual(
       Object.values(Console).sort()
+    )
+  })
+})
+
+describe('DeleteUserResponseSchema', () => {
+  const response = (userName: string | null) => ({
+    user: { id: '3f2b8c1e-6d4a-4a39-9c1e-0b1c2d3e4f5a', userName }
+  })
+
+  it('accepts a deleted user without a name', () => {
+    expect(DeleteUserResponseSchema.safeParse(response(null)).success).toBe(
+      true
+    )
+  })
+
+  it('accepts a deleted user with a name', () => {
+    expect(DeleteUserResponseSchema.safeParse(response('ana')).success).toBe(
+      true
     )
   })
 })

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { IGDBService } from './igdb.service'
+import { EROTIC_EXCEPTION_IDS, IGDBService } from './igdb.service'
 import { IGDBGame } from '../types/igdb'
 
 type RequestFn = (endpoint: string, body: string) => Promise<unknown>
 
-function mockRequest(rows: { uid: string; game: number }[]) {
+function mockRequest(rows: Record<string, unknown>[]) {
   return vi
     .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
     .mockResolvedValue(rows)
@@ -343,6 +343,95 @@ describe('IGDBService status in the cache input and listings', () => {
     expect(
       IGDBService.toGameCacheInput({ id: 2, name: 'B' } as IGDBGame).gameStatus
     ).toBeNull()
+  })
+
+  describe('keeps the Erotic theme (42) out of the catalog', () => {
+    const EXCLUDE_EROTIC = 'themes != (42)'
+    const EXCEPTION_LIST = EROTIC_EXCEPTION_IDS.join(',')
+
+    it.each([
+      ['fetchForSync', () => IGDBService.fetchForSync(0, 500)],
+      [
+        'fetchMissingReleasedContent',
+        () => IGDBService.fetchMissingReleasedContent(0, 1000, 500)
+      ],
+      ['getRecentlyReleasedGames', () => IGDBService.getRecentlyReleasedGames()]
+    ])('%s filters the theme', async (_name, call) => {
+      const request = mockRequest([])
+
+      await call()
+
+      expect(request).toHaveBeenCalledWith(
+        'games',
+        expect.stringContaining(EXCLUDE_EROTIC)
+      )
+    })
+
+    it('filters the theme in the coming soon list and in its count', async () => {
+      const request = mockRequest([])
+      const count = vi
+        .spyOn(
+          IGDBService as unknown as { countRequest: RequestFn },
+          'countRequest'
+        )
+        .mockResolvedValue(0 as never)
+
+      await IGDBService.getComingSoonGames(20, 0)
+
+      expect(request).toHaveBeenCalledWith(
+        'games',
+        expect.stringContaining(EXCLUDE_EROTIC)
+      )
+      expect(count).toHaveBeenCalledWith(
+        'games',
+        expect.stringContaining(EXCLUDE_EROTIC)
+      )
+    })
+
+    it('lists the ids of Erotic games in pages for the purge script', async () => {
+      const request = mockRequest([{ id: 11 }, { id: 15 }])
+
+      const ids = await IGDBService.fetchEroticIds(10, 500)
+
+      expect(ids).toEqual([11, 15])
+      expect(request).toHaveBeenCalledWith(
+        'games',
+        `fields id; where id > 10 & themes = (42) & id != (${EXCEPTION_LIST}); sort id asc; limit 500;`
+      )
+    })
+
+    it('blocks a tagged game outside the exception list and lets a listed one through', async () => {
+      const request = mockRequest([])
+
+      await IGDBService.fetchForSync(0, 500)
+
+      const query = request.mock.calls[0][1] as string
+      expect(query).toContain(
+        `(themes != (42) | id = (${EXCEPTION_LIST}))`
+      )
+      expect(EROTIC_EXCEPTION_IDS).toContain(12328)
+      expect(EROTIC_EXCEPTION_IDS).not.toContain(1)
+      expect(query).not.toMatch(/ & themes != \(42\)/)
+    })
+
+    it('keeps the exception list sorted, unique and with every approved game', () => {
+      expect([...EROTIC_EXCEPTION_IDS].sort((a, b) => a - b)).toEqual(
+        EROTIC_EXCEPTION_IDS
+      )
+      expect(new Set(EROTIC_EXCEPTION_IDS).size).toBe(EROTIC_EXCEPTION_IDS.length)
+      expect(EROTIC_EXCEPTION_IDS).toHaveLength(22)
+    })
+
+    it('does not filter the title matcher used by the platform imports', async () => {
+      const request = mockRequest([])
+
+      await IGDBService.searchGamesByName('zelda', [6])
+
+      expect(request).toHaveBeenCalledWith(
+        'games',
+        expect.not.stringContaining(EXCLUDE_EROTIC)
+      )
+    })
   })
 
   it('asks IGDB for game_status when syncing', async () => {

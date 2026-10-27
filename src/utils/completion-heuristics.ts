@@ -48,8 +48,57 @@ function isOpenEnded(game: IGDBGame): boolean {
   return openEndedGenre && hasMultiplayerMode(game)
 }
 
+const NARRATIVE_GENRES = new Set(['adventure', 'role-playing (rpg)', 'visual novel'])
+const PARTY_THEME = 'party'
+
+function lacksCampaign(game: IGDBGame): boolean {
+  if (!hasMultiplayerMode(game)) return false
+  const isParty = game.themes?.some(t => t.name.toLowerCase() === PARTY_THEME) ?? false
+  if (isParty) return true
+  if (!game.genres || game.genres.length === 0) return false
+  return !game.genres.some(g => NARRATIVE_GENRES.has(g.name.toLowerCase()))
+}
+
 export function canInferCompletion(game: IGDBGame): boolean {
-  return hasSinglePlayerMode(game) && !isOpenEnded(game)
+  return hasSinglePlayerMode(game) && !isOpenEnded(game) && !lacksCampaign(game)
+}
+
+export const MIN_CHAPTERS_FOR_SEQUENCE = 5
+
+const CHAPTER_NAME_PATTERN = /^(.*?(?:chapter|ch|c))_?(\d+)$/i
+
+export function completedChapterSequenceEnd(
+  schemaApiNames: string[],
+  achieved: { apiNames: string[]; unlockTimes: Map<string, number> }
+): string | null {
+  const groups = new Map<string, Map<number, string>>()
+  for (const name of schemaApiNames) {
+    const match = CHAPTER_NAME_PATTERN.exec(name)
+    if (!match) continue
+    const prefix = match[1].toLowerCase()
+    const chapters = groups.get(prefix) ?? new Map<number, string>()
+    chapters.set(Number(match[2]), name)
+    groups.set(prefix, chapters)
+  }
+
+  const unlocked = new Set(achieved.apiNames)
+  for (const chapters of groups.values()) {
+    const last = Math.max(...chapters.keys())
+    const first = Math.min(...chapters.keys())
+    const count = chapters.size
+    if (first > 1 || count !== last - first + 1 || count < MIN_CHAPTERS_FOR_SEQUENCE) {
+      continue
+    }
+    const ordered = Array.from({ length: count }, (_, i) => chapters.get(first + i)!)
+    if (!ordered.every(name => unlocked.has(name))) continue
+
+    const times = ordered.map(name => achieved.unlockTimes.get(name) ?? 0)
+    const inOrder = times.every((time, i) => time > 0 && (i === 0 || time >= times[i - 1]))
+    if (!inOrder) continue
+
+    return ordered[ordered.length - 1]
+  }
+  return null
 }
 
 export function meetsPlaytimeSignal({

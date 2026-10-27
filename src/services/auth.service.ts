@@ -3,6 +3,7 @@ import { AuthRepository } from '../repositories/auth.repository'
 import { CacheRepository } from '../repositories/cache.repository'
 import { EmailService } from './email.service'
 import { ClientError } from '../errors/client-error'
+import { TermsRequiredError } from '../errors/terms-required-error'
 import bcrypt from 'bcrypt'
 import { randomBytes } from 'node:crypto'
 import { CreateUserDTO } from '../dtos/user.dto'
@@ -96,17 +97,18 @@ export class AuthService {
   }
 
   async validateRefreshToken(refreshToken: string) {
+    const storedToken = await this.authRepository.findToken(refreshToken)
+
+    if (
+      !storedToken ||
+      !storedToken.isValid ||
+      storedToken.expiresAt < new Date()
+    ) {
+      throw new ClientError('Sessão inválida ou expirada.', 401)
+    }
+
+    let userId: string
     try {
-      const storedToken = await this.authRepository.findToken(refreshToken)
-
-      if (
-        !storedToken ||
-        !storedToken.isValid ||
-        storedToken.expiresAt < new Date()
-      ) {
-        throw new ClientError('Sessão inválida ou expirada.', 401)
-      }
-
       const decoded = this.jwt.verify(refreshToken) as {
         userId: string
         tokenType?: string
@@ -114,10 +116,7 @@ export class AuthService {
       if (decoded.tokenType === 'access') {
         throw new ClientError('Sessão inválida.', 401)
       }
-
-      await this.authRepository.invalidateToken(refreshToken)
-
-      return decoded.userId
+      userId = decoded.userId
     } catch (error) {
       if (error instanceof ClientError) {
         throw error
@@ -128,6 +127,10 @@ export class AuthService {
       }
       throw new ClientError('Sessão inválida.', 401)
     }
+
+    await this.authRepository.invalidateToken(refreshToken)
+
+    return userId
   }
 
   async isRefreshTokenActive(refreshToken: string): Promise<string | null> {
@@ -277,13 +280,16 @@ export class AuthService {
     await markSessionsRevoked(this.cacheRepository, userId)
   }
 
-  async loginWithGoogle(profile: {
-    sub: string
-    email: string
-    email_verified?: boolean
-    name: string
-    picture: string
-  }) {
+  async loginWithGoogle(
+    profile: {
+      sub: string
+      email: string
+      email_verified?: boolean
+      name: string
+      picture: string
+    },
+    acceptedTerms: boolean
+  ) {
     let user = await this.authRepository.findUserByGoogleId(profile.sub)
 
     if (!user) {
@@ -311,6 +317,8 @@ export class AuthService {
         )
         await this.authRepository.markEmailVerified(existing.id)
       } else {
+        if (!acceptedTerms) throw new TermsRequiredError()
+
         const hashedPassword = await bcrypt.hash(randomToken(), BCRYPT_COST)
 
         const created = await this.authRepository.createUserWithGoogle({
@@ -338,13 +346,16 @@ export class AuthService {
     return { user, accessToken, refreshToken, expiresAt }
   }
 
-  async loginWithDiscord(discordUser: {
-    id: string
-    email: string
-    verified?: boolean
-    username: string
-    avatar: string | null
-  }) {
+  async loginWithDiscord(
+    discordUser: {
+      id: string
+      email: string
+      verified?: boolean
+      username: string
+      avatar: string | null
+    },
+    acceptedTerms: boolean
+  ) {
     let user = await this.authRepository.findByDiscordId(discordUser.id)
 
     const profilePicture = discordUser.avatar
@@ -377,6 +388,8 @@ export class AuthService {
         )
         await this.authRepository.markEmailVerified(existingId)
       } else {
+        if (!acceptedTerms) throw new TermsRequiredError()
+
         const hashedPassword = await bcrypt.hash(
           crypto.randomUUID(),
           BCRYPT_COST

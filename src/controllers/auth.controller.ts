@@ -2,10 +2,19 @@ import { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthService } from '../services/auth.service'
 import * as AuthSchema from '../schemas/auth.schema'
 import { ClientError } from '../errors/client-error'
+import { TermsRequiredError } from '../errors/terms-required-error'
 import { clearAuthCookies, setAuthCookies } from '../utils/auth-cookies'
 
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  private oauthErrorCode(error: unknown) {
+    if (error instanceof TermsRequiredError) return 'terms_required'
+    if (error instanceof ClientError && error.statusCode === 403) {
+      return 'email_not_verified'
+    }
+    return 'oauth_failed'
+  }
 
   private redirectWithOAuthError(
     reply: FastifyReply,
@@ -15,10 +24,7 @@ export class AuthController {
     console.error(`${provider} OAuth Error:`, {
       error: error instanceof Error ? error.message : 'unknown error'
     })
-    const code =
-      error instanceof ClientError && error.statusCode === 403
-        ? 'email_not_verified'
-        : 'oauth_failed'
+    const code = this.oauthErrorCode(error)
     return reply.redirect(process.env.FRONTEND_URL + '/auth?error=' + code)
   }
 
@@ -97,11 +103,18 @@ export class AuthController {
 
     if (!refreshToken) throw new ClientError('Token de atualização não enviado.', 401)
 
-    const {
-      accessToken,
-      refreshToken: newRefreshToken,
-      expiresAt
-    } = await this.authService.refreshTokens(refreshToken)
+    let tokens: Awaited<ReturnType<AuthService['refreshTokens']>>
+    try {
+      tokens = await this.authService.refreshTokens(refreshToken)
+    } catch (error) {
+      if (error instanceof ClientError) throw error
+      console.error('Refresh failed:', {
+        error: error instanceof Error ? error.message : 'unknown error'
+      })
+      return reply.status(503).send({ status: 'unavailable' })
+    }
+
+    const { accessToken, refreshToken: newRefreshToken, expiresAt } = tokens
 
     setAuthCookies(reply, accessToken, newRefreshToken, expiresAt).send({
       message: 'Tokens atualizados'
@@ -119,7 +132,11 @@ export class AuthController {
     clearAuthCookies(reply).send({ message: 'Sessão encerrada com sucesso.' })
   }
 
-  async googleCallback(request: FastifyRequest, reply: FastifyReply) {
+  async googleCallback(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    acceptedTerms: boolean
+  ) {
     try {
       const { code } = request.query as { code: string; state: string }
 
@@ -181,7 +198,7 @@ export class AuthController {
       }
 
       const { accessToken, refreshToken } =
-        await this.authService.loginWithGoogle(profile)
+        await this.authService.loginWithGoogle(profile, acceptedTerms)
 
       setAuthCookies(reply, accessToken, refreshToken).redirect(
         process.env.FRONTEND_URL + '/'
@@ -191,7 +208,11 @@ export class AuthController {
     }
   }
 
-  async discordCallback(request: FastifyRequest, reply: FastifyReply) {
+  async discordCallback(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    acceptedTerms: boolean
+  ) {
     try {
       const { code } = request.query as { code: string }
 
@@ -248,7 +269,7 @@ export class AuthController {
       }
 
       const { accessToken, refreshToken } =
-        await this.authService.loginWithDiscord(profile)
+        await this.authService.loginWithDiscord(profile, acceptedTerms)
 
       setAuthCookies(reply, accessToken, refreshToken).redirect(
         process.env.FRONTEND_URL + '/'

@@ -299,6 +299,13 @@ describe('SteamApiService.getOwnedGames', () => {
     expect(await SteamApiService.getOwnedGames('1')).toBeNull()
   })
 
+  it('returns null when the body has no response field', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(200, {})))
+
+    expect(await SteamApiService.getOwnedGames('1')).toBeNull()
+  })
+
   it.each([401, 403, 429, 500, 503])(
     'throws a SteamApiError carrying status %i',
     async status => {
