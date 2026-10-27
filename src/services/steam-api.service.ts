@@ -133,10 +133,10 @@ export class SteamApiService {
     }
 
     const data = (await response.json()) as {
-      response: { game_count?: number; games?: SteamOwnedGame[] }
+      response?: { game_count?: number; games?: SteamOwnedGame[] }
     }
 
-    if (!data.response.games) return null
+    if (!data.response?.games) return null
 
     return data.response.games
   }
