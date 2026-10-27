@@ -3,6 +3,16 @@ import { IGDBGame } from '../types/igdb'
 import { fetchWithTimeout } from '../utils/fetch-with-timeout'
 import { GAME_STATUS, isHiddenFromCatalog } from '../utils/game-status'
 
+const EROTIC_THEME_ID = 42
+
+// Classics and story-driven works that IGDB tags Erotic; each id approved by hand.
+export const EROTIC_EXCEPTION_IDS = [
+  2906, 2908, 2910, 2911, 2912, 2913, 2914, 2915, 3826, 4251, 9648, 10679,
+  12328, 22493, 46980, 63998, 65289, 81729, 102087, 136548, 138756, 172667
+]
+const EROTIC_EXCEPTION_LIST = EROTIC_EXCEPTION_IDS.join(',')
+const EXCLUDE_EROTIC = `(themes != (${EROTIC_THEME_ID}) | id = (${EROTIC_EXCEPTION_LIST}))`
+
 export class IGDBService {
   private static accessToken: string | null = null
   private static tokenExpiresAt: number = 0
@@ -287,7 +297,7 @@ export class IGDBService {
     const cutoff = this.getReleaseCutoffEpoch()
     return this.request<IGDBGame[]>(
       'games',
-      `fields id,name,cover.url,rating,platforms.name,first_release_date,category,parent_game; where first_release_date < ${cutoff} & first_release_date != null & cover != null & total_rating_count >= ${this.MIN_TOTAL_RATING_COUNT}; sort first_release_date desc; limit ${limit};`
+      `fields id,name,cover.url,rating,platforms.name,first_release_date,category,parent_game; where first_release_date < ${cutoff} & first_release_date != null & cover != null & ${EXCLUDE_EROTIC} & total_rating_count >= ${this.MIN_TOTAL_RATING_COUNT}; sort first_release_date desc; limit ${limit};`
     )
   }
 
@@ -297,7 +307,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & cover != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & cover != null & ${EXCLUDE_EROTIC}; sort id asc; limit ${limit};`
     )
   }
 
@@ -308,8 +318,16 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & id <= ${maxId} & cover != null & parent_game != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & id <= ${maxId} & cover != null & ${EXCLUDE_EROTIC} & parent_game != null; sort id asc; limit ${limit};`
     )
+  }
+
+  static async fetchEroticIds(lastId: number, limit: number): Promise<number[]> {
+    const games = await this.request<{ id: number }[]>(
+      'games',
+      `fields id; where id > ${lastId} & themes = (${EROTIC_THEME_ID}) & id != (${EROTIC_EXCEPTION_LIST}); sort id asc; limit ${limit};`
+    )
+    return games.map(game => game.id)
   }
 
   static async getHypesByIds(ids: number[]): Promise<Map<number, number>> {
@@ -423,7 +441,7 @@ export class IGDBService {
     pageIndex = 0
   ): Promise<{ games: IGDBGame[]; total: number }> {
     const cutoff = this.getReleaseCutoffEpoch()
-    const where = `where first_release_date >= ${cutoff} & cover != null & hypes >= ${this.MIN_HYPES} & game_status != ${GAME_STATUS.RUMORED}`
+    const where = `where first_release_date >= ${cutoff} & cover != null & ${EXCLUDE_EROTIC} & hypes >= ${this.MIN_HYPES} & game_status != ${GAME_STATUS.RUMORED}`
     const [games, rawTotal] = await Promise.all([
       this.request<IGDBGame[]>(
         'games',
