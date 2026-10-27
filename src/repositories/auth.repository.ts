@@ -1,6 +1,7 @@
 import { prisma } from '../database/db'
 import { CreateUserDTO } from '../dtos/user.dto'
 import { hashToken } from '../utils/hash-token'
+import { termsAcceptance } from '../utils/terms'
 
 const MAX_SESSIONS_PER_USER = 10
 
@@ -50,7 +51,8 @@ export class AuthRepository {
       data: {
         email: data.email,
         password: data.password,
-        userName: data.userName
+        userName: data.userName,
+        ...termsAcceptance()
       },
       select: {
         id: true
@@ -72,7 +74,8 @@ export class AuthRepository {
         profilePicture: data.picture,
         googleId: data.googleId,
         password: data.password,
-        emailVerifiedAt: new Date()
+        emailVerifiedAt: new Date(),
+        ...termsAcceptance()
       },
       select: { id: true }
     })
@@ -129,7 +132,7 @@ export class AuthRepository {
     profilePicture: string | null
   }) {
     return prisma.user.create({
-      data: { ...data, emailVerifiedAt: new Date() }
+      data: { ...data, emailVerifiedAt: new Date(), ...termsAcceptance() }
     })
   }
 

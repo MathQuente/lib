@@ -24,7 +24,12 @@ export const PasswordSchema = z
 export const RegisterBodySchema = z
   .object({
     email: EmailSchema,
-    password: PasswordSchema
+    password: PasswordSchema,
+    acceptedTerms: z.literal(true, {
+      errorMap: () => ({
+        message: 'Confirme que tem 18 anos ou mais e aceita os Termos.'
+      })
+    })
   })
   .refine(
     ({ email, password }) => {

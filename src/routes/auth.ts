@@ -7,9 +7,13 @@ import { EmailService } from '../services/email.service'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 import { BASE_COOKIE_OPTIONS } from '../utils/auth-cookies'
-
-const OAUTH_STATE_TTL_SECONDS = 600
-const oauthStateKey = (state: string) => `oauth-state:${state}`
+import {
+  OAUTH_STATE_TTL_SECONDS,
+  oauthStateKey,
+  parseAcceptedTerms,
+  readOAuthState,
+  saveOAuthState
+} from '../utils/oauth-state'
 const OAUTH_STATE_COOKIE = 'oauth_state'
 
 function setOAuthStateCookie(reply: FastifyReply, state: string) {
@@ -163,7 +167,13 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const state = crypto.randomBytes(16).toString('hex')
-      await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
+      await saveOAuthState(
+        cacheRepository,
+        state,
+        parseAcceptedTerms(
+          (request.query as { acceptedTerms?: unknown }).acceptedTerms
+        )
+      )
       setOAuthStateCookie(reply, state)
 
       const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -218,7 +228,7 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    const cachedState = await cacheRepository.get(oauthStateKey(stateFromQuery))
+    const cachedState = await readOAuthState(cacheRepository, stateFromQuery)
     if (!cachedState) {
       console.error('❌ State inválido ou expirado')
       return reply.redirect(
@@ -235,7 +245,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     await cacheRepository.del(oauthStateKey(stateFromQuery))
 
-    return authController.googleCallback(request, reply)
+    return authController.googleCallback(
+      request,
+      reply,
+      cachedState.acceptedTerms
+    )
   })
 
   app.get('/discord', async (request, reply) => {
@@ -249,7 +263,13 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const state = crypto.randomBytes(16).toString('hex')
-      await cacheRepository.set(oauthStateKey(state), true, OAUTH_STATE_TTL_SECONDS)
+      await saveOAuthState(
+        cacheRepository,
+        state,
+        parseAcceptedTerms(
+          (request.query as { acceptedTerms?: unknown }).acceptedTerms
+        )
+      )
       setOAuthStateCookie(reply, state)
 
       const baseUrl = 'https://discord.com/api/oauth2/authorize'
@@ -303,7 +323,7 @@ export async function authRoutes(app: FastifyInstance) {
       )
     }
 
-    const cachedState = await cacheRepository.get(oauthStateKey(stateFromQuery))
+    const cachedState = await readOAuthState(cacheRepository, stateFromQuery)
     if (!cachedState) {
       console.error('❌ State inválido')
       return reply.redirect(
@@ -319,6 +339,10 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     await cacheRepository.del(oauthStateKey(stateFromQuery))
-    return authController.discordCallback(request, reply)
+    return authController.discordCallback(
+      request,
+      reply,
+      cachedState.acceptedTerms
+    )
   })
 }
