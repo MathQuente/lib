@@ -4,7 +4,7 @@ import { isConsoleAllowed } from '../utils/platform-consoles'
 export const DeleteUserResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
-    userName: z.string()
+    userName: z.string().nullable()
   })
 })
 
