@@ -199,6 +199,68 @@ describe('AuthService.validateRefreshToken', () => {
     )
   })
 
+  it('does not turn a database failure into an invalid session', async () => {
+    const databaseDown = new Error('Can not reach database server')
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockRejectedValue(databaseDown)
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt(),
+      fakeCacheRepository
+    )
+
+    const error = await service.validateRefreshToken('some-token').catch(e => e)
+
+    expect(error).toBe(databaseDown)
+    expect(error).not.toBeInstanceOf(ClientError)
+  })
+
+  it('does not turn a failure while rotating into an invalid session', async () => {
+    const databaseDown = new Error('Connection closed')
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockResolvedValue({
+        isValid: true,
+        expiresAt: new Date(Date.now() + 60_000)
+      }),
+      invalidateToken: vi.fn().mockRejectedValue(databaseDown)
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt({ verify: vi.fn(() => ({ userId: 'user-1' })) }),
+      fakeCacheRepository
+    )
+
+    const error = await service.validateRefreshToken('some-token').catch(e => e)
+
+    expect(error).toBe(databaseDown)
+    expect(error).not.toBeInstanceOf(ClientError)
+  })
+
+  it('still reports a bad signature as an invalid session', async () => {
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockResolvedValue({
+        isValid: true,
+        expiresAt: new Date(Date.now() + 60_000)
+      })
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt({
+        verify: vi.fn(() => {
+          throw Object.assign(new Error('bad signature'), {
+            code: 'FAST_JWT_INVALID_SIGNATURE'
+          })
+        })
+      }),
+      fakeCacheRepository
+    )
+
+    await expect(service.validateRefreshToken('some-token')).rejects.toThrow(
+      ClientError
+    )
+  })
+
   it('returns the userId and rotates the token when it is valid', async () => {
     const invalidateToken = vi.fn()
     const authRepository = fakeAuthRepository({

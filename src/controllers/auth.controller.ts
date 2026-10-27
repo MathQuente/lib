@@ -103,11 +103,18 @@ export class AuthController {
 
     if (!refreshToken) throw new ClientError('Token de atualização não enviado.', 401)
 
-    const {
-      accessToken,
-      refreshToken: newRefreshToken,
-      expiresAt
-    } = await this.authService.refreshTokens(refreshToken)
+    let tokens: Awaited<ReturnType<AuthService['refreshTokens']>>
+    try {
+      tokens = await this.authService.refreshTokens(refreshToken)
+    } catch (error) {
+      if (error instanceof ClientError) throw error
+      console.error('Refresh failed:', {
+        error: error instanceof Error ? error.message : 'unknown error'
+      })
+      return reply.status(503).send({ status: 'unavailable' })
+    }
+
+    const { accessToken, refreshToken: newRefreshToken, expiresAt } = tokens
 
     setAuthCookies(reply, accessToken, newRefreshToken, expiresAt).send({
       message: 'Tokens atualizados'

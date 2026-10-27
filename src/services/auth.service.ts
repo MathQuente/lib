@@ -97,17 +97,18 @@ export class AuthService {
   }
 
   async validateRefreshToken(refreshToken: string) {
+    const storedToken = await this.authRepository.findToken(refreshToken)
+
+    if (
+      !storedToken ||
+      !storedToken.isValid ||
+      storedToken.expiresAt < new Date()
+    ) {
+      throw new ClientError('Sessão inválida ou expirada.', 401)
+    }
+
+    let userId: string
     try {
-      const storedToken = await this.authRepository.findToken(refreshToken)
-
-      if (
-        !storedToken ||
-        !storedToken.isValid ||
-        storedToken.expiresAt < new Date()
-      ) {
-        throw new ClientError('Sessão inválida ou expirada.', 401)
-      }
-
       const decoded = this.jwt.verify(refreshToken) as {
         userId: string
         tokenType?: string
@@ -115,10 +116,7 @@ export class AuthService {
       if (decoded.tokenType === 'access') {
         throw new ClientError('Sessão inválida.', 401)
       }
-
-      await this.authRepository.invalidateToken(refreshToken)
-
-      return decoded.userId
+      userId = decoded.userId
     } catch (error) {
       if (error instanceof ClientError) {
         throw error
@@ -129,6 +127,10 @@ export class AuthService {
       }
       throw new ClientError('Sessão inválida.', 401)
     }
+
+    await this.authRepository.invalidateToken(refreshToken)
+
+    return userId
   }
 
   async isRefreshTokenActive(refreshToken: string): Promise<string | null> {
