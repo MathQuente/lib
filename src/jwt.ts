@@ -7,6 +7,8 @@ import { AuthService, revokedAccessTokenKey } from './services/auth.service'
 import { sessionsRevokedAtKey } from './utils/session-revocation'
 import { CacheRepository } from './repositories/cache.repository'
 import { clearAuthCookies, setAccessTokenCookie } from './utils/auth-cookies'
+import { logError, respondUnavailable } from './utils/respond-unavailable'
+import { respondUnauthorized } from './utils/respond-unauthorized'
 
 const MIN_SECRET_LENGTH = 32
 
@@ -18,15 +20,28 @@ const RENEWABLE_ERROR_CODES = new Set([
   'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED'
 ])
 
-function respondUnavailable(
+function findActiveRefreshUser(fastify: FastifyInstance, refreshToken: string) {
+  const authService = new AuthService(
+    authRepository,
+    fastify.jwt,
+    cacheRepository
+  )
+  return authService.isRefreshTokenActive(refreshToken)
+}
+
+async function issueRenewedAccessToken(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
   response: FastifyReply,
-  label: string,
-  error: unknown
+  userId: string
 ) {
-  console.error(label, {
-    error: error instanceof Error ? error.message : 'unknown error'
-  })
-  return response.status(503).send({ status: 'unavailable' })
+  const newAccessToken = fastify.jwt.sign({ userId, tokenType: 'access' })
+
+  request.cookies.accessToken = newAccessToken
+
+  await verifyAccessCookie(request)
+
+  setAccessTokenCookie(response, newAccessToken)
 }
 
 function verifyAccessCookie(request: FastifyRequest) {
@@ -102,7 +117,7 @@ export class Jwt {
           await verifyAccessCookie(request)
 
           if (request.user.tokenType === 'refresh') {
-            return response.status(401).send({ status: 'unauthorized' })
+            return respondUnauthorized(response)
           }
 
           let revoked: boolean
@@ -117,30 +132,23 @@ export class Jwt {
           }
 
           if (revoked) {
-            return clearAuthCookies(response)
-              .status(401)
-              .send({ status: 'unauthorized' })
+            return respondUnauthorized(clearAuthCookies(response))
           }
         } catch (error) {
           const code = (error as { code?: string }).code
           if (!RENEWABLE_ERROR_CODES.has(code ?? '')) {
-            return response.status(401).send({ status: 'unauthorized' })
+            return respondUnauthorized(response)
           }
 
           const refreshToken = request.cookies.refreshToken
 
           if (!refreshToken) {
-            return response.status(401).send({ status: 'unauthorized' })
+            return respondUnauthorized(response)
           }
 
           let userId: string | null
           try {
-            const authService = new AuthService(
-              authRepository,
-              fastify.jwt,
-              cacheRepository
-            )
-            userId = await authService.isRefreshTokenActive(refreshToken)
+            userId = await findActiveRefreshUser(fastify, refreshToken)
           } catch (refreshCheckError) {
             return respondUnavailable(
               response,
@@ -150,22 +158,11 @@ export class Jwt {
           }
 
           if (!userId) {
-            return clearAuthCookies(response)
-              .status(401)
-              .send({ status: 'unauthorized' })
+            return respondUnauthorized(clearAuthCookies(response))
           }
 
           try {
-            const newAccessToken = fastify.jwt.sign({
-              userId,
-              tokenType: 'access'
-            })
-
-            request.cookies.accessToken = newAccessToken
-
-            await verifyAccessCookie(request)
-
-            setAccessTokenCookie(response, newAccessToken)
+            await issueRenewedAccessToken(fastify, request, response, userId)
           } catch (renewalError) {
             return respondUnavailable(
               response,
@@ -179,27 +176,45 @@ export class Jwt {
   }
 
   private static tryAuthenticateDecorator = (fastify: FastifyInstance) => {
-    fastify.decorate('tryAuthenticate', async (request: FastifyRequest) => {
-      try {
-        await verifyAccessCookie(request)
-      } catch {
-        return
-      }
+    fastify.decorate(
+      'tryAuthenticate',
+      async (request: FastifyRequest, response: FastifyReply) => {
+        try {
+          await verifyAccessCookie(request)
+        } catch (error) {
+          const code = (error as { code?: string }).code
+          const refreshToken = request.cookies.refreshToken
 
-      try {
-        const isAccessToken = request.user.tokenType !== 'refresh'
-        if (isAccessToken && !(await isSessionRevoked(request))) return
-      } catch (revocationCheckError) {
-        console.error('Revocation check failed:', {
-          error:
-            revocationCheckError instanceof Error
-              ? revocationCheckError.message
-              : 'unknown error'
-        })
-      }
+          if (RENEWABLE_ERROR_CODES.has(code ?? '') && refreshToken) {
+            try {
+              const userId = await findActiveRefreshUser(fastify, refreshToken)
+              if (userId) {
+                await issueRenewedAccessToken(
+                  fastify,
+                  request,
+                  response,
+                  userId
+                )
+                return
+              }
+            } catch (renewalError) {
+              logError('Optional session renewal failed:', renewalError)
+            }
+            ;(request as { user?: unknown }).user = undefined
+          }
+          return
+        }
 
-      ;(request as { user?: unknown }).user = undefined
-    })
+        try {
+          const isAccessToken = request.user.tokenType !== 'refresh'
+          if (isAccessToken && !(await isSessionRevoked(request))) return
+        } catch (revocationCheckError) {
+          logError('Revocation check failed:', revocationCheckError)
+        }
+
+        ;(request as { user?: unknown }).user = undefined
+      }
+    )
   }
 
   public static registerCookiePlugin = (fastify: FastifyInstance) => {

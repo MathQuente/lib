@@ -90,6 +90,7 @@ export async function gameRoutes(app: FastifyInstance) {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/:igdbId',
     {
+      preHandler: [app.tryAuthenticate],
       schema: {
         params: GameSchema.GameParamsSchema,
         response: {

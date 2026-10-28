@@ -78,7 +78,7 @@ export class AuthService {
     )
   ) {}
 
-  async generateTokens(userId: string) {
+  private signTokens(userId: string) {
     const accessToken = this.jwt.sign(
       { userId, tokenType: 'access' },
       { expiresIn: '15m' }
@@ -91,9 +91,19 @@ export class AuthService {
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-    await this.authRepository.saveToken(refreshToken, userId, expiresAt)
-
     return { accessToken, refreshToken, expiresAt }
+  }
+
+  async generateTokens(userId: string) {
+    const tokens = this.signTokens(userId)
+
+    await this.authRepository.saveToken(
+      tokens.refreshToken,
+      userId,
+      tokens.expiresAt
+    )
+
+    return tokens
   }
 
   async validateRefreshToken(refreshToken: string) {
@@ -128,8 +138,6 @@ export class AuthService {
       throw new ClientError('Sessão inválida.', 401)
     }
 
-    await this.authRepository.invalidateToken(refreshToken)
-
     return userId
   }
 
@@ -162,7 +170,14 @@ export class AuthService {
       accessToken,
       refreshToken: newRefreshToken,
       expiresAt
-    } = await this.generateTokens(userId)
+    } = this.signTokens(userId)
+
+    await this.authRepository.rotateToken(
+      refreshToken,
+      newRefreshToken,
+      userId,
+      expiresAt
+    )
 
     return { accessToken, refreshToken: newRefreshToken, expiresAt }
   }
@@ -269,10 +284,8 @@ export class AuthService {
     }
   }
 
-  private async discardPasswordAndSessions(userId: string) {
-    const hashedPassword = await bcrypt.hash(crypto.randomUUID(), BCRYPT_COST)
-    await this.authRepository.updatePassword(userId, hashedPassword)
-    await this.revokeAllSessions(userId)
+  private randomPasswordHash() {
+    return bcrypt.hash(crypto.randomUUID(), BCRYPT_COST)
   }
 
   async revokeAllSessions(userId: string) {
@@ -306,16 +319,20 @@ export class AuthService {
           throw new ClientError(PROVIDER_ALREADY_LINKED_MESSAGE, 409)
         }
 
-        if (!existing.discordId) {
-          await this.discardPasswordAndSessions(existing.id)
+        const discardedPasswordHash = existing.discordId
+          ? null
+          : await this.randomPasswordHash()
+
+        if (discardedPasswordHash) {
+          await markSessionsRevoked(this.cacheRepository, existing.id)
         }
 
         user = await this.authRepository.linkGoogle(
           existing.id,
           profile.sub,
-          profile.picture
+          profile.picture,
+          discardedPasswordHash
         )
-        await this.authRepository.markEmailVerified(existing.id)
       } else {
         if (!acceptedTerms) throw new TermsRequiredError()
 
@@ -377,16 +394,20 @@ export class AuthService {
         }
 
         const existingId = user.id
-        if (!user.googleId) {
-          await this.discardPasswordAndSessions(existingId)
+        const discardedPasswordHash = user.googleId
+          ? null
+          : await this.randomPasswordHash()
+
+        if (discardedPasswordHash) {
+          await markSessionsRevoked(this.cacheRepository, existingId)
         }
 
         user = await this.authRepository.linkDiscord(
           existingId,
           discordUser.id,
-          profilePicture
+          profilePicture,
+          discardedPasswordHash
         )
-        await this.authRepository.markEmailVerified(existingId)
       } else {
         if (!acceptedTerms) throw new TermsRequiredError()
 

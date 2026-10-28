@@ -4,6 +4,7 @@ import * as AuthSchema from '../schemas/auth.schema'
 import { ClientError } from '../errors/client-error'
 import { TermsRequiredError } from '../errors/terms-required-error'
 import { clearAuthCookies, setAuthCookies } from '../utils/auth-cookies'
+import { respondUnavailable } from '../utils/respond-unavailable'
 
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -108,10 +109,7 @@ export class AuthController {
       tokens = await this.authService.refreshTokens(refreshToken)
     } catch (error) {
       if (error instanceof ClientError) throw error
-      console.error('Refresh failed:', {
-        error: error instanceof Error ? error.message : 'unknown error'
-      })
-      return reply.status(503).send({ status: 'unavailable' })
+      return respondUnavailable(reply, 'Refresh failed:', error)
     }
 
     const { accessToken, refreshToken: newRefreshToken, expiresAt } = tokens
