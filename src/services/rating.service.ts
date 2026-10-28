@@ -2,10 +2,11 @@ import { ClientError } from '../errors/client-error'
 import { RatingRepository } from '../repositories/rating.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
-
-const PLAYED_STATUS_ID = 1
-const PLAYING_STATUS_ID = 3
-const WISHLIST_STATUS_ID = 5
+import {
+  PLAYED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  WISHLIST_STATUS_ID
+} from '../utils/library-status'
 
 export class RatingService {
   constructor(

@@ -14,6 +14,7 @@ import { ErrorSchemas } from '../schemas/error.schema'
 import { RecentAuthService } from '../services/recent-auth.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { UserGamePlatformService } from '../services/user-game-platform.service'
+import { sendProblem } from '../utils/problem'
 import { UserGamePlatformController } from '../controllers/user-game-platform.controller'
 
 export async function userRoutes(app: FastifyInstance) {
@@ -36,7 +37,7 @@ export async function userRoutes(app: FastifyInstance) {
     reply: FastifyReply
   ) => {
     if (!(await recentAuthService.isRecent(request.user.userId))) {
-      return reply.status(403).send({
+      return sendProblem(reply, 403, {
         status: 'reauth_required',
         message: 'Entre novamente para confirmar esta ação.'
       })

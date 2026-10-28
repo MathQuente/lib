@@ -31,10 +31,12 @@ import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromPsnCategories } from '../utils/console-inference'
+import {
+  PLAYED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  BACKLOG_STATUS_ID
+} from '../utils/library-status'
 
-const PLAYED_STATUS_ID = 1
-const PLAYING_STATUS_ID = 3
-const BACKLOG_STATUS_ID = 4
 const RECENT_PLAY_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000
 
 const MIN_RATIO_FOR_TROPHY_LOOKUP = 0.1

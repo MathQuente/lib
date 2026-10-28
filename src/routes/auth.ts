@@ -7,6 +7,7 @@ import { EmailService } from '../services/email.service'
 import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import crypto from 'crypto'
 import { BASE_COOKIE_OPTIONS } from '../utils/auth-cookies'
+import { sendProblem } from '../utils/problem'
 import {
   OAUTH_STATE_TTL_SECONDS,
   oauthStateKey,
@@ -163,7 +164,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!oauth2) {
         console.error('❌ OAuth2 plugin não encontrado!')
-        return reply.status(500).send({ error: 'OAuth2 not configured' })
+        return sendProblem(reply, 500, { message: 'OAuth2 not configured', error: 'OAuth2 not configured' })
       }
 
       const state = crypto.randomBytes(16).toString('hex')
@@ -192,7 +193,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect(authUrl)
     } catch (error) {
       console.error('Erro ao iniciar OAuth:', error)
-      return reply.status(500).send({ error: 'Failed to start OAuth flow' })
+      return sendProblem(reply, 500, { message: 'Failed to start OAuth flow', error: 'Failed to start OAuth flow' })
     }
   })
 
@@ -259,7 +260,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!oauth2) {
         console.error('❌ OAuth2 plugin não encontrado!')
-        return reply.status(500).send({ error: 'OAuth2 not configured' })
+        return sendProblem(reply, 500, { message: 'OAuth2 not configured', error: 'OAuth2 not configured' })
       }
 
       const state = crypto.randomBytes(16).toString('hex')
@@ -287,7 +288,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect(authUrl)
     } catch (error) {
       console.error('Erro ao iniciar OAuth:', error)
-      return reply.status(500).send({ error: 'Failed to start OAuth flow' })
+      return sendProblem(reply, 500, { message: 'Failed to start OAuth flow', error: 'Failed to start OAuth flow' })
     }
   })
 

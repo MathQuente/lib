@@ -5,4 +5,4 @@ if (!REDIS_URL) {
   throw new Error('REDIS_URL environment variable is required')
 }
 
-export const redis = new Redis(REDIS_URL)
+export const redis = new Redis(REDIS_URL, { commandTimeout: 5000 })

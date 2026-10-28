@@ -35,16 +35,18 @@ import { UserGamePlatformRepository } from '../repositories/user-game-platform.r
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
 import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
 import { STEAM_CONSOLE } from '../utils/console-inference'
+import {
+  PLAYED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  BACKLOG_STATUS_ID,
+  WISHLIST_STATUS_ID
+} from '../utils/library-status'
 
 const UNAVAILABLE_MESSAGE =
   'Não foi possível consultar a Steam agora. Tente novamente mais tarde.'
 const RATE_LIMITED_MESSAGE =
   'A integração com a Steam atingiu o limite de consultas. Tente novamente mais tarde.'
 
-const PLAYED_STATUS_ID = 1
-const PLAYING_STATUS_ID = 3
-const BACKLOG_STATUS_ID = 4
-const WISHLIST_STATUS_ID = 5
 const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
 
 const ACHIEVEMENT_CHECK_CONCURRENCY = 10
