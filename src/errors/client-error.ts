@@ -5,3 +5,9 @@ export class ClientError extends Error {
     this.statusCode = statusCode
   }
 }
+
+export class XboxAccountLimitError extends ClientError {
+  constructor(limit: number) {
+    super(`Você já vinculou o máximo de ${limit} contas do Xbox.`, 409)
+  }
+}

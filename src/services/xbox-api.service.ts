@@ -124,6 +124,20 @@ export class XboxApiService {
     return body.content ?? body
   }
 
+  private async requestWithRetry<T>(path: string, payload?: unknown) {
+    try {
+      return await this.request<T>(path, payload)
+    } catch (err) {
+      if (
+        !(err instanceof XboxApiError) ||
+        (err.status !== undefined && err.status < 500)
+      ) {
+        throw err
+      }
+      return this.request<T>(path, payload)
+    }
+  }
+
   async findProfile(gamertag: string): Promise<XboxProfile | null> {
     const { people } = await this.request<{ people?: OpenXblPerson[] }>(
       `/search/${encodeURIComponent(gamertag)}`
@@ -224,18 +238,33 @@ export class XboxApiService {
 
   async getMinutesPlayed(
     xuid: string,
-    titleIds: string[]
+    titleIds: string[],
+    onBatchFailed?: (error: XboxApiError) => void
   ): Promise<Map<string, number>> {
     const minutes = new Map<string, number>()
 
     for (let i = 0; i < titleIds.length; i += STATS_BATCH_SIZE) {
       const batch = titleIds.slice(i, i + STATS_BATCH_SIZE)
-      const { statlistscollection } = await this.request<{
-        statlistscollection?: { stats?: OpenXblStat[] }[]
-      }>('/player/stats', {
+      const payload = {
         xuids: [xuid],
         stats: batch.map(titleId => ({ name: MINUTES_PLAYED_STAT, titleId }))
-      })
+      }
+      type StatsResponse = {
+        statlistscollection?: { stats?: OpenXblStat[] }[]
+      }
+
+      let statlistscollection: StatsResponse['statlistscollection']
+      try {
+        ;({ statlistscollection } = await this.requestWithRetry<StatsResponse>(
+          '/player/stats',
+          payload
+        ))
+      } catch (err) {
+        if (!onBatchFailed || !(err instanceof XboxApiError)) throw err
+        onBatchFailed(err)
+        if (err.status === 429) break
+        continue
+      }
 
       for (const stat of statlistscollection?.flatMap(c => c.stats ?? []) ?? []) {
         const value = Number(stat.value)

@@ -348,4 +348,94 @@ describe('XboxApiService.getMinutesPlayed', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('does not retry a batch rejected with a client error such as a revoked key', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }))
+    const onBatchFailed = vi.fn()
+
+    await new XboxApiService().getMinutesPlayed('123', ['10'], onBatchFailed)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onBatchFailed).toHaveBeenCalled()
+  })
+
+  it('retries a failed batch once before giving up on it', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('This operation was aborted'))
+      .mockResolvedValueOnce(
+        json({
+          content: {
+            statlistscollection: [
+              { stats: [{ titleid: '10', name: 'MinutesPlayed', value: '60' }] }
+            ]
+          }
+        })
+      )
+    const onBatchFailed = vi.fn()
+
+    const result = await new XboxApiService().getMinutesPlayed(
+      '123',
+      ['10'],
+      onBatchFailed
+    )
+
+    expect(result).toEqual(new Map([['10', 60]]))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onBatchFailed).not.toHaveBeenCalled()
+  })
+
+  it('keeps the batches that worked when another batch keeps failing', async () => {
+    const ok = json({
+      content: {
+        statlistscollection: [
+          { stats: [{ titleid: '0', name: 'MinutesPlayed', value: '30' }] }
+        ]
+      }
+    })
+    fetchMock
+      .mockResolvedValueOnce(ok)
+      .mockRejectedValueOnce(new Error('aborted'))
+      .mockRejectedValueOnce(new Error('aborted'))
+      .mockResolvedValueOnce(
+        json({
+          content: {
+            statlistscollection: [
+              { stats: [{ titleid: '200', name: 'MinutesPlayed', value: '90' }] }
+            ]
+          }
+        })
+      )
+    const titleIds = Array.from({ length: 201 }, (_, i) => String(i))
+    const onBatchFailed = vi.fn()
+
+    const result = await new XboxApiService().getMinutesPlayed(
+      '123',
+      titleIds,
+      onBatchFailed
+    )
+
+    expect(result).toEqual(
+      new Map([
+        ['0', 30],
+        ['200', 90]
+      ])
+    )
+    expect(onBatchFailed).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops at a 429 without retrying it', async () => {
+    fetchMock.mockResolvedValue(json({}, 429))
+    const titleIds = Array.from({ length: 201 }, (_, i) => String(i))
+    const onBatchFailed = vi.fn()
+
+    const result = await new XboxApiService().getMinutesPlayed(
+      '123',
+      titleIds,
+      onBatchFailed
+    )
+
+    expect(result).toEqual(new Map())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onBatchFailed).toHaveBeenCalledTimes(1)
+  })
 })

@@ -6,8 +6,7 @@ import {
   UserGameSortBy,
   UserGameSortOrder
 } from '../types/user'
-
-const PLAYED_STATUS_ID = 1
+import { PLAYED_STATUS_ID } from '../utils/library-status'
 
 const NOT_WISHLIST = {
   UserGamesStatus: { status: { not: Status.WISHLIST } }
@@ -180,8 +179,10 @@ export class UserRepository {
         steamId: true,
         psnAccountId: true,
         psnOnlineId: true,
-        xboxXuid: true,
-        xboxGamertag: true,
+        xboxAccounts: {
+          select: { id: true, gamertag: true },
+          orderBy: { createdAt: 'asc' }
+        },
         _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
     })
@@ -209,17 +210,44 @@ export class UserRepository {
     })
   }
 
-  async setXboxAccount(
+  async listXboxAccounts(userId: string) {
+    return prisma.xboxAccount.findMany({
+      where: { userId },
+      select: { id: true, xuid: true, gamertag: true },
+      orderBy: { createdAt: 'asc' }
+    })
+  }
+
+  async findXboxAccountByXuid(xuid: string) {
+    return prisma.xboxAccount.findUnique({
+      where: { xuid },
+      select: { id: true, userId: true, gamertag: true }
+    })
+  }
+
+  async addXboxAccount(
     userId: string,
-    account: { xuid: string; gamertag: string } | null
+    account: { xuid: string; gamertag: string },
+    maxAccounts?: number
   ) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: {
-        xboxXuid: account?.xuid ?? null,
-        xboxGamertag: account?.gamertag ?? null
-      },
-      select: { xboxXuid: true, xboxGamertag: true }
+    const data = { userId, xuid: account.xuid, gamertag: account.gamertag }
+    const select = { id: true, gamertag: true }
+    if (maxAccounts === undefined) {
+      return prisma.xboxAccount.create({ data, select })
+    }
+    return prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`xbox-accounts:${userId}`}))`
+      const count = await tx.xboxAccount.count({ where: { userId } })
+      if (count >= maxAccounts) return null
+      return tx.xboxAccount.create({ data, select })
+    })
+  }
+
+  async updateXboxGamertag(accountId: string, gamertag: string) {
+    return prisma.xboxAccount.update({
+      where: { id: accountId },
+      data: { gamertag },
+      select: { id: true, gamertag: true }
     })
   }
 

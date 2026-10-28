@@ -46,10 +46,11 @@ export async function xboxRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/',
+    '/:accountId',
     {
       preHandler: [app.authenticate],
       schema: {
+        params: XboxSchema.DisconnectParamsSchema,
         response: {
           204: XboxSchema.DisconnectResponseSchema,
           404: ErrorSchemas.NotFound,

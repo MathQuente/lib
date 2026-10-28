@@ -4,6 +4,10 @@ export const StartXboxLinkResponseSchema = z.object({
   url: z.string().url()
 })
 
+export const DisconnectParamsSchema = z.object({
+  accountId: z.string().uuid()
+})
+
 export const DisconnectResponseSchema = z.void()
 
 export const StartImportResponseSchema = z.object({
@@ -14,7 +18,8 @@ const ImportSectionResultSchema = z.object({
   imported: z.number(),
   updated: z.number(),
   skipped: z.number(),
-  notFound: z.array(z.string())
+  notFound: z.array(z.string()),
+  suggestions: z.number().optional()
 })
 
 export const ImportStatusResponseSchema = z.object({
@@ -29,7 +34,17 @@ export const ImportStatusResponseSchema = z.object({
   progress: z.number().optional(),
   result: z
     .object({
-      library: ImportSectionResultSchema
+      library: ImportSectionResultSchema,
+      accounts: z
+        .array(
+          z.object({
+            gamertag: z.string(),
+            library: ImportSectionResultSchema.optional(),
+            error: z.string().optional(),
+            warning: z.string().optional()
+          })
+        )
+        .optional()
     })
     .optional(),
   error: z.string().optional(),

@@ -13,7 +13,7 @@ import { XboxApiError, XboxApiService, XboxTitle } from './xbox-api.service'
 import { IGDBService } from './igdb.service'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
-import { ClientError } from '../errors/client-error'
+import { ClientError, XboxAccountLimitError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBGame } from '../types/igdb'
 import {
@@ -27,12 +27,17 @@ function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
 ): UserRepository {
   return {
-    findUserById: vi.fn().mockResolvedValue({ id: 'user-1', xboxXuid: 'xuid-1' }),
+    findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+    listXboxAccounts: vi
+      .fn()
+      .mockResolvedValue([{ id: 'acc-1', xuid: 'xuid-1', gamertag: 'Gamer' }]),
+    findXboxAccountByXuid: vi.fn().mockResolvedValue(null),
+    addXboxAccount: vi.fn().mockResolvedValue({ id: 'acc-2', gamertag: 'Player' }),
+    updateXboxGamertag: vi.fn().mockResolvedValue(null),
     findUserGame: vi.fn().mockResolvedValue(null),
     addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
     createUserGameStats: vi.fn().mockResolvedValue(null),
     upsertUserGameHours: vi.fn().mockResolvedValue(null),
-    setXboxAccount: vi.fn().mockResolvedValue(null),
     ...overrides
   } as unknown as UserRepository
 }
@@ -400,64 +405,111 @@ describe('pickSubtitleMatch', () => {
 describe('XboxService.connectXbox', () => {
   const verifiedProfile = { xuid: '99', gamertag: 'Player' }
 
-  it('saves the verified xuid and gamertag', async () => {
-    const setXboxAccount = vi.fn().mockResolvedValue(null)
-    const xboxApi = fakeXboxApi()
-    const service = new XboxService(
-      fakeUserRepository({ setXboxAccount }),
+  function serviceWith(overrides: Partial<UserRepository> = {}) {
+    return new XboxService(
+      fakeUserRepository(overrides),
       fakeGameCacheService(),
-      xboxApi
+      fakeXboxApi()
+    )
+  }
+
+  it('adds the verified xuid and gamertag as an account', async () => {
+    const addXboxAccount = vi.fn().mockResolvedValue({ id: 'acc-2' })
+
+    const result = await serviceWith({ addXboxAccount }).connectXbox(
+      'user-1',
+      verifiedProfile
     )
 
-    const result = await service.connectXbox('user-1', verifiedProfile)
-
-    expect(setXboxAccount).toHaveBeenCalledWith('user-1', verifiedProfile)
+    expect(addXboxAccount).toHaveBeenCalledWith('user-1', verifiedProfile, 2)
     expect(result).toEqual({ xboxGamertag: 'Player' })
   })
 
-  it('rejects with 409 when the profile is linked to another account', async () => {
-    const setXboxAccount = vi.fn().mockRejectedValue(
+  it('rejects with the limit error when the atomic insert reports the user is full', async () => {
+    const addXboxAccount = vi.fn().mockResolvedValue(null)
+
+    await expect(
+      serviceWith({ addXboxAccount }).connectXbox('user-1', verifiedProfile)
+    ).rejects.toBeInstanceOf(XboxAccountLimitError)
+  })
+
+  it('relinking the same account is idempotent and refreshes the gamertag', async () => {
+    const addXboxAccount = vi.fn()
+    const updateXboxGamertag = vi.fn().mockResolvedValue(null)
+
+    await serviceWith({
+      addXboxAccount,
+      updateXboxGamertag,
+      findXboxAccountByXuid: vi
+        .fn()
+        .mockResolvedValue({ id: 'acc-1', userId: 'user-1', gamertag: 'Old' })
+    }).connectXbox('user-1', verifiedProfile)
+
+    expect(addXboxAccount).not.toHaveBeenCalled()
+    expect(updateXboxGamertag).toHaveBeenCalledWith('acc-1', 'Player')
+  })
+
+  it('rejects with 409 when the profile belongs to another user', async () => {
+    await expect(
+      serviceWith({
+        findXboxAccountByXuid: vi
+          .fn()
+          .mockResolvedValue({ id: 'acc-9', userId: 'user-2', gamertag: 'X' })
+      }).connectXbox('user-1', verifiedProfile)
+    ).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('rejects with 409 when a concurrent link wins the unique xuid', async () => {
+    const addXboxAccount = vi.fn().mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('dup', {
         code: 'P2002',
         clientVersion: 'test'
       })
     )
-    const service = new XboxService(
-      fakeUserRepository({ setXboxAccount }),
-      fakeGameCacheService(),
-      fakeXboxApi()
-    )
 
     await expect(
-      service.connectXbox('user-1', verifiedProfile)
+      serviceWith({ addXboxAccount }).connectXbox('user-1', verifiedProfile)
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it('rejects with 404 when the user does not exist', async () => {
-    const service = new XboxService(
-      fakeUserRepository({ findUserById: vi.fn().mockResolvedValue(null) }),
-      fakeGameCacheService(),
-      fakeXboxApi()
-    )
+  it('rejects a third account with the limit error', async () => {
+    const accounts = [
+      { id: 'a1', xuid: '1', gamertag: 'A' },
+      { id: 'a2', xuid: '2', gamertag: 'B' }
+    ]
+    const addXboxAccount = vi.fn()
 
     await expect(
-      service.connectXbox('user-1', verifiedProfile)
+      serviceWith({
+        listXboxAccounts: vi.fn().mockResolvedValue(accounts),
+        addXboxAccount
+      }).connectXbox('user-1', verifiedProfile)
+    ).rejects.toBeInstanceOf(XboxAccountLimitError)
+    expect(addXboxAccount).not.toHaveBeenCalled()
+  })
+
+  it('rejects with 404 when the user does not exist', async () => {
+    await expect(
+      serviceWith({
+        findUserById: vi.fn().mockResolvedValue(null)
+      }).connectXbox('user-1', verifiedProfile)
     ).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 
 describe('XboxService.disconnectXbox', () => {
-  it('clears the linked account', async () => {
-    const setXboxAccount = vi.fn().mockResolvedValue(null)
+  it('removes the account through the platform service', async () => {
+    const removeXboxAccount = vi.fn().mockResolvedValue(undefined)
     const service = new XboxService(
-      fakeUserRepository({ setXboxAccount }),
+      fakeUserRepository(),
       fakeGameCacheService(),
-      fakeXboxApi()
+      fakeXboxApi(),
+      { removeXboxAccount } as never
     )
 
-    await service.disconnectXbox('user-1')
+    await service.disconnectXbox('user-1', 'acc-1')
 
-    expect(setXboxAccount).toHaveBeenCalledWith('user-1', null)
+    expect(removeXboxAccount).toHaveBeenCalledWith('user-1', 'acc-1')
   })
 })
 
@@ -467,7 +519,8 @@ describe('XboxService.runImport', () => {
       fakeUserRepository({
         findUserById: vi
           .fn()
-          .mockResolvedValue({ id: 'user-1', xboxXuid: null })
+          .mockResolvedValue({ id: 'user-1' }),
+      listXboxAccounts: vi.fn().mockResolvedValue([])
       }),
       fakeXboxApi()
     )
@@ -508,7 +561,13 @@ describe('XboxService.runImport', () => {
       { hoursPlayed: undefined, completions: 0, completedAt: null }
     )
     expect(result).toEqual({
-      library: { imported: 1, updated: 0, skipped: 0, notFound: [] }
+      library: { imported: 1, updated: 0, skipped: 0, notFound: [] },
+      accounts: [
+        {
+          gamertag: 'Gamer',
+          library: { imported: 1, updated: 0, skipped: 0, notFound: [] }
+        }
+      ]
     })
     expect(onProgress).toHaveBeenLastCalledWith(100)
   })
@@ -544,7 +603,18 @@ describe('XboxService.runImport', () => {
         updated: 0,
         skipped: 0,
         notFound: ['Account Creation Tool']
-      }
+      },
+      accounts: [
+        {
+          gamertag: 'Gamer',
+          library: {
+            imported: 2,
+            updated: 0,
+            skipped: 0,
+            notFound: ['Account Creation Tool']
+          }
+        }
+      ]
     })
   })
 
@@ -671,7 +741,8 @@ describe('XboxService.runImport', () => {
       'ug-11071',
       'XBOX',
       'UNKNOWN',
-      expect.objectContaining({ hoursPlayed: 1.5 })
+      expect.objectContaining({ hoursPlayed: 1.5 }),
+      { accountId: 'acc-1', hours: 1.5 }
     )
   })
 
@@ -784,7 +855,8 @@ describe('XboxService.runImport', () => {
         10,
         'XBOX',
         expect.objectContaining({ finished: true, strongFinished: true }),
-        'XBOX_360'
+        'XBOX_360',
+        'acc-1'
       )
     })
 
@@ -936,12 +1008,17 @@ describe('XboxService.runImport', () => {
 
     await service.runImport('user-1')
 
-    expect(getMinutesPlayed).toHaveBeenCalledWith('xuid-1', ['1', '2', '3'])
+    expect(getMinutesPlayed).toHaveBeenCalledWith(
+      'xuid-1',
+      ['1', '2', '3'],
+      expect.any(Function)
+    )
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-10',
       'XBOX',
       'XBOX_ONE',
-      expect.objectContaining({ hoursPlayed: 2.25 })
+      expect.objectContaining({ hoursPlayed: 2.25 }),
+      { accountId: 'acc-1', hours: 2.25 }
     )
     expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-20',
@@ -970,6 +1047,60 @@ describe('XboxService.runImport', () => {
       'XBOX_ONE',
       expect.objectContaining({ hoursPlayed: undefined })
     )
+  })
+
+  it('warns the account when the minutes played lookup fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([title({})]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getMinutesPlayed: vi.fn().mockRejectedValue(new XboxApiError('down', 500))
+    })
+    mockExternal([['9AAA', 10]])
+    const service = makeService(fakeUserRepository(), xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(result.accounts[0].warning).toMatch(/horas de alguns jogos/)
+  })
+
+  it('warns the account when only some minutes played batches fail', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([title({})]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getMinutesPlayed: vi.fn(async (_xuid, _ids, onBatchFailed) => {
+        onBatchFailed(new XboxApiError('aborted'))
+        return new Map([['1', 120]])
+      })
+    })
+    mockExternal([['9AAA', 10]])
+    const service = makeService(fakeUserRepository(), xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(result.accounts[0].warning).toMatch(/horas de alguns jogos/)
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-10',
+      'XBOX',
+      'XBOX_ONE',
+      expect.objectContaining({ hoursPlayed: 2 }),
+      { accountId: 'acc-1', hours: 2 }
+    )
+  })
+
+  it('does not warn when the minutes played lookup succeeds', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([title({})]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getMinutesPlayed: vi.fn().mockResolvedValue(new Map([['1', 120]]))
+    })
+    mockExternal([['9AAA', 10]])
+    const service = makeService(fakeUserRepository(), xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(result.accounts[0].warning).toBeUndefined()
   })
 
   it('does not search IGDB for names with nothing left after normalizing', async () => {
@@ -1044,27 +1175,27 @@ describe('XboxService.runImport', () => {
       1
     ],
     [
-      'Xbox omits the total and the gamerscore share fits the game size',
+      'Xbox omits the total and the progress reaches the threshold',
       {
-        achievementProgress: 55,
+        achievementProgress: 72,
         achievementsEarned: 40,
-        gamerscoreEarned: 555,
+        gamerscoreEarned: 720,
         gamerscoreTotal: 1000
       },
       1
     ],
     [
-      'DLC inflates the total gamerscore but the base game share is high',
+      'Xbox omits the total and the progress is below the threshold, even with a high gamerscore share',
       {
         achievementProgress: 16,
         achievementsEarned: 24,
         gamerscoreEarned: 655,
         gamerscoreTotal: 4000
       },
-      1
+      4
     ],
     [
-      'the gamerscore share is too small for a short achievement list',
+      'the progress is too low for a short achievement list',
       {
         achievementProgress: 57,
         achievementsEarned: 12,
@@ -1214,6 +1345,131 @@ describe('XboxService.runImport', () => {
 
     expect(userRepository.addGameToUserLibrary).not.toHaveBeenCalled()
     expect(result.library.notFound).toEqual(['Call of Duty®'])
+  })
+
+  describe('completion without a reported total', () => {
+    const multiplayerAdventure = (id: number) =>
+      igdb(id, {
+        genres: [{ name: 'Adventure' }],
+        game_modes: [{ name: 'Single player' }, { name: 'Multiplayer' }]
+      } as Partial<IGDBGame>)
+
+    async function importTitle(
+      progress: Partial<ReturnType<typeof title>>,
+      game: IGDBGame,
+      record = vi.fn().mockResolvedValue(true)
+    ) {
+      const xboxApi = fakeXboxApi({
+        getTitleHistory: vi.fn().mockResolvedValue([title(progress)]),
+        resolveProductIds: vi
+          .fn()
+          .mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+      })
+      vi.spyOn(IGDBService, 'getGamesByExternalIds').mockResolvedValue([
+        { uid: '9AAA', game }
+      ])
+      const userRepository = fakeUserRepository()
+      const fake = fakePlatformService(userRepository)
+      const service = new XboxService(
+        userRepository,
+        fakeGameCacheService(),
+        xboxApi,
+        fake.service,
+        0,
+        { record }
+      )
+      const result = await service.runImport('user-1')
+      return { userRepository, record, result }
+    }
+
+    it('does not mark a game as finished from a gamerscore share that ignores the real size', async () => {
+      const { userRepository, record } = await importTitle(
+        {
+          achievementProgress: 9,
+          achievementsEarned: 54,
+          gamerscoreEarned: 605,
+          gamerscoreTotal: 6310
+        },
+        igdb(10)
+      )
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 4 })
+      )
+      expect(record).not.toHaveBeenCalled()
+    })
+
+    it('estimates from the gamerscore when the game total is close to the base game size', async () => {
+      const { userRepository, record } = await importTitle(
+        {
+          achievementProgress: 49,
+          achievementsEarned: 27,
+          gamerscoreEarned: 605,
+          gamerscoreTotal: 1215
+        },
+        multiplayerAdventure(10)
+      )
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 1 })
+      )
+      expect(record).not.toHaveBeenCalled()
+    })
+
+    it('keeps a multiplayer game out of Played and records a low-confidence suggestion', async () => {
+      const { userRepository, record, result } = await importTitle(
+        { achievementProgress: 75, achievementsEarned: 60 },
+        multiplayerAdventure(10)
+      )
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 4 })
+      )
+      expect(record).toHaveBeenCalledWith(
+        'user-1',
+        10,
+        'XBOX',
+        expect.objectContaining({ achieved: 60, total: null, signals: ['heuristic'] }),
+        true
+      )
+      expect(result.library.suggestions).toBe(1)
+    })
+
+    it('marks a multiplayer game as finished when the reported total gives a ratio above the threshold', async () => {
+      const { userRepository, record } = await importTitle(
+        { achievementProgress: 63, achievementsEarned: 27, achievementsTotal: 43 },
+        multiplayerAdventure(10)
+      )
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 1 })
+      )
+      expect(record).not.toHaveBeenCalled()
+    })
+
+    it('still marks a multiplayer game as finished at 100% progress', async () => {
+      const { userRepository, record } = await importTitle(
+        { achievementProgress: 100, achievementsEarned: 60 },
+        multiplayerAdventure(10)
+      )
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({ statusIds: 1 })
+      )
+      expect(record).not.toHaveBeenCalled()
+    })
+
+    it('imports normally when recording the suggestion fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { result } = await importTitle(
+        { achievementProgress: 75, achievementsEarned: 60 },
+        multiplayerAdventure(10),
+        vi.fn().mockRejectedValue(new Error('db down'))
+      )
+
+      expect(result.library.imported).toBe(1)
+      expect(result.library.suggestions).toBeUndefined()
+    })
   })
 
   it('does not infer completion for multiplayer-only titles', async () => {
@@ -1374,4 +1630,126 @@ describe('XboxService.runImport', () => {
       expect(error.message).not.toContain('raw upstream')
     }
   )
+})
+
+describe('XboxService.runImport with two accounts', () => {
+  const accounts = [
+    { id: 'acc-1', xuid: 'xuid-1', gamertag: 'Main' },
+    { id: 'acc-2', xuid: 'xuid-2', gamertag: 'Alt' }
+  ]
+
+  function twoAccountService(
+    xboxApi: XboxApiService,
+    importPlatform = vi.fn().mockResolvedValue('imported')
+  ) {
+    const userRepository = fakeUserRepository({
+      listXboxAccounts: vi.fn().mockResolvedValue(accounts)
+    })
+    const service = new XboxService(
+      userRepository,
+      fakeGameCacheService(),
+      xboxApi,
+      { importPlatform } as never,
+      0
+    )
+    return { service, importPlatform }
+  }
+
+  function apiWith(overrides: Partial<XboxApiService> = {}) {
+    return fakeXboxApi({
+      getTitleHistory: vi
+        .fn()
+        .mockImplementation(async (xuid: string) => [
+          title({ titleId: xuid === 'xuid-1' ? '1' : '2', pfn: 'pfn-1' })
+        ]),
+      resolveProductIds: vi
+        .fn()
+        .mockResolvedValue(new Map([['pfn-1', '9AAA']])),
+      getMinutesPlayed: vi
+        .fn()
+        .mockImplementation(async (xuid: string) =>
+          xuid === 'xuid-1' ? new Map([['1', 120]]) : new Map([['2', 60]])
+        ),
+      ...overrides
+    })
+  }
+
+  it('imports each account with its own xuid and account id, keeping hours per account', async () => {
+    mockExternal([['9AAA', 10]])
+    mockSearch()
+    const xboxApi = apiWith()
+    const { service, importPlatform } = twoAccountService(xboxApi)
+
+    const result = await service.runImport('user-1')
+
+    expect(xboxApi.getTitleHistory).toHaveBeenNthCalledWith(1, 'xuid-1')
+    expect(xboxApi.getTitleHistory).toHaveBeenNthCalledWith(2, 'xuid-2')
+    expect(importPlatform).toHaveBeenCalledTimes(2)
+    expect(importPlatform).toHaveBeenNthCalledWith(
+      1,
+      'user-1',
+      10,
+      'XBOX',
+      expect.objectContaining({ hoursPlayed: 2 }),
+      'XBOX_ONE',
+      'acc-1'
+    )
+    expect(importPlatform).toHaveBeenNthCalledWith(
+      2,
+      'user-1',
+      10,
+      'XBOX',
+      expect.objectContaining({ hoursPlayed: 1 }),
+      'XBOX_ONE',
+      'acc-2'
+    )
+    expect(result.accounts.map(a => a.gamertag)).toEqual(['Main', 'Alt'])
+    expect(result.library.imported).toBe(2)
+  })
+
+  it('reports progress across both accounts and ends at 100', async () => {
+    mockExternal([['9AAA', 10]])
+    mockSearch()
+    const { service } = twoAccountService(apiWith())
+    const onProgress = vi.fn()
+
+    await service.runImport('user-1', onProgress)
+
+    const values = onProgress.mock.calls.map(([percent]) => percent)
+    expect(values).toContain(50)
+    expect(values.at(-1)).toBe(100)
+    expect([...values].sort((a, b) => a - b)).toEqual(values)
+  })
+
+  it('keeps the first account and reports an error for the second when it is rate limited', async () => {
+    mockExternal([['9AAA', 10]])
+    mockSearch()
+    const getTitleHistory = vi
+      .fn()
+      .mockResolvedValueOnce([title({ titleId: '1', pfn: 'pfn-1' })])
+      .mockRejectedValueOnce(new XboxApiError('rate', 429))
+    const { service, importPlatform } = twoAccountService(
+      apiWith({ getTitleHistory })
+    )
+
+    const result = await service.runImport('user-1')
+
+    expect(importPlatform).toHaveBeenCalledTimes(1)
+    expect(result.accounts[0]).toMatchObject({
+      gamertag: 'Main',
+      library: { imported: 1 }
+    })
+    expect(result.accounts[1]).toMatchObject({ gamertag: 'Alt' })
+    expect(result.accounts[1].error).toMatch(/limite de consultas/)
+    expect(result.library.imported).toBe(1)
+  })
+
+  it('fails the job when every account fails', async () => {
+    const getTitleHistory = vi.fn().mockRejectedValue(new XboxApiError('rate', 429))
+    const { service } = twoAccountService(apiWith({ getTitleHistory }))
+
+    await expect(service.runImport('user-1')).rejects.toMatchObject({
+      statusCode: 503
+    })
+  })
 })

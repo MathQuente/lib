@@ -13,9 +13,8 @@ import { UserGamePlatformRepository } from '../repositories/user-game-platform.r
 import { CacheRepository } from '../repositories/cache.repository'
 import { markSessionsRevoked } from '../utils/session-revocation'
 import { randomInt } from 'crypto'
+import { PLAYED_STATUS_ID, WISHLIST_STATUS_ID } from '../utils/library-status'
 
-const PLAYED_STATUS_ID = 1
-const WISHLIST_STATUS_ID = 5
 const STEAM_PERSONA_TTL_SECONDS = 6 * 60 * 60
 const STEAM_PERSONA_FAILURE_TTL_SECONDS = 60
 const steamPersonaKey = (steamId: string) => `steam:persona:${steamId}`
@@ -151,7 +150,7 @@ export class UserService {
         steamId: user.steamId,
         steamPersonaName: await this.getSteamPersonaName(user.steamId),
         psnOnlineId: user.psnOnlineId,
-        xboxGamertag: user.xboxGamertag,
+        xboxAccounts: user.xboxAccounts,
         followersCount,
         followingCount
       }
