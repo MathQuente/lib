@@ -14,6 +14,10 @@ type Row = {
   hoursPlayed: Prisma.Decimal | null
   completions: number
   completedAt: Date | null
+  accountHours: {
+    hoursPlayed: Prisma.Decimal
+    xboxAccount: { gamertag: string }
+  }[]
 }
 
 function userGame(overrides: {
@@ -49,6 +53,7 @@ function row(overrides: Partial<Row> & { platform: string }): Row {
     hoursPlayed: null,
     completions: 0,
     completedAt: null,
+    accountHours: [],
     ...overrides
   }
 }
@@ -74,6 +79,49 @@ function setup(found: ReturnType<typeof userGame> | null) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('UserGamePlatformService.getPlatforms', () => {
+  it('lists the hours each Xbox account reported, ordered as stored', async () => {
+    const { service } = setup(
+      userGame({
+        platforms: [
+          row({
+            platform: 'XBOX',
+            console: 'XBOX_ONE',
+            hoursPlayed: new Prisma.Decimal(94.33),
+            accountHours: [
+              {
+                hoursPlayed: new Prisma.Decimal(31.83),
+                xboxAccount: { gamertag: 'MathQuente' }
+              },
+              {
+                hoursPlayed: new Prisma.Decimal(62.5),
+                xboxAccount: { gamertag: 'Other' }
+              }
+            ]
+          })
+        ]
+      })
+    )
+
+    const { platforms } = await service.getPlatforms('user-1', 10)
+
+    expect(platforms[0].accountHours).toEqual([
+      { gamertag: 'MathQuente', hoursPlayed: 31.83 },
+      { gamertag: 'Other', hoursPlayed: 62.5 }
+    ])
+  })
+
+  it('returns an empty list for platforms without account hours', async () => {
+    const { service } = setup(
+      userGame({ platforms: [row({ platform: 'STEAM' })] })
+    )
+
+    const { platforms } = await service.getPlatforms('user-1', 10)
+
+    expect(platforms[0].accountHours).toEqual([])
+  })
 })
 
 describe('UserGamePlatformService.addPlatform', () => {
@@ -1267,5 +1315,91 @@ describe('importPlatform with an inferred console', () => {
       'PS4',
       {}
     )
+  })
+})
+
+describe('UserGamePlatformService.importPlatform with an Xbox account', () => {
+  const data = {
+    statusId: 3,
+    activityStatusId: 3,
+    hoursPlayed: 4,
+    finished: false,
+    confirmedFinished: false
+  }
+
+  it('passes the account contribution along with the row values', async () => {
+    const { service, platformRepository } = setup(
+      userGame({ statusId: 3, platforms: [] })
+    )
+
+    await service.importPlatform('user-1', 10, 'XBOX', data, 'XBOX_ONE', 'acc-1')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE',
+      expect.objectContaining({ hoursPlayed: 4 }),
+      { accountId: 'acc-1', hours: 4 }
+    )
+  })
+
+  it('sends no contribution when the account has no minutes for the title', async () => {
+    const { service, platformRepository } = setup(
+      userGame({ statusId: 3, platforms: [] })
+    )
+
+    await service.importPlatform(
+      'user-1',
+      10,
+      'XBOX',
+      { ...data, hoursPlayed: undefined },
+      'XBOX_ONE',
+      'acc-1'
+    )
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE',
+      expect.anything()
+    )
+  })
+
+  it('keeps a completion earned on another account when this one has none', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        platforms: [
+          row({
+            platform: 'XBOX',
+            console: 'XBOX_ONE',
+            completions: 1,
+            completedAt: new Date('2024-05-01')
+          })
+        ]
+      })
+    )
+
+    await service.importPlatform('user-1', 10, 'XBOX', data, 'XBOX_ONE', 'acc-2')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_ONE',
+      expect.objectContaining({ completions: 1 }),
+      { accountId: 'acc-2', hours: 4 }
+    )
+  })
+})
+
+describe('UserGamePlatformService.removeXboxAccount', () => {
+  it('rejects with 404 when the account is not the user\'s', async () => {
+    const { service, platformRepository } = setup(null)
+    const removeXboxAccount = vi.fn().mockResolvedValue(false)
+    Object.assign(platformRepository, { removeXboxAccount })
+
+    await expect(
+      service.removeXboxAccount('user-1', 'acc-9')
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 })

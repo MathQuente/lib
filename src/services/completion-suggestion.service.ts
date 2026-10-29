@@ -9,16 +9,7 @@ import {
 } from '../repositories/completion-suggestion.repository'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { UserService } from './users.service'
-
-const PLAYED_STATUS_ID = 1
-const STATUS_NAME_BY_ID: Record<number, string> = {
-  1: 'PLAYED',
-  2: 'PAUSED',
-  3: 'PLAYING',
-  4: 'BACKLOG',
-  5: 'WISHLIST',
-  6: 'DROPPED'
-}
+import { PLAYED_STATUS_ID, STATUS_NAME_BY_ID } from '../utils/library-status'
 
 export interface CompletionSuggestionRecorder {
   record(

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { ClientError } from '../errors/client-error'
+import { ClientError, XboxAccountLimitError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
@@ -16,22 +16,37 @@ import {
   canInferCompletion,
   COMPLETION_KEYWORD_PATTERN,
   hasSinglePlayerMode,
+  hasMultiplayerMode,
   meetsCompletionRatio,
   MIN_ACHIEVEMENTS_FOR_SIGNAL
 } from '../utils/completion-heuristics'
 import {
   xboxImportQueue,
   xboxImportJobId,
+  XboxAccountImportResult,
   XboxImportJobResult
 } from '../queues/xbox-import.queue'
-import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
+import {
+  enqueueUniqueImport,
+  getImportJobStatus,
+  ImportSectionResult
+} from '../queues/import-job'
+import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromXboxDevices } from '../utils/console-inference'
+import {
+  PLAYED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  BACKLOG_STATUS_ID
+} from '../utils/library-status'
 
-const PLAYED_STATUS_ID = 1
-const PLAYING_STATUS_ID = 3
-const BACKLOG_STATUS_ID = 4
+export const MAX_XBOX_ACCOUNTS = 2
+const HOURS_INCOMPLETE_WARNING =
+  'Não foi possível trazer as horas de alguns jogos. Importe de novo mais tarde.'
+
+const GENERIC_ACCOUNT_ERROR =
+  'Erro ao importar esta conta do Xbox. Tente novamente mais tarde.'
 const RECENT_PLAY_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000
 const NAME_SEARCH_INTERVAL_MS = 275
 const CONSOLE_SUFFIX = /\s+(?:for\s+)?xbox\s+(?:series\s+x\|s|one|360)$/i
@@ -224,31 +239,45 @@ export function findBasesOfFinishedExpansions(
   return bases
 }
 
+const MIN_PROGRESS_WITHOUT_TOTAL = 70
 const BASE_GAME_GAMERSCORE = 1000
+const MAX_GAMERSCORE_FOR_ESTIMATE = 1500
 
 function isConfirmedByProgress(title: XboxTitle) {
   return title.achievementProgress >= 100
 }
 
-function looksFinished(title: XboxTitle, igdbGame: IGDBGame): boolean {
-  if (isConfirmedByProgress(title)) return true
-  if (!canInferCompletion(igdbGame)) return false
+type FinishVerdict = 'finished' | 'suggest' | 'no'
 
-  const earned = title.achievementsEarned
-  if (earned <= 0) return false
+function finishVerdict(title: XboxTitle, igdbGame: IGDBGame): FinishVerdict {
+  if (isConfirmedByProgress(title)) return 'finished'
+  if (!canInferCompletion(igdbGame)) return 'no'
+  if (title.achievementsEarned <= 0) return 'no'
 
   if (title.achievementsTotal > 0) {
-    return meetsCompletionRatio(earned, title.achievementsTotal)
+    return meetsCompletionRatio(title.achievementsEarned, title.achievementsTotal)
+      ? 'finished'
+      : 'no'
   }
 
-  if (title.gamerscoreEarned <= 0 || title.gamerscoreTotal <= 0) return false
-  const share = Math.min(
-    1,
-    title.gamerscoreEarned /
-      Math.min(title.gamerscoreTotal, BASE_GAME_GAMERSCORE)
-  )
-  const estimatedTotal = Math.round(earned / share)
-  return meetsCompletionRatio(share * estimatedTotal, estimatedTotal)
+  if (
+    title.gamerscoreEarned > 0 &&
+    title.gamerscoreTotal > 0 &&
+    title.gamerscoreTotal <= MAX_GAMERSCORE_FOR_ESTIMATE
+  ) {
+    const share = Math.min(
+      1,
+      title.gamerscoreEarned /
+        Math.min(title.gamerscoreTotal, BASE_GAME_GAMERSCORE)
+    )
+    const estimatedTotal = Math.round(title.achievementsEarned / share)
+    return meetsCompletionRatio(share * estimatedTotal, estimatedTotal)
+      ? 'finished'
+      : 'no'
+  }
+
+  if (title.achievementProgress < MIN_PROGRESS_WITHOUT_TOTAL) return 'no'
+  return hasMultiplayerMode(igdbGame) ? 'suggest' : 'finished'
 }
 
 export class XboxService {
@@ -260,7 +289,8 @@ export class XboxService {
       new UserGamePlatformRepository(),
       userRepository
     ),
-    private nameSearchIntervalMs = NAME_SEARCH_INTERVAL_MS
+    private nameSearchIntervalMs = NAME_SEARCH_INTERVAL_MS,
+    private completionSuggestionRecorder?: CompletionSuggestionRecorder
   ) {}
 
   private lastNameSearchAt = 0
@@ -274,8 +304,35 @@ export class XboxService {
   async connectXbox(userId: string, verifiedProfile: XboxProfile) {
     await this.requireUser(userId)
 
+    const existing = await this.userRepository.findXboxAccountByXuid(
+      verifiedProfile.xuid
+    )
+    if (existing) {
+      if (existing.userId !== userId) {
+        throw new ClientError(
+          'Este perfil do Xbox já está vinculado a outra conta.',
+          409
+        )
+      }
+      await this.userRepository.updateXboxGamertag(
+        existing.id,
+        verifiedProfile.gamertag
+      )
+      return { xboxGamertag: verifiedProfile.gamertag }
+    }
+
+    const accounts = await this.userRepository.listXboxAccounts(userId)
+    if (accounts.length >= MAX_XBOX_ACCOUNTS) {
+      throw new XboxAccountLimitError(MAX_XBOX_ACCOUNTS)
+    }
+
     try {
-      await this.userRepository.setXboxAccount(userId, verifiedProfile)
+      const created = await this.userRepository.addXboxAccount(
+        userId,
+        verifiedProfile,
+        MAX_XBOX_ACCOUNTS
+      )
+      if (!created) throw new XboxAccountLimitError(MAX_XBOX_ACCOUNTS)
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -292,14 +349,15 @@ export class XboxService {
     return { xboxGamertag: verifiedProfile.gamertag }
   }
 
-  async disconnectXbox(userId: string) {
+  async disconnectXbox(userId: string, accountId: string) {
     await this.requireUser(userId)
-    await this.userRepository.setXboxAccount(userId, null)
+    await this.userGamePlatformService.removeXboxAccount(userId, accountId)
   }
 
   async enqueueImport(userId: string) {
-    const user = await this.requireUser(userId)
-    if (!user.xboxXuid) {
+    await this.requireUser(userId)
+    const accounts = await this.userRepository.listXboxAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil do Xbox primeiro.', 400)
     }
 
@@ -322,14 +380,75 @@ export class XboxService {
     userId: string,
     onProgress?: (percent: number) => void
   ): Promise<XboxImportJobResult> {
-    const user = await this.requireUser(userId)
-    if (!user.xboxXuid) {
+    await this.requireUser(userId)
+    const accounts = await this.userRepository.listXboxAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil do Xbox primeiro.', 400)
     }
 
+    const results: XboxAccountImportResult[] = []
+    const failures: unknown[] = []
+
+    for (const [index, account] of accounts.entries()) {
+      const report = (percent: number) =>
+        onProgress?.(Math.round(((index + percent / 100) / accounts.length) * 100))
+      try {
+        let hoursIncomplete = false
+        const library = await this.importAccount(userId, account, report, () => {
+          hoursIncomplete = true
+        })
+        results.push({
+          gamertag: account.gamertag,
+          library,
+          ...(hoursIncomplete ? { warning: HOURS_INCOMPLETE_WARNING } : {})
+        })
+      } catch (err) {
+        failures.push(err)
+        console.error('[Xbox] account import failed', {
+          gamertag: account.gamertag,
+          error: err instanceof Error ? err.message : 'unknown error'
+        })
+        results.push({
+          gamertag: account.gamertag,
+          error:
+            err instanceof ClientError ? err.message : GENERIC_ACCOUNT_ERROR
+        })
+      }
+    }
+
+    if (failures.length === accounts.length) throw failures[0]
+
+    onProgress?.(100)
+
+    const library: ImportSectionResult = {
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      notFound: []
+    }
+    let suggestions = 0
+    for (const { library: accountLibrary } of results) {
+      if (!accountLibrary) continue
+      library.imported += accountLibrary.imported
+      library.updated += accountLibrary.updated
+      library.skipped += accountLibrary.skipped
+      library.notFound.push(...accountLibrary.notFound)
+      suggestions += accountLibrary.suggestions ?? 0
+    }
+    if (suggestions > 0) library.suggestions = suggestions
+
+    return { library, accounts: results }
+  }
+
+  private async importAccount(
+    userId: string,
+    account: { id: string; xuid: string },
+    onProgress: (percent: number) => void,
+    onHoursIncomplete: () => void
+  ): Promise<ImportSectionResult> {
     let titles: XboxTitle[]
     try {
-      titles = await this.xboxApiService.getTitleHistory(user.xboxXuid)
+      titles = await this.xboxApiService.getTitleHistory(account.xuid)
     } catch (err) {
       if (err instanceof XboxApiError) {
         console.error('[Xbox] title history failed', { error: err.message })
@@ -390,20 +509,27 @@ export class XboxService {
 
     const toImport = [...byIgdbId.values()]
     const minutesByTitleId = await this.loadMinutesPlayed(
-      user.xboxXuid,
-      toImport.flatMap(game => game.titleIds)
+      account.xuid,
+      toImport.flatMap(game => game.titleIds),
+      onHoursIncomplete
+    )
+    const verdicts = new Map(
+      toImport.map(game => [
+        game.mostCompleted.titleId,
+        finishVerdict(game.mostCompleted, game.igdbGame)
+      ])
     )
     const finishedTitles = toImport
-      .filter(game => looksFinished(game.mostCompleted, game.igdbGame))
+      .filter(game => verdicts.get(game.mostCompleted.titleId) === 'finished')
       .map(game => game.mostCompleted)
     const completedAtByTitleId = await this.loadCompletionDates(
-      user.xboxXuid,
+      account.xuid,
       finishedTitles
     )
     const finishedTitleIds = new Set(finishedTitles.map(t => t.titleId))
 
     const storyFinished = await this.findFinishedByStoryAchievement(
-      user.xboxXuid,
+      account.xuid,
       toImport.filter(game => !finishedTitleIds.has(game.mostCompleted.titleId))
     )
     const strongTitleIds = new Set(storyFinished.keys())
@@ -422,6 +548,7 @@ export class XboxService {
     const total = toImport.length
     let imported = 0
     let updated = 0
+    let suggestions = 0
     let processed = 0
     const now = Date.now()
 
@@ -433,6 +560,10 @@ export class XboxService {
       mostCompleted
     } of toImport) {
       const minutes = titleIds.flatMap(id => minutesByTitleId.get(id) ?? [])
+      const hoursPlayed =
+        minutes.length > 0
+          ? Math.round((minutes.reduce((a, b) => a + b, 0) / 60) * 100) / 100
+          : undefined
       const isFinished = finishedTitleIds.has(mostCompleted.titleId)
       const isRecent =
         !!lastPlayedAt &&
@@ -450,10 +581,7 @@ export class XboxService {
         {
           statusId,
           activityStatusId,
-          hoursPlayed:
-            minutes.length > 0
-              ? Math.round((minutes.reduce((a, b) => a + b, 0) / 60) * 100) / 100
-              : undefined,
+          hoursPlayed,
           finished: isFinished,
           confirmedFinished,
           strongFinished: strongTitleIds.has(mostCompleted.titleId),
@@ -464,19 +592,58 @@ export class XboxService {
             : undefined,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
         },
-        consoleFromXboxDevices(devices)
+        consoleFromXboxDevices(devices),
+        account.id
       )
 
       if (outcome === 'imported') imported++
       else if (outcome === 'skipped') skipped++
       else updated++
+
+      const wantsSuggestion =
+        !isFinished &&
+        verdicts.get(mostCompleted.titleId) === 'suggest' &&
+        outcome !== 'skipped' &&
+        this.completionSuggestionRecorder
+      if (wantsSuggestion) {
+        try {
+          const recorded = await this.completionSuggestionRecorder!.record(
+            userId,
+            igdbGame.id,
+            'XBOX',
+            {
+              hoursPlayed: hoursPlayed ?? 0,
+              normallyHours: null,
+              achieved: mostCompleted.achievementsEarned,
+              total:
+                mostCompleted.achievementsTotal > 0
+                  ? mostCompleted.achievementsTotal
+                  : null,
+              signals: ['heuristic']
+            },
+            true
+          )
+          if (recorded) suggestions++
+        } catch (error) {
+          console.error('[Xbox] completion suggestion failed', {
+            igdbId: igdbGame.id,
+            error: error instanceof Error ? error.message : error
+          })
+        }
+      }
       processed++
-      onProgress?.(Math.round((processed / total) * 100))
+      onProgress(Math.round((processed / total) * 100))
     }
 
-    onProgress?.(100)
+    onProgress(100)
 
-    return { library: { imported, updated, skipped, notFound } }
+    return {
+      imported,
+      updated,
+      skipped,
+      notFound,
+      ...(suggestions > 0 ? { suggestions } : {})
+    }
   }
 
   private async findExpansionBases(
@@ -572,12 +739,26 @@ export class XboxService {
     return dates
   }
 
-  private async loadMinutesPlayed(xuid: string, titleIds: string[]) {
+  private async loadMinutesPlayed(
+    xuid: string,
+    titleIds: string[],
+    onIncomplete: () => void
+  ) {
     if (titleIds.length === 0) return new Map<string, number>()
     try {
-      return await this.xboxApiService.getMinutesPlayed(xuid, titleIds)
+      return await this.xboxApiService.getMinutesPlayed(
+        xuid,
+        titleIds,
+        err => {
+          onIncomplete()
+          console.warn('[Xbox] minutes played batch failed, skipping its hours', {
+            error: err.message
+          })
+        }
+      )
     } catch (err) {
       if (!(err instanceof XboxApiError)) throw err
+      onIncomplete()
       console.warn('[Xbox] minutes played lookup failed, importing without hours', {
         error: err.message
       })

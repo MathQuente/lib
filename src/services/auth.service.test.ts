@@ -216,27 +216,6 @@ describe('AuthService.validateRefreshToken', () => {
     expect(error).not.toBeInstanceOf(ClientError)
   })
 
-  it('does not turn a failure while rotating into an invalid session', async () => {
-    const databaseDown = new Error('Connection closed')
-    const authRepository = fakeAuthRepository({
-      findToken: vi.fn().mockResolvedValue({
-        isValid: true,
-        expiresAt: new Date(Date.now() + 60_000)
-      }),
-      invalidateToken: vi.fn().mockRejectedValue(databaseDown)
-    })
-    const service = new AuthService(
-      authRepository,
-      fakeJwt({ verify: vi.fn(() => ({ userId: 'user-1' })) }),
-      fakeCacheRepository
-    )
-
-    const error = await service.validateRefreshToken('some-token').catch(e => e)
-
-    expect(error).toBe(databaseDown)
-    expect(error).not.toBeInstanceOf(ClientError)
-  })
-
   it('still reports a bad signature as an invalid session', async () => {
     const authRepository = fakeAuthRepository({
       findToken: vi.fn().mockResolvedValue({
@@ -261,7 +240,7 @@ describe('AuthService.validateRefreshToken', () => {
     )
   })
 
-  it('returns the userId and rotates the token when it is valid', async () => {
+  it('returns the userId without touching the stored token', async () => {
     const invalidateToken = vi.fn()
     const authRepository = fakeAuthRepository({
       findToken: vi.fn().mockResolvedValue({
@@ -279,7 +258,58 @@ describe('AuthService.validateRefreshToken', () => {
     const userId = await service.validateRefreshToken('some-token')
 
     expect(userId).toBe('user-1')
-    expect(invalidateToken).toHaveBeenCalledWith('some-token')
+    expect(invalidateToken).not.toHaveBeenCalled()
+  })
+})
+
+describe('AuthService.refreshTokens', () => {
+  function setup(rotateToken: AuthRepository['rotateToken']) {
+    const authRepository = fakeAuthRepository({
+      findToken: vi.fn().mockResolvedValue({
+        isValid: true,
+        expiresAt: new Date(Date.now() + 60_000)
+      }),
+      rotateToken,
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(
+      authRepository,
+      fakeJwt({ verify: vi.fn(() => ({ userId: 'user-1' })) }),
+      fakeCacheRepository
+    )
+    return { service, authRepository }
+  }
+
+  it('rotates the old token for the new one in a single repository call', async () => {
+    const rotateToken = vi.fn().mockResolvedValue(undefined)
+    const { service, authRepository } = setup(rotateToken)
+
+    const tokens = await service.refreshTokens('old-token')
+
+    expect(rotateToken).toHaveBeenCalledWith(
+      'old-token',
+      tokens.refreshToken,
+      'user-1',
+      tokens.expiresAt
+    )
+    expect(authRepository.saveToken).not.toHaveBeenCalled()
+  })
+
+  it('lets a lost race through as a client error', async () => {
+    const lost = new ClientError('Sessão inválida ou expirada.', 401)
+    const { service } = setup(vi.fn().mockRejectedValue(lost))
+
+    await expect(service.refreshTokens('old-token')).rejects.toBe(lost)
+  })
+
+  it('does not turn a failure while rotating into an invalid session', async () => {
+    const databaseDown = new Error('Connection closed')
+    const { service } = setup(vi.fn().mockRejectedValue(databaseDown))
+
+    const error = await service.refreshTokens('old-token').catch(e => e)
+
+    expect(error).toBe(databaseDown)
+    expect(error).not.toBeInstanceOf(ClientError)
   })
 })
 
@@ -368,9 +398,7 @@ describe('AuthService.loginWithGoogle', () => {
     expect(findByEmail).not.toHaveBeenCalled()
   })
 
-  it('drops the old password and sessions before linking a password account', async () => {
-    const updatePassword = vi.fn()
-    const deleteTokensByUserId = vi.fn()
+  it('hands the discarded password to the link write and revokes the sessions after it', async () => {
     const linkGoogle = vi.fn().mockResolvedValue({ id: 'user-1' })
     const cache = recordingCache()
     const authRepository = fakeAuthRepository({
@@ -378,28 +406,71 @@ describe('AuthService.loginWithGoogle', () => {
       findByEmail: vi
         .fn()
         .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
-      updatePassword,
-      deleteTokensByUserId,
       linkGoogle,
-      markEmailVerified: vi.fn(),
       saveToken: vi.fn()
     })
     const service = new AuthService(authRepository, fakeJwt(), cache)
 
     await service.loginWithGoogle({ ...profile, email_verified: true }, true)
 
-    expect(updatePassword).toHaveBeenCalledWith('user-1', expect.any(String))
-    expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
+    expect(linkGoogle).toHaveBeenCalledWith(
+      'user-1',
+      'google-1',
+      profile.picture,
+      expect.any(String)
+    )
     expect(cache.set).toHaveBeenCalledWith(
       'sessions-revoked-at:user-1',
       expect.any(Number),
       expect.any(Number)
     )
-    expect(linkGoogle).toHaveBeenCalledWith(
-      'user-1',
-      'google-1',
-      profile.picture
+  })
+
+  it('marks the sessions revoked before and again after the link transaction', async () => {
+    const cache = fakeCache()
+    const linkGoogle = vi
+      .fn()
+      .mockResolvedValue({ id: 'user-1', email: 'a@b.c' })
+    const authRepository = fakeAuthRepository({
+      findUserByGoogleId: vi.fn().mockResolvedValue(null),
+      findByEmail: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
+      linkGoogle,
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(authRepository, fakeJwt(), cache)
+
+    await service.loginWithGoogle({ ...profile, email_verified: true }, true)
+
+    const markers = cache.set.mock.invocationCallOrder.filter((_order, index) =>
+      String(cache.set.mock.calls[index][0]).startsWith('sessions-revoked-at')
     )
+    const link = linkGoogle.mock.invocationCallOrder[0]
+    expect(markers).toHaveLength(2)
+    expect(markers[0]).toBeLessThan(link)
+    expect(markers[1]).toBeGreaterThan(link)
+  })
+
+  it('still links when the marker written after the transaction fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cache = fakeCache()
+    cache.set
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('redis down'))
+    const authRepository = fakeAuthRepository({
+      findUserByGoogleId: vi.fn().mockResolvedValue(null),
+      findByEmail: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
+      linkGoogle: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@b.c' }),
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(authRepository, fakeJwt(), cache)
+
+    await expect(
+      service.loginWithGoogle({ ...profile, email_verified: true }, true)
+    ).resolves.toBeDefined()
   })
 
   it('logs in by googleId without checking the email again', async () => {
@@ -1051,52 +1122,105 @@ describe('AuthService provider linking', () => {
   }
 
   function googleSetup(existing: { discordId: string | null }) {
-    const updatePassword = vi.fn()
-    const deleteTokensByUserId = vi.fn()
-    const markEmailVerified = vi.fn()
+    const linkGoogle = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const cache = fakeCache()
     const authRepository = fakeAuthRepository({
       findUserByGoogleId: vi.fn().mockResolvedValue(null),
       findByEmail: vi
         .fn()
         .mockResolvedValue({ id: 'user-1', googleId: null, ...existing }),
-      linkGoogle: vi.fn().mockResolvedValue({ id: 'user-1' }),
-      updatePassword,
-      deleteTokensByUserId,
-      markEmailVerified,
+      linkGoogle,
       saveToken: vi.fn()
     })
-    const service = new AuthService(authRepository, fakeJwt(), fakeCache())
-    return { service, updatePassword, deleteTokensByUserId, markEmailVerified }
+    const service = new AuthService(authRepository, fakeJwt(), cache)
+    return { service, linkGoogle, cache }
   }
 
   it('drops the password of a password-only account even when its email was verified by link', async () => {
-    const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
-      googleSetup({ discordId: null })
+    const { service, linkGoogle, cache } = googleSetup({ discordId: null })
 
     await service.loginWithGoogle(googleProfile, true)
 
-    expect(updatePassword).toHaveBeenCalledWith('user-1', expect.any(String))
-    expect(deleteTokensByUserId).toHaveBeenCalledWith('user-1')
-    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+    expect(linkGoogle).toHaveBeenCalledWith(
+      'user-1',
+      'google-1',
+      googleProfile.picture,
+      expect.any(String)
+    )
+    expect(cache.set).toHaveBeenCalledWith(
+      'sessions-revoked-at:user-1',
+      expect.any(Number),
+      expect.any(Number)
+    )
   })
 
   it('keeps the password and sessions of an account that already has another provider', async () => {
-    const { service, updatePassword, deleteTokensByUserId, markEmailVerified } =
-      googleSetup({ discordId: 'discord-1' })
+    const { service, linkGoogle, cache } = googleSetup({
+      discordId: 'discord-1'
+    })
 
     await service.loginWithGoogle(googleProfile, true)
 
-    expect(updatePassword).not.toHaveBeenCalled()
-    expect(deleteTokensByUserId).not.toHaveBeenCalled()
-    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+    expect(linkGoogle).toHaveBeenCalledWith(
+      'user-1',
+      'google-1',
+      googleProfile.picture,
+      null
+    )
+    expect(cache.set).not.toHaveBeenCalledWith(
+      'sessions-revoked-at:user-1',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  it('writes nothing when storing the session revocation fails, so a retry repeats the takeover', async () => {
+    const { service, linkGoogle, cache } = googleSetup({ discordId: null })
+    cache.set.mockRejectedValueOnce(new Error('redis down'))
+
+    await expect(
+      service.loginWithGoogle(googleProfile, true)
+    ).rejects.toThrow('redis down')
+    expect(linkGoogle).not.toHaveBeenCalled()
+  })
+
+  it('does the same for Discord', async () => {
+    const linkDiscord = vi.fn()
+    const cache = fakeCache()
+    cache.set.mockRejectedValueOnce(new Error('redis down'))
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByDiscordId: vi.fn().mockResolvedValue(null),
+        findByEmail: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          googleId: null,
+          discordId: null
+        }),
+        linkDiscord
+      }),
+      fakeJwt(),
+      cache
+    )
+
+    await expect(
+      service.loginWithDiscord(
+        {
+          id: 'discord-1',
+          email: 'user@a.com',
+          verified: true,
+          username: 'user',
+          avatar: null
+        },
+        true
+      )
+    ).rejects.toThrow('redis down')
+    expect(linkDiscord).not.toHaveBeenCalled()
   })
 
   it.each([
     ['a password-only account', null, true],
     ['an account that already has Google', 'google-1', false]
   ])('links Discord to %s', async (_label, googleId, expectsTakeOver) => {
-    const updatePassword = vi.fn()
-    const markEmailVerified = vi.fn()
     const linkDiscord = vi.fn().mockResolvedValue({ id: 'user-1' })
     const service = new AuthService(
       fakeAuthRepository({
@@ -1105,9 +1229,6 @@ describe('AuthService provider linking', () => {
           .fn()
           .mockResolvedValue({ id: 'user-1', googleId, discordId: null }),
         linkDiscord,
-        updatePassword,
-        deleteTokensByUserId: vi.fn(),
-        markEmailVerified,
         saveToken: vi.fn()
       }),
       fakeJwt(),
@@ -1122,9 +1243,12 @@ describe('AuthService provider linking', () => {
       avatar: null
     }, true)
 
-    expect(linkDiscord).toHaveBeenCalledWith('user-1', 'discord-1', null)
-    expect(updatePassword).toHaveBeenCalledTimes(expectsTakeOver ? 1 : 0)
-    expect(markEmailVerified).toHaveBeenCalledWith('user-1')
+    expect(linkDiscord).toHaveBeenCalledWith(
+      'user-1',
+      'discord-1',
+      null,
+      expectsTakeOver ? expect.any(String) : null
+    )
   })
 })
 

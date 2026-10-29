@@ -1,16 +1,18 @@
 import { Console, Platform } from '@prisma/client'
 import { ClientError } from '../errors/client-error'
 import {
+  AccountHours,
   PlatformValues,
   UserGamePlatformRepository
 } from '../repositories/user-game-platform.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { isConsoleAllowed } from '../utils/platform-consoles'
-
-const PLAYED_STATUS_ID = 1
-const WISHLIST_STATUS_ID = 5
-const BACKLOG_STATUS_ID = 4
-const PLAYING_STATUS_ID = 3
+import {
+  PLAYED_STATUS_ID,
+  WISHLIST_STATUS_ID,
+  BACKLOG_STATUS_ID,
+  PLAYING_STATUS_ID
+} from '../utils/library-status'
 
 const STATUS_RANK: Record<number, number> = {
   5: 0,
@@ -95,10 +97,15 @@ export class UserGamePlatformService {
     private userRepository: UserRepository
   ) {}
 
-  private async requireUserGame(igdbId: number, userId: string) {
+  private async requireUserGame(
+    igdbId: number,
+    userId: string,
+    options?: { accountHours?: boolean }
+  ) {
     const userGame = await this.platformRepository.findUserGameWithPlatforms(
       igdbId,
-      userId
+      userId,
+      options
     )
     if (!userGame) {
       throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
@@ -113,7 +120,11 @@ export class UserGamePlatformService {
         console: p.console,
         hoursPlayed: p.hoursPlayed != null ? Number(p.hoursPlayed) : null,
         completions: p.completions,
-        completedAt: toDateString(p.completedAt)
+        completedAt: toDateString(p.completedAt),
+        accountHours: p.accountHours.map(a => ({
+          gamertag: a.xboxAccount.gamertag,
+          hoursPlayed: Number(a.hoursPlayed)
+        }))
       })),
       totals: {
         hoursPlayed: userGame.UserGameStats?.hoursPlayed
@@ -272,17 +283,27 @@ export class UserGamePlatformService {
     return this.getPlatforms(userId, igdbId)
   }
 
+  async removeXboxAccount(userId: string, accountId: string) {
+    const removed = await this.platformRepository.removeXboxAccount(
+      userId,
+      accountId
+    )
+    if (!removed) throw new ClientError('Conta do Xbox não encontrada.', 404)
+  }
+
   async importPlatform(
     userId: string,
     igdbId: number,
     platform: Platform,
     data: ImportedPlatformData,
-    gameConsole: Console = 'UNKNOWN'
+    gameConsole: Console = 'UNKNOWN',
+    accountId?: string
   ): Promise<'imported' | 'updated' | 'skipped'> {
     this.assertConsole(platform, gameConsole)
     let userGame = await this.platformRepository.findUserGameWithPlatforms(
       igdbId,
-      userId
+      userId,
+      { accountHours: false }
     )
     const existingResolution = userGame
       ? resolveRow(userGame.platforms, platform, gameConsole, {
@@ -318,7 +339,9 @@ export class UserGamePlatformService {
         endless: data.endless
       })
       await this.userRepository.createUserGameStats(userId, igdbId, 0)
-      userGame = await this.requireUserGame(igdbId, userId)
+      userGame = await this.requireUserGame(igdbId, userId, {
+        accountHours: false
+      })
     } else {
       const targetStatusId =
         !isEndless &&
@@ -364,20 +387,27 @@ export class UserGamePlatformService {
         (countsAsCompletion ? (data.completedAt ?? new Date()) : null)
     }
 
+    const accountHours: [AccountHours] | [] =
+      accountId && data.hoursPlayed !== undefined
+        ? [{ accountId, hours: data.hoursPlayed }]
+        : []
+
     if (resolution.action === 'adopt') {
       await this.platformRepository.adoptConsole(
         userGame.id,
         platform,
         resolution.row.console,
         gameConsole,
-        values
+        values,
+        ...accountHours
       )
     } else {
       await this.platformRepository.savePlatform(
         userGame.id,
         platform,
         resolution.action === 'update' ? resolution.row.console : gameConsole,
-        values
+        values,
+        ...accountHours
       )
     }
 

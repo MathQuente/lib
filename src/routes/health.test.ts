@@ -52,7 +52,14 @@ describe('GET /ready', () => {
     const response = await app.inject({ method: 'GET', url: '/ready' })
 
     expect(response.statusCode).toBe(503)
-    expect(response.json()).toEqual({ status: 'unavailable' })
+    expect(response.json()).toEqual({
+      type: 'about:blank',
+      title: 'Service Unavailable',
+      status: 'unavailable',
+      detail: 'Serviço indisponível no momento. Tente novamente em instantes.',
+      message: 'Serviço indisponível no momento. Tente novamente em instantes.'
+    })
+    expect(response.headers['retry-after']).toBe('5')
     expect(response.body).not.toContain('password')
   })
 

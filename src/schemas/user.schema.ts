@@ -38,7 +38,7 @@ export const GetMeResponseSchema = z.object({
     steamId: z.string().nullable(),
     steamPersonaName: z.string().nullable(),
     psnOnlineId: z.string().nullable(),
-    xboxGamertag: z.string().nullable(),
+    xboxAccounts: z.array(z.object({ id: z.string(), gamertag: z.string() })),
     followersCount: z.number(),
     followingCount: z.number()
   })
@@ -301,7 +301,10 @@ export const UserGamePlatformsResponseSchema = z.object({
       console: ConsoleEnumSchema,
       hoursPlayed: z.number().nullable(),
       completions: z.number(),
-      completedAt: z.string().nullable()
+      completedAt: z.string().nullable(),
+      accountHours: z.array(
+        z.object({ gamertag: z.string(), hoursPlayed: z.number() })
+      )
     })
   ),
   totals: z.object({

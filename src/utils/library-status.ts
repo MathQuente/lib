@@ -1,0 +1,15 @@
+export const PLAYED_STATUS_ID = 1
+export const PAUSED_STATUS_ID = 2
+export const PLAYING_STATUS_ID = 3
+export const BACKLOG_STATUS_ID = 4
+export const WISHLIST_STATUS_ID = 5
+export const DROPPED_STATUS_ID = 6
+
+export const STATUS_NAME_BY_ID: Record<number, string> = {
+  [PLAYED_STATUS_ID]: 'PLAYED',
+  [PAUSED_STATUS_ID]: 'PAUSED',
+  [PLAYING_STATUS_ID]: 'PLAYING',
+  [BACKLOG_STATUS_ID]: 'BACKLOG',
+  [WISHLIST_STATUS_ID]: 'WISHLIST',
+  [DROPPED_STATUS_ID]: 'DROPPED'
+}

@@ -2,6 +2,7 @@ import type { FastifyError, FastifyInstance } from 'fastify'
 import { ClientError } from './errors/client-error'
 import { ZodError } from 'zod'
 import { IGDBRequestError } from './errors/igdb-request-error'
+import { sendProblem } from './utils/problem'
 
 type FastifyErrorHandler = FastifyInstance['errorHandler']
 
@@ -18,20 +19,18 @@ const CLIENT_ERROR_MESSAGES: Record<number, string> = {
 
 export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
   if (error instanceof ZodError) {
-    return reply.status(400).send({
+    return sendProblem(reply, 400, {
       message: 'Invalid input',
       error: error.flatten().fieldErrors
     })
   }
 
   if (error instanceof ClientError) {
-    return reply.status(error.statusCode).send({
-      message: error.message
-    })
+    return sendProblem(reply, error.statusCode, { message: error.message })
   }
 
   if (error instanceof IGDBRequestError) {
-    return reply.status(502).send({
+    return sendProblem(reply, 502, {
       message: 'Upstream game data provider failed'
     })
   }
@@ -47,7 +46,7 @@ export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
       statusCode: fastifyError.statusCode,
       message: fastifyError.message
     })
-    return reply.status(fastifyError.statusCode).send({
+    return sendProblem(reply, fastifyError.statusCode, {
       message: fastifyError.validation
         ? 'Invalid input'
         : (CLIENT_ERROR_MESSAGES[fastifyError.statusCode] ?? 'Bad request')
@@ -55,5 +54,5 @@ export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
   }
 
   console.error('[UnhandledError]', error)
-  return reply.status(500).send({ message: 'Internal server error' })
+  return sendProblem(reply, 500, { message: 'Internal server error' })
 }

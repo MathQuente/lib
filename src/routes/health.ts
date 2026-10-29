@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { withTimeout } from '../utils/with-timeout'
+import { RETRY_AFTER_SECONDS, logError } from '../utils/respond-unavailable'
+import { sendProblem } from '../utils/problem'
 
 export type HealthChecks = {
   database: () => Promise<unknown>
@@ -33,11 +35,16 @@ export async function healthRoutes(
 
     const failed = results.find(result => result.status === 'rejected')
     if (failed) {
-      console.error('Readiness failed:', {
-        error:
-          failed.reason instanceof Error ? failed.reason.message : 'unknown'
-      })
-      return reply.status(503).send({ status: 'unavailable' })
+      logError('Readiness failed:', failed.reason)
+      return sendProblem(
+        reply.header('Retry-After', String(RETRY_AFTER_SECONDS)),
+        503,
+        {
+          status: 'unavailable',
+          message:
+            'Serviço indisponível no momento. Tente novamente em instantes.'
+        }
+      )
     }
 
     return { status: 'ready' }

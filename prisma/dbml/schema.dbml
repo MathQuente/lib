@@ -38,8 +38,6 @@ Table users {
   steamId String [unique]
   psnAccountId String [unique]
   psnOnlineId String
-  xboxXuid String [unique]
-  xboxGamertag String
   emailVerifiedAt DateTime
   termsAcceptedAt DateTime
   termsVersion String
@@ -49,6 +47,7 @@ Table users {
   refreshToken refresh_token [not null]
   Rating ratings [not null]
   Review reviews [not null]
+  xboxAccounts xbox_accounts [not null]
   following follows [not null]
   followers follows [not null]
 }
@@ -98,9 +97,34 @@ Table user_game_platforms {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   userGame user_games [not null]
+  accountHours xbox_account_hours [not null]
 
   indexes {
     (userGameId, platform, console) [unique]
+  }
+}
+
+Table xbox_accounts {
+  id String [pk]
+  userId String [not null]
+  xuid String [unique, not null]
+  gamertag String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  user users [not null]
+  hours xbox_account_hours [not null]
+}
+
+Table xbox_account_hours {
+  id String [pk]
+  userGamePlatformId String [not null]
+  xboxAccountId String [not null]
+  hoursPlayed Decimal [not null]
+  updatedAt DateTime [not null]
+  userGamePlatform user_game_platforms [not null]
+  xboxAccount xbox_accounts [not null]
+
+  indexes {
+    (userGamePlatformId, xboxAccountId) [unique]
   }
 }
 
@@ -243,6 +267,12 @@ Ref: user_games.userId > users.id [delete: Cascade]
 Ref: user_games.userGamesStatusId > users_games_status.id
 
 Ref: user_game_platforms.userGameId > user_games.id [delete: Cascade]
+
+Ref: xbox_accounts.userId > users.id [delete: Cascade]
+
+Ref: xbox_account_hours.userGamePlatformId > user_game_platforms.id [delete: Cascade]
+
+Ref: xbox_account_hours.xboxAccountId > xbox_accounts.id [delete: Cascade]
 
 Ref: completion_suggestions.userGameId - user_games.id [delete: Cascade]
 

@@ -2,12 +2,13 @@ import { ClientError } from '../errors/client-error'
 import { ReviewRepository } from '../repositories/review.repository'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
-
-const PLAYED_STATUS_ID = 1
-const PAUSED_STATUS_ID = 2
-const PLAYING_STATUS_ID = 3
-const BACKLOG_STATUS_ID = 4
-const DROPPED_STATUS_ID = 6
+import {
+  PLAYED_STATUS_ID,
+  PAUSED_STATUS_ID,
+  PLAYING_STATUS_ID,
+  BACKLOG_STATUS_ID,
+  DROPPED_STATUS_ID
+} from '../utils/library-status'
 
 const REVIEWABLE_STATUS_IDS = [
   PLAYED_STATUS_ID,

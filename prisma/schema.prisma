@@ -50,8 +50,6 @@ model User {
   steamId         String?        @unique @map("steam_id")
   psnAccountId    String?        @unique @map("psn_account_id")
   psnOnlineId     String?        @map("psn_online_id")
-  xboxXuid        String?        @unique @map("xbox_xuid")
-  xboxGamertag    String?        @map("xbox_gamertag")
   emailVerifiedAt DateTime?      @map("email_verified_at")
   termsAcceptedAt DateTime?      @map("terms_accepted_at")
   termsVersion    String?        @map("terms_version")
@@ -61,6 +59,7 @@ model User {
   refreshToken    RefreshToken[]
   Rating          Rating[]
   Review          Review[]
+  xboxAccounts    XboxAccount[]
 
   following Follow[] @relation("FollowFollower")
   followers Follow[] @relation("FollowFollowing")
@@ -165,10 +164,40 @@ model UserGamePlatform {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  userGame UserGame @relation(fields: [userGameId], references: [id], onDelete: Cascade)
+  userGame     UserGame           @relation(fields: [userGameId], references: [id], onDelete: Cascade)
+  accountHours XboxAccountHours[]
 
   @@unique([userGameId, platform, console])
   @@map("user_game_platforms")
+}
+
+model XboxAccount {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  xuid      String   @unique
+  gamertag  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hours XboxAccountHours[]
+
+  @@index([userId])
+  @@map("xbox_accounts")
+}
+
+model XboxAccountHours {
+  id                 String   @id @default(uuid())
+  userGamePlatformId String   @map("user_game_platform_id")
+  xboxAccountId      String   @map("xbox_account_id")
+  hoursPlayed        Decimal  @map("hours_played") @db.Decimal(6, 2)
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  userGamePlatform UserGamePlatform @relation(fields: [userGamePlatformId], references: [id], onDelete: Cascade)
+  xboxAccount      XboxAccount      @relation(fields: [xboxAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([userGamePlatformId, xboxAccountId])
+  @@index([xboxAccountId])
+  @@map("xbox_account_hours")
 }
 
 enum SuggestionStatus {

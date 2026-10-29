@@ -294,7 +294,14 @@ describe('app.authenticate', () => {
     })
 
     expect(response.statusCode).toBe(503)
-    expect(response.json()).toEqual({ status: 'unavailable' })
+    expect(response.headers['retry-after']).toBe('5')
+    expect(response.json()).toEqual({
+      type: 'about:blank',
+      title: 'Service Unavailable',
+      status: 'unavailable',
+      detail: 'Serviço indisponível no momento. Tente novamente em instantes.',
+      message: 'Serviço indisponível no momento. Tente novamente em instantes.'
+    })
     expect(response.headers['set-cookie']).toBeUndefined()
   })
 
@@ -337,8 +344,42 @@ describe('app.tryAuthenticate', () => {
     expect(response.json()).toEqual({ userId: null })
   })
 
-  it('does not renew the session from the refresh cookie', async () => {
+  it('renews the session from an active refresh cookie without rotating it', async () => {
     authRepository.findToken.mockResolvedValue(activeRefreshRow())
+
+    const response = await app.inject({
+      url: '/public',
+      cookies: { refreshToken: refreshToken() }
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ userId: 'user-1' })
+    expect(response.headers['set-cookie']).toEqual(
+      expect.stringContaining('accessToken=')
+    )
+    expect(response.headers['set-cookie']).not.toEqual(
+      expect.stringContaining('refreshToken=')
+    )
+  })
+
+  it('renews when the access cookie has expired', async () => {
+    const refresh = refreshToken()
+    const expired = expiredAccessToken()
+    authRepository.findToken.mockResolvedValue(activeRefreshRow())
+
+    const response = await app.inject({
+      url: '/public',
+      cookies: { accessToken: expired, refreshToken: refresh }
+    })
+
+    expect(response.json()).toEqual({ userId: 'user-1' })
+    expect(response.headers['set-cookie']).toEqual(
+      expect.stringContaining('accessToken=')
+    )
+  })
+
+  it('stays anonymous and leaves the cookies alone when the refresh token is not active', async () => {
+    authRepository.findToken.mockResolvedValue(null)
 
     const response = await app.inject({
       url: '/public',
@@ -348,6 +389,34 @@ describe('app.tryAuthenticate', () => {
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({ userId: null })
     expect(response.headers['set-cookie']).toBeUndefined()
+  })
+
+  it('stays anonymous and logs when checking the refresh token fails', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    authRepository.findToken.mockRejectedValue(new Error('database down'))
+
+    const response = await app.inject({
+      url: '/public',
+      cookies: { refreshToken: refreshToken() }
+    })
+
+    expect(response.json()).toEqual({ userId: null })
+    expect(response.headers['set-cookie']).toBeUndefined()
+    expect(logged).toHaveBeenCalledWith('Optional session renewal failed:', {
+      error: 'database down'
+    })
+  })
+
+  it('does not renew from a tampered access token', async () => {
+    authRepository.findToken.mockResolvedValue(activeRefreshRow())
+    const tampered = `${accessToken()}x`
+
+    const response = await app.inject({
+      url: '/public',
+      cookies: { accessToken: tampered, refreshToken: refreshToken() }
+    })
+
+    expect(response.json()).toEqual({ userId: null })
     expect(authRepository.findToken).not.toHaveBeenCalled()
   })
 

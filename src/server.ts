@@ -24,12 +24,14 @@ import { startSteamImportWorker } from './workers/steam-import.worker'
 import { startPsnImportWorker } from './workers/psn-import.worker'
 import { startXboxImportWorker } from './workers/xbox-import.worker'
 import closeWithGrace from 'close-with-grace'
-import { prisma } from './database/db'
-import { bullConnection } from './queues/connection'
+import { HealthRepository } from './repositories/health.repository'
 import { healthRoutes } from './routes/health'
 import { shutdown } from './shutdown'
+import { sendProblem } from './utils/problem'
 
-const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8_000
+
+const healthRepository = new HealthRepository()
 
 function parseTrustProxy(value: string | undefined): boolean | number | string {
   if (!value || value === 'false') return false
@@ -90,9 +92,9 @@ export class Server {
           app: this.app,
           workers,
           connections: [
-            () => prisma.$disconnect(),
-            () => redis.quit(),
-            () => bullConnection.quit()
+            () => healthRepository.closeDatabase(),
+            () => healthRepository.closeRedis(),
+            () => healthRepository.closeQueueConnection()
           ]
         })
       }
@@ -144,8 +146,8 @@ export class Server {
   private static initRoutes() {
     this.app.register(healthRoutes, {
       checks: {
-        database: () => prisma.$queryRaw`SELECT 1`,
-        redis: () => redis.ping()
+        database: () => healthRepository.checkDatabase(),
+        redis: () => healthRepository.checkRedis()
       }
     })
     this.app.register(authRoutes, { prefix: '/auth' })
@@ -189,7 +191,7 @@ export class Server {
   private static initErrorHandler() {
     this.app.setErrorHandler(errorHandler)
     this.app.setNotFoundHandler((_request, reply) =>
-      reply.status(404).send({ message: 'Not found' })
+      sendProblem(reply, 404, { message: 'Not found' })
     )
   }
 }

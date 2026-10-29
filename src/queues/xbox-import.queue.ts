@@ -16,6 +16,14 @@ export interface XboxImportJobData {
   userId: string
 }
 
+export interface XboxAccountImportResult {
+  gamertag: string
+  library?: ImportSectionResult
+  error?: string
+  warning?: string
+}
+
 export interface XboxImportJobResult {
   library: ImportSectionResult
+  accounts: XboxAccountImportResult[]
 }

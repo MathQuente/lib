@@ -7,7 +7,12 @@ export interface PlatformValues {
   completedAt?: Date | null
 }
 
-const platformSelect = {
+export interface AccountHours {
+  accountId: string
+  hours: number
+}
+
+const platformBaseSelect = {
   platform: true,
   console: true,
   hoursPlayed: true,
@@ -15,32 +20,81 @@ const platformSelect = {
   completedAt: true
 } satisfies Prisma.UserGamePlatformSelect
 
+const platformSelect = {
+  ...platformBaseSelect,
+  accountHours: {
+    select: {
+      hoursPlayed: true,
+      xboxAccount: { select: { gamertag: true } }
+    },
+    orderBy: { xboxAccount: { gamertag: 'asc' } }
+  }
+} satisfies Prisma.UserGamePlatformSelect
+
+const platformOrder = [
+  { platform: 'asc' },
+  { console: 'asc' }
+] satisfies Prisma.UserGamePlatformOrderByWithRelationInput[]
+
+const userGameHeaderSelect = {
+  id: true,
+  userGamesStatusId: true,
+  endless: true,
+  completedAt: true,
+  UserGameStats: { select: { hoursPlayed: true, completions: true } }
+} satisfies Prisma.UserGameSelect
+
+const REMOVE_ACCOUNT_TIMEOUT_MS = 30_000
+
+type AccountHoursRow = {
+  hoursPlayed: Prisma.Decimal
+  xboxAccount: { gamertag: string }
+}
+
 export class UserGamePlatformRepository {
-  async findUserGameWithPlatforms(igdbId: number, userId: string) {
-    return prisma.userGame.findUnique({
-      where: { userId_igdbId: { userId, igdbId } },
-      select: {
-        id: true,
-        userGamesStatusId: true,
-        endless: true,
-        completedAt: true,
-        UserGameStats: { select: { hoursPlayed: true, completions: true } },
-        platforms: {
-          select: platformSelect,
-          orderBy: [{ platform: 'asc' }, { console: 'asc' }]
+  async findUserGameWithPlatforms(
+    igdbId: number,
+    userId: string,
+    options: { accountHours?: boolean } = {}
+  ) {
+    const where = { userId_igdbId: { userId, igdbId } }
+    if (options.accountHours ?? true) {
+      return prisma.userGame.findUnique({
+        where,
+        select: {
+          ...userGameHeaderSelect,
+          platforms: { select: platformSelect, orderBy: platformOrder }
         }
+      })
+    }
+    const found = await prisma.userGame.findUnique({
+      where,
+      select: {
+        ...userGameHeaderSelect,
+        platforms: { select: platformBaseSelect, orderBy: platformOrder }
       }
     })
+    return (
+      found && {
+        ...found,
+        platforms: found.platforms.map(row => ({
+          ...row,
+          accountHours: [] as AccountHoursRow[]
+        }))
+      }
+    )
   }
 
   async savePlatform(
     userGameId: string,
     platform: Platform,
     gameConsole: Console,
-    values: PlatformValues
+    values: PlatformValues,
+    accountHours?: AccountHours
   ) {
     return prisma.$transaction(async tx => {
-      await tx.userGamePlatform.upsert({
+      const accountExists = await this.lockAccount(tx, accountHours)
+      const row = await tx.userGamePlatform.upsert({
         where: {
           userGameId_platform_console: {
             userGameId,
@@ -51,6 +105,9 @@ export class UserGamePlatformRepository {
         update: values,
         create: { userGameId, platform, console: gameConsole, ...values }
       })
+      if (accountHours) {
+        await this.applyAccountHours(tx, row.id, accountHours, accountExists)
+      }
       await this.recomputeTotals(tx, userGameId)
     })
   }
@@ -60,15 +117,20 @@ export class UserGamePlatformRepository {
     platform: Platform,
     from: Console,
     to: Console,
-    values: PlatformValues
+    values: PlatformValues,
+    accountHours?: AccountHours
   ) {
     return prisma.$transaction(async tx => {
-      await tx.userGamePlatform.update({
+      const accountExists = await this.lockAccount(tx, accountHours)
+      const row = await tx.userGamePlatform.update({
         where: {
           userGameId_platform_console: { userGameId, platform, console: from }
         },
         data: { console: to, ...values }
       })
+      if (accountHours) {
+        await this.applyAccountHours(tx, row.id, accountHours, accountExists)
+      }
       await this.recomputeTotals(tx, userGameId)
     })
   }
@@ -127,6 +189,89 @@ export class UserGamePlatformRepository {
     })
   }
 
+  private async lockAccount(
+    tx: Prisma.TransactionClient,
+    accountHours?: AccountHours
+  ) {
+    if (!accountHours) return true
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM xbox_accounts WHERE id = ${accountHours.accountId} FOR SHARE
+    `
+    return locked.length > 0
+  }
+
+  private async applyAccountHours(
+    tx: Prisma.TransactionClient,
+    userGamePlatformId: string,
+    { accountId, hours }: AccountHours,
+    accountExists: boolean
+  ) {
+    if (!accountExists) {
+      await this.syncRowHours(tx, userGamePlatformId)
+      return
+    }
+    await tx.xboxAccountHours.upsert({
+      where: {
+        userGamePlatformId_xboxAccountId: {
+          userGamePlatformId,
+          xboxAccountId: accountId
+        }
+      },
+      update: { hoursPlayed: hours },
+      create: { userGamePlatformId, xboxAccountId: accountId, hoursPlayed: hours }
+    })
+    await this.syncRowHours(tx, userGamePlatformId)
+  }
+
+  private async syncRowHours(
+    tx: Prisma.TransactionClient,
+    userGamePlatformId: string
+  ) {
+    const { _sum, _count } = await tx.xboxAccountHours.aggregate({
+      where: { userGamePlatformId },
+      _sum: { hoursPlayed: true },
+      _count: true
+    })
+    await tx.userGamePlatform.update({
+      where: { id: userGamePlatformId },
+      data: { hoursPlayed: _count > 0 ? _sum.hoursPlayed : null }
+    })
+  }
+
+  async removeXboxAccount(userId: string, accountId: string) {
+    return prisma.$transaction(async tx => {
+      const account = await tx.xboxAccount.findFirst({
+        where: { id: accountId, userId },
+        select: { id: true }
+      })
+      if (!account) return false
+
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM xbox_accounts WHERE id = ${accountId} FOR UPDATE
+      `
+      if (locked.length === 0) return false
+      const affected = await tx.xboxAccountHours.findMany({
+        where: { xboxAccountId: accountId },
+        select: {
+          userGamePlatformId: true,
+          userGamePlatform: { select: { userGameId: true } }
+        }
+      })
+      await tx.xboxAccount.delete({ where: { id: accountId } })
+
+      for (const { userGamePlatformId } of affected) {
+        await this.syncRowHours(tx, userGamePlatformId)
+      }
+      const userGameIds = new Set(
+        affected.map(row => row.userGamePlatform.userGameId)
+      )
+      for (const userGameId of userGameIds) {
+        await this.recomputeTotals(tx, userGameId)
+      }
+      return true
+    }, { timeout: REMOVE_ACCOUNT_TIMEOUT_MS })
+  }
+
   private async recomputeTotals(
     tx: Prisma.TransactionClient,
     userGameId: string
@@ -158,6 +303,11 @@ export class UserGamePlatformRepository {
       await tx.userGame.update({
         where: { id: userGameId },
         data: { completedAt: earliestCompletedAt }
+      })
+    } else if (completions === 0) {
+      await tx.userGame.updateMany({
+        where: { id: userGameId, completedAt: { not: null } },
+        data: { completedAt: null }
       })
     }
   }
