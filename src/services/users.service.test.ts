@@ -412,8 +412,8 @@ describe('UserService.findManyUserGames', () => {
       query: undefined,
       sortBy: 'rating',
       sortOrder: 'desc',
-      skip: 80,
-      take: 40
+      skip: 96,
+      take: 48
     })
   })
 

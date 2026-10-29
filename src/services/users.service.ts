@@ -23,7 +23,7 @@ const EDIT_BY_PLATFORM_MESSAGE =
 
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
-  private readonly USER_GAMES_PER_PAGE = 40
+  private readonly USER_GAMES_PER_PAGE = 48
 
   constructor(
     private userRepository: UserRepository,
