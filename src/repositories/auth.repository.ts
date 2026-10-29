@@ -57,6 +57,7 @@ export class AuthRepository {
     expiresAt: Date
   ) {
     await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR SHARE`
       const { count } = await tx.refreshToken.updateMany({
         where: { tokenHash: hashToken(oldToken), isValid: true },
         data: { isValid: false }

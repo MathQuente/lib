@@ -11,6 +11,7 @@ import { generateFromEmail } from 'unique-username-generator'
 import { hashToken } from '../utils/hash-token'
 import { RecentAuthService } from './recent-auth.service'
 import { markSessionsRevoked } from '../utils/session-revocation'
+import { logError } from '../utils/respond-unavailable'
 import { normalizeEmail } from '../utils/normalize-email'
 
 const BCRYPT_COST = 12
@@ -293,6 +294,14 @@ export class AuthService {
     await markSessionsRevoked(this.cacheRepository, userId)
   }
 
+  private async markRevokedAfterLink(userId: string) {
+    try {
+      await markSessionsRevoked(this.cacheRepository, userId)
+    } catch (error) {
+      logError('Post-link session revocation failed:', error)
+    }
+  }
+
   async loginWithGoogle(
     profile: {
       sub: string
@@ -333,6 +342,10 @@ export class AuthService {
           profile.picture,
           discardedPasswordHash
         )
+
+        if (discardedPasswordHash) {
+          await this.markRevokedAfterLink(existing.id)
+        }
       } else {
         if (!acceptedTerms) throw new TermsRequiredError()
 
@@ -408,6 +421,10 @@ export class AuthService {
           profilePicture,
           discardedPasswordHash
         )
+
+        if (discardedPasswordHash) {
+          await this.markRevokedAfterLink(existingId)
+        }
       } else {
         if (!acceptedTerms) throw new TermsRequiredError()
 

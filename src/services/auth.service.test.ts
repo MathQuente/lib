@@ -426,6 +426,53 @@ describe('AuthService.loginWithGoogle', () => {
     )
   })
 
+  it('marks the sessions revoked before and again after the link transaction', async () => {
+    const cache = fakeCache()
+    const linkGoogle = vi
+      .fn()
+      .mockResolvedValue({ id: 'user-1', email: 'a@b.c' })
+    const authRepository = fakeAuthRepository({
+      findUserByGoogleId: vi.fn().mockResolvedValue(null),
+      findByEmail: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
+      linkGoogle,
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(authRepository, fakeJwt(), cache)
+
+    await service.loginWithGoogle({ ...profile, email_verified: true }, true)
+
+    const markers = cache.set.mock.invocationCallOrder.filter((_order, index) =>
+      String(cache.set.mock.calls[index][0]).startsWith('sessions-revoked-at')
+    )
+    const link = linkGoogle.mock.invocationCallOrder[0]
+    expect(markers).toHaveLength(2)
+    expect(markers[0]).toBeLessThan(link)
+    expect(markers[1]).toBeGreaterThan(link)
+  })
+
+  it('still links when the marker written after the transaction fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cache = fakeCache()
+    cache.set
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('redis down'))
+    const authRepository = fakeAuthRepository({
+      findUserByGoogleId: vi.fn().mockResolvedValue(null),
+      findByEmail: vi
+        .fn()
+        .mockResolvedValue({ id: 'user-1', googleId: null, discordId: null }),
+      linkGoogle: vi.fn().mockResolvedValue({ id: 'user-1', email: 'a@b.c' }),
+      saveToken: vi.fn()
+    })
+    const service = new AuthService(authRepository, fakeJwt(), cache)
+
+    await expect(
+      service.loginWithGoogle({ ...profile, email_verified: true }, true)
+    ).resolves.toBeDefined()
+  })
+
   it('logs in by googleId without checking the email again', async () => {
     const updatePassword = vi.fn()
     const authRepository = fakeAuthRepository({
