@@ -226,6 +226,22 @@ export class IGDBService {
   static readonly XBOX_EXTERNAL_GAME_SOURCE = 11
   static readonly XBOX_SEARCH_PLATFORM_IDS = [11, 12, 49, 169, 6]
   private static readonly EXTERNAL_GAMES_BATCH_SIZE = 500
+  private static readonly EXTERNAL_GAMES_PAGE_SIZE = 500
+
+  private static async fetchExternalGames(
+    uids: string[],
+    source: number
+  ): Promise<{ uid: string; game: number }[]> {
+    const rows: { uid: string; game: number }[] = []
+    for (let offset = 0; ; offset += this.EXTERNAL_GAMES_PAGE_SIZE) {
+      const page = await this.request<{ uid: string; game: number }[]>(
+        'external_games',
+        `where uid = (${uids.map(id => `"${id}"`).join(',')}) & external_game_source = ${source}; fields uid,game; sort id asc; limit ${this.EXTERNAL_GAMES_PAGE_SIZE}; offset ${offset};`
+      )
+      rows.push(...page)
+      if (page.length < this.EXTERNAL_GAMES_PAGE_SIZE) return rows
+    }
+  }
 
   static async getGamesByExternalIds(
     uids: string[],
@@ -239,12 +255,7 @@ export class IGDBService {
     }
 
     const externalGamesResults = await Promise.all(
-      chunks.map(chunk =>
-        this.request<{ uid: string; game: number }[]>(
-          'external_games',
-          `where uid = (${chunk.map(id => `"${id}"`).join(',')}) & external_game_source = ${source}; fields uid,game; limit ${chunk.length};`
-        )
-      )
+      chunks.map(chunk => this.fetchExternalGames(chunk, source))
     )
 
     const uidToIgdbId = new Map<string, number>()

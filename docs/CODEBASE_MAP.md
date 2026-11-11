@@ -310,7 +310,7 @@ Three tiers of game data:
 
 Ratings (cross-user average) and the caller's library data are never cached; they are read from Postgres and merged on every request. The personal rating and the cross-user average are always two separate values.
 
-**External ids** (`getGamesByExternalIds`): queries the `external_games` endpoint by `uid` and `external_game_source` in chunks of 500, then fetches the games. Sources: 1 Steam, 36 PlayStation, 11 Xbox.
+**External ids** (`getGamesByExternalIds`): queries the `external_games` endpoint by `uid` and `external_game_source` in chunks of 500 uids, each chunk read in pages of 500 rows (`sort id asc; limit 500; offset N`, so a uid with several rows never gets cut), then fetches the games. Sources: 1 Steam, 36 PlayStation, 11 Xbox.
 
 **"Released" cutoff**: the next midnight in `America/Fortaleza`. **`release_dates` dedup**: one row per platform+region; the detail endpoint groups by platform and keeps the earliest date.
 

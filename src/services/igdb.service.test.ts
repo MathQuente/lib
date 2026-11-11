@@ -49,6 +49,28 @@ describe('IGDBService.getGamesByExternalIds', () => {
     ])
   })
 
+  it('pages through external_games when a batch has more rows than one page', async () => {
+    const firstPage = Array.from({ length: 500 }, (_, i) => ({
+      uid: String(i),
+      game: 10
+    }))
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([{ uid: '500', game: 20 }])
+    vi.spyOn(IGDBService, 'getGamesByIds').mockResolvedValue([game(10), game(20)])
+
+    const result = await IGDBService.getGamesByExternalIds(
+      firstPage.map(row => row.uid),
+      36
+    )
+
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[0][1]).toContain('sort id asc; limit 500; offset 0;')
+    expect(request.mock.calls[1][1]).toContain('limit 500; offset 500;')
+    expect(result).toHaveLength(501)
+  })
+
   it('fetches each IGDB game once when several uids point to it', async () => {
     mockRequest([
       { uid: '1', game: 10 },
