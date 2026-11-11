@@ -1,7 +1,19 @@
-import { Queue } from 'bullmq'
+import { Queue, UnrecoverableError } from 'bullmq'
 import { ClientError } from '../errors/client-error'
+import { TimeoutError } from '../utils/with-timeout'
 
 export const IMPORT_COOLDOWN_MS = 60 * 60 * 1000
+
+export const IMPORT_JOB_OPTIONS = {
+  attempts: 2,
+  backoff: { type: 'fixed', delay: 30_000 }
+} as const
+
+export function toImportJobError(err: unknown, genericMessage: string): Error {
+  if (err instanceof ClientError) return new UnrecoverableError(err.message)
+  if (err instanceof TimeoutError) return new UnrecoverableError(genericMessage)
+  return new Error(genericMessage)
+}
 
 export interface ImportSectionResult {
   imported: number
@@ -40,7 +52,7 @@ export async function enqueueUniqueImport(
     await existing.remove()
   }
 
-  await queue.add('import', data, { jobId })
+  await queue.add('import', data, { jobId, ...IMPORT_JOB_OPTIONS })
   return { status: 'queued' as const }
 }
 

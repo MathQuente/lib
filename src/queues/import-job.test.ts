@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Queue } from 'bullmq'
-import { getImportJobStatus, IMPORT_COOLDOWN_MS } from './import-job'
+import { UnrecoverableError } from 'bullmq'
+import { ClientError } from '../errors/client-error'
+import { TimeoutError } from '../utils/with-timeout'
+import {
+  getImportJobStatus,
+  IMPORT_COOLDOWN_MS,
+  IMPORT_JOB_OPTIONS,
+  toImportJobError
+} from './import-job'
 
 function queueWith(job: unknown) {
   return { getJob: vi.fn().mockResolvedValue(job) } as unknown as Queue
@@ -73,5 +81,36 @@ describe('getImportJobStatus', () => {
     )
 
     expect(status).toEqual({ status: 'active', progress: 42 })
+  })
+})
+
+describe('toImportJobError', () => {
+  it('keeps the message of a ClientError and stops the retries', () => {
+    const error = toImportJobError(
+      new ClientError('Perfil privado.'),
+      'generic'
+    )
+
+    expect(error).toBeInstanceOf(UnrecoverableError)
+    expect(error.message).toBe('Perfil privado.')
+  })
+
+  it('does not retry a timeout, because the import may still be running', () => {
+    const error = toImportJobError(new TimeoutError('timed out'), 'generic')
+
+    expect(error).toBeInstanceOf(UnrecoverableError)
+    expect(error.message).toBe('generic')
+  })
+
+  it('lets any other failure be retried with the generic message', () => {
+    const error = toImportJobError(new Error('socket hang up'), 'generic')
+
+    expect(error).not.toBeInstanceOf(UnrecoverableError)
+    expect(error.message).toBe('generic')
+  })
+
+  it('retries once after a pause', () => {
+    expect(IMPORT_JOB_OPTIONS.attempts).toBe(2)
+    expect(IMPORT_JOB_OPTIONS.backoff.delay).toBeGreaterThan(0)
   })
 })

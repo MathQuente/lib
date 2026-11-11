@@ -13,6 +13,7 @@ import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { GameCacheService } from '../services/game-cache.service'
 import { ClientError } from '../errors/client-error'
 import { withTimeout } from '../utils/with-timeout'
+import { toImportJobError } from '../queues/import-job'
 
 const GENERIC_IMPORT_ERROR =
   'Erro ao importar sua biblioteca da PlayStation. Tente novamente mais tarde.'
@@ -37,12 +38,13 @@ export function startPsnImportWorker() {
           'PSN import timed out after 5 minutes.'
         )
       } catch (err) {
-        if (err instanceof ClientError) throw err
-        console.error('[PsnImport] unexpected job failure', {
-          jobId: job.id,
-          error: err
-        })
-        throw new Error(GENERIC_IMPORT_ERROR)
+        if (!(err instanceof ClientError)) {
+          console.error('[PsnImport] unexpected job failure', {
+            jobId: job.id,
+            error: err
+          })
+        }
+        throw toImportJobError(err, GENERIC_IMPORT_ERROR)
       }
     },
     { connection: bullConnection }

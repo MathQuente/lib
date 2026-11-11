@@ -17,6 +17,7 @@ import { UserGamePlatformRepository } from '../repositories/user-game-platform.r
 import { UserGamePlatformService } from '../services/user-game-platform.service'
 import { ClientError } from '../errors/client-error'
 import { withTimeout } from '../utils/with-timeout'
+import { toImportJobError } from '../queues/import-job'
 
 const GENERIC_IMPORT_ERROR =
   'Erro ao importar sua biblioteca da Steam. Tente novamente mais tarde.'
@@ -56,12 +57,13 @@ export function startSteamImportWorker() {
           'Steam import timed out after 5 minutes.'
         )
       } catch (err) {
-        if (err instanceof ClientError) throw err
-        console.error('[SteamImport] unexpected job failure', {
-          jobId: job.id,
-          error: err
-        })
-        throw new Error(GENERIC_IMPORT_ERROR)
+        if (!(err instanceof ClientError)) {
+          console.error('[SteamImport] unexpected job failure', {
+            jobId: job.id,
+            error: err
+          })
+        }
+        throw toImportJobError(err, GENERIC_IMPORT_ERROR)
       }
     },
     { connection: bullConnection }
