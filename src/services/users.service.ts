@@ -7,6 +7,7 @@ import { UserRepository } from '../repositories/users.repository'
 import { FollowRepository } from '../repositories/follow.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
+import { CloudinaryService } from './cloudinary.service'
 import { SteamApiService } from './steam-api.service'
 import { GameCacheService } from './game-cache.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
@@ -82,7 +83,7 @@ export class UserService {
   }
 
   async delete(userId: string) {
-    await this.requireUser(userId)
+    const existing = await this.requireUser(userId)
 
     const user = await this.userRepository.deleteUser(userId)
 
@@ -94,7 +95,46 @@ export class UserService {
       })
     }
 
+    await this.destroyOwnedImages([
+      existing.profilePicture,
+      existing.userBanner
+    ])
+
     return { user }
+  }
+
+  private async destroyOwnedImages(urls: (string | null | undefined)[]) {
+    if (!CloudinaryService.isConfigured()) return
+
+    try {
+      const candidates = [
+        ...new Set(urls.filter((url): url is string => !!url))
+      ].filter(url => CloudinaryService.publicIdFromUrl(url) !== null)
+      if (candidates.length === 0) return
+
+      const inUse = new Set(
+        await this.userRepository.findImageUrlsInUse(candidates)
+      )
+
+      for (const url of candidates) {
+        if (inUse.has(url)) continue
+        try {
+          await CloudinaryService.destroy(
+            CloudinaryService.publicIdFromUrl(url)!
+          )
+        } catch (error) {
+          this.logImageRemovalFailure(error)
+        }
+      }
+    } catch (error) {
+      this.logImageRemovalFailure(error)
+    }
+  }
+
+  private logImageRemovalFailure(error: unknown) {
+    console.error('Cloudinary image removal failed:', {
+      error: error instanceof Error ? error.message : 'unknown error'
+    })
   }
 
   private async getSteamPersonaName(
@@ -476,13 +516,30 @@ export class UserService {
   }
 
   async update(userId: string, data: UpdateUserDTO) {
-    await this.requireUser(userId)
+    const existing = await this.requireUser(userId)
 
     const user = await this.userRepository.updateUser(userId, {
       profilePicture: data.profilePicture,
       userBanner: data.userBanner,
       userName: data.userName
     })
+
+    const replaced: string[] = []
+    if (
+      data.profilePicture !== undefined &&
+      existing.profilePicture &&
+      data.profilePicture !== existing.profilePicture
+    ) {
+      replaced.push(existing.profilePicture)
+    }
+    if (
+      data.userBanner !== undefined &&
+      existing.userBanner &&
+      data.userBanner !== existing.userBanner
+    ) {
+      replaced.push(existing.userBanner)
+    }
+    await this.destroyOwnedImages(replaced)
 
     return { user }
   }

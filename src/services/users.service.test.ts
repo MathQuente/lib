@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { UserService } from './users.service'
 import { IGDBService } from './igdb.service'
 import { GameCacheService } from './game-cache.service'
@@ -10,6 +10,7 @@ import { FollowRepository } from '../repositories/follow.repository'
 import { ClientError } from '../errors/client-error'
 import { CacheRepository } from '../repositories/cache.repository'
 import { SteamApiService } from './steam-api.service'
+import { CloudinaryService } from './cloudinary.service'
 
 function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
@@ -981,6 +982,326 @@ describe('UserService.delete', () => {
     await expect(service.delete('user-1')).resolves.toEqual({
       user: { id: 'user-1', userName: 'someone' }
     })
+  })
+})
+
+describe('UserService.delete image cleanup', () => {
+  const PHOTO =
+    'https://res.cloudinary.com/mycloud/image/upload/v1/images/photo.png'
+  const BANNER =
+    'https://res.cloudinary.com/mycloud/image/upload/v1/images/banner.png'
+
+  function build(
+    user: { profilePicture: string | null; userBanner: string | null },
+    inUse = false
+  ) {
+    const deleteUser = vi
+      .fn()
+      .mockResolvedValue({ id: 'user-1', userName: 'someone' })
+    const findImageUrlsInUse = vi
+      .fn()
+      .mockImplementation(async (urls: string[]) => (inUse ? urls : []))
+    const service = new UserService(
+      fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1', ...user }),
+        deleteUser,
+        findImageUrlsInUse
+      }),
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository(),
+      undefined,
+      {
+        set: vi.fn().mockResolvedValue(undefined)
+      } as unknown as CacheRepository
+    )
+    return { service, deleteUser, findImageUrlsInUse }
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('CLOUDINARY_CLOUD_NAME', 'mycloud')
+    vi.stubEnv('CLOUDINARY_API_KEY', 'key')
+    vi.stubEnv('CLOUDINARY_API_SECRET', 'secret')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('destroys the photo and the banner after the account row is gone', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, deleteUser } = build({
+      profilePicture: PHOTO,
+      userBanner: BANNER
+    })
+
+    await service.delete('user-1')
+
+    expect(destroy).toHaveBeenCalledTimes(2)
+    expect(destroy).toHaveBeenCalledWith('images/photo')
+    expect(destroy).toHaveBeenCalledWith('images/banner')
+    expect(deleteUser.mock.invocationCallOrder[0]).toBeLessThan(
+      destroy.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('destroys a shared photo and banner url only once', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({ profilePicture: PHOTO, userBanner: PHOTO })
+
+    await service.delete('user-1')
+
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips urls that are not from our Cloudinary cloud', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({
+      profilePicture: 'https://lh3.googleusercontent.com/a/abc',
+      userBanner: 'https://res.cloudinary.com/other/image/upload/b.png'
+    })
+
+    await service.delete('user-1')
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('skips an image that another user still uses', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({ profilePicture: PHOTO, userBanner: null }, true)
+
+    await service.delete('user-1')
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when the account cannot be deleted', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, deleteUser } = build({
+      profilePicture: PHOTO,
+      userBanner: null
+    })
+    deleteUser.mockRejectedValue(new Error('db down'))
+
+    await expect(service.delete('user-1')).rejects.toThrow('db down')
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('still reports the deletion when Cloudinary fails and keeps going', async () => {
+    const destroy = vi
+      .spyOn(CloudinaryService, 'destroy')
+      .mockRejectedValueOnce(new Error('cloudinary down'))
+      .mockResolvedValue()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { service } = build({ profilePicture: PHOTO, userBanner: BANNER })
+
+    await expect(service.delete('user-1')).resolves.toEqual({
+      user: { id: 'user-1', userName: 'someone' }
+    })
+    expect(destroy).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(error.mock.calls)).not.toContain('res.cloudinary.com')
+  })
+
+  it('still reports the deletion when the in-use lookup fails', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { service, findImageUrlsInUse } = build({
+      profilePicture: PHOTO,
+      userBanner: null
+    })
+    findImageUrlsInUse.mockRejectedValue(new Error('db down'))
+
+    await expect(service.delete('user-1')).resolves.toEqual({
+      user: { id: 'user-1', userName: 'someone' }
+    })
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('makes no Cloudinary call without credentials', async () => {
+    vi.stubEnv('CLOUDINARY_API_SECRET', '')
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, findImageUrlsInUse } = build({
+      profilePicture: PHOTO,
+      userBanner: null
+    })
+
+    await service.delete('user-1')
+
+    expect(destroy).not.toHaveBeenCalled()
+    expect(findImageUrlsInUse).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserService.update image cleanup', () => {
+  const OLD_PHOTO =
+    'https://res.cloudinary.com/mycloud/image/upload/v1/images/old.png'
+  const NEW_PHOTO =
+    'https://res.cloudinary.com/mycloud/image/upload/v2/images/new.png'
+  const OLD_BANNER =
+    'https://res.cloudinary.com/mycloud/image/upload/v1/images/banner.png'
+
+  function build(
+    current: { profilePicture: string | null; userBanner: string | null },
+    inUse: boolean | ((url: string) => boolean) = false
+  ) {
+    const updateUser = vi.fn().mockResolvedValue({ id: 'user-1' })
+    const findImageUrlsInUse = vi
+      .fn()
+      .mockImplementation(async (urls: string[]) =>
+        typeof inUse === 'function'
+          ? urls.filter(url => inUse(url))
+          : inUse
+            ? urls
+            : []
+      )
+    const service = new UserService(
+      fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1', ...current }),
+        updateUser,
+        findImageUrlsInUse
+      }),
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+    return { service, updateUser, findImageUrlsInUse }
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('CLOUDINARY_CLOUD_NAME', 'mycloud')
+    vi.stubEnv('CLOUDINARY_API_KEY', 'key')
+    vi.stubEnv('CLOUDINARY_API_SECRET', 'secret')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('destroys the previous photo after the new one is saved', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, updateUser } = build({
+      profilePicture: OLD_PHOTO,
+      userBanner: null
+    })
+
+    await service.update('user-1', { profilePicture: NEW_PHOTO })
+
+    expect(destroy).toHaveBeenCalledTimes(1)
+    expect(destroy).toHaveBeenCalledWith('images/old')
+    expect(updateUser.mock.invocationCallOrder[0]).toBeLessThan(
+      destroy.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('destroys the previous banner when it is removed', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({ profilePicture: null, userBanner: OLD_BANNER })
+
+    await service.update('user-1', { userBanner: null })
+
+    expect(destroy).toHaveBeenCalledWith('images/banner')
+  })
+
+  it('keeps the images when the same url is sent again', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({ profilePicture: OLD_PHOTO, userBanner: null })
+
+    await service.update('user-1', { profilePicture: OLD_PHOTO })
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the images when the fields are not part of the update', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({
+      profilePicture: OLD_PHOTO,
+      userBanner: OLD_BANNER
+    })
+
+    await service.update('user-1', { userName: 'new name' })
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps an image that another user still uses', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build(
+      { profilePicture: OLD_PHOTO, userBanner: null },
+      true
+    )
+
+    await service.update('user-1', { profilePicture: NEW_PHOTO })
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps an image this same user still uses in the other field', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build(
+      { profilePicture: OLD_PHOTO, userBanner: OLD_PHOTO },
+      url => url === OLD_PHOTO
+    )
+
+    await service.update('user-1', { profilePicture: NEW_PHOTO })
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('skips provider avatars and other clouds', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service } = build({
+      profilePicture: 'https://lh3.googleusercontent.com/a/abc',
+      userBanner: 'https://res.cloudinary.com/other/image/upload/v1/b.png'
+    })
+
+    await service.update('user-1', {
+      profilePicture: NEW_PHOTO,
+      userBanner: null
+    })
+
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('still returns the user when Cloudinary fails', async () => {
+    vi.spyOn(CloudinaryService, 'destroy').mockRejectedValue(
+      new Error('cloudinary down')
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { service } = build({ profilePicture: OLD_PHOTO, userBanner: null })
+
+    await expect(
+      service.update('user-1', { profilePicture: NEW_PHOTO })
+    ).resolves.toEqual({ user: { id: 'user-1' } })
+  })
+
+  it('destroys nothing when the update cannot be saved', async () => {
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, updateUser } = build({
+      profilePicture: OLD_PHOTO,
+      userBanner: null
+    })
+    updateUser.mockRejectedValue(new Error('db down'))
+
+    await expect(
+      service.update('user-1', { profilePicture: NEW_PHOTO })
+    ).rejects.toThrow('db down')
+    expect(destroy).not.toHaveBeenCalled()
+  })
+
+  it('makes no Cloudinary call without credentials', async () => {
+    vi.stubEnv('CLOUDINARY_API_KEY', '')
+    const destroy = vi.spyOn(CloudinaryService, 'destroy').mockResolvedValue()
+    const { service, findImageUrlsInUse } = build({
+      profilePicture: OLD_PHOTO,
+      userBanner: null
+    })
+
+    await service.update('user-1', { profilePicture: NEW_PHOTO })
+
+    expect(destroy).not.toHaveBeenCalled()
+    expect(findImageUrlsInUse).not.toHaveBeenCalled()
   })
 })
 

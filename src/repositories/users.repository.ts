@@ -166,6 +166,21 @@ export class UserRepository {
     })
   }
 
+  async findImageUrlsInUse(urls: string[]) {
+    const rows = await prisma.user.findMany({
+      where: {
+        OR: [{ profilePicture: { in: urls } }, { userBanner: { in: urls } }]
+      },
+      select: { profilePicture: true, userBanner: true }
+    })
+    const inUse = new Set<string>()
+    for (const row of rows) {
+      if (row.profilePicture) inUse.add(row.profilePicture)
+      if (row.userBanner) inUse.add(row.userBanner)
+    }
+    return urls.filter(url => inUse.has(url))
+  }
+
   async findUserById(userId: string) {
     return prisma.user.findUnique({
       where: { id: userId },
