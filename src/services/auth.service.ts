@@ -527,16 +527,16 @@ export class AuthService {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`
 
-    try {
-      await this.emailService.sendPasswordResetEmail(user.email, resetUrl)
-    } catch (err) {
+    void Promise.resolve(
+      this.emailService.sendPasswordResetEmail(user.email, resetUrl)
+    ).catch(err => {
       console.error('[PasswordReset] email delivery failed', {
         error: err instanceof Error ? err.message : 'unknown error'
       })
       if (process.env.NODE_ENV !== 'production') {
         console.info('[PasswordReset] dev reset link:', resetUrl)
       }
-    }
+    })
   }
 
   async isPasswordResetTokenValid(token: string): Promise<boolean> {

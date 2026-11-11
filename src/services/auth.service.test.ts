@@ -559,6 +559,11 @@ describe('AuthService.requestPasswordReset', () => {
     await expect(
       service.requestPasswordReset('a@a.com')
     ).resolves.toBeUndefined()
+    await new Promise(resolve => setImmediate(resolve))
+    expect(console.error).toHaveBeenCalledWith(
+      '[PasswordReset] email delivery failed',
+      { error: 'no api key' }
+    )
     expect(cache.set).toHaveBeenCalledWith(
       expect.stringMatching(/^password-reset:/),
       'user-1',
@@ -623,6 +628,34 @@ describe('AuthService.validateUser throttling', () => {
       true,
       expect.any(Number)
     )
+  })
+})
+
+describe('AuthService.requestPasswordReset timing', () => {
+  it('answers without waiting for the email to be sent', async () => {
+    let finishSending: () => void = () => {}
+    const emailService = {
+      sendPasswordResetEmail: vi.fn(
+        () => new Promise<void>(resolve => (finishSending = resolve))
+      )
+    } as unknown as EmailService
+    const service = new AuthService(
+      fakeAuthRepository({
+        findByEmail: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', email: 'a@a.com' })
+      }),
+      fakeJwt(),
+      fakeCache(),
+      emailService
+    )
+
+    await expect(
+      service.requestPasswordReset('a@a.com')
+    ).resolves.toBeUndefined()
+
+    expect(emailService.sendPasswordResetEmail).toHaveBeenCalledTimes(1)
+    finishSending()
   })
 })
 
