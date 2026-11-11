@@ -672,6 +672,47 @@ describe('UserService.findGamesToDisplay', () => {
     expect(result.message).toBe('Tire a poeira desses jogos esquecidos.')
     getGameById.mockRestore()
   })
+
+  it('returns no game when the picked one cannot be fetched from IGDB', async () => {
+    const getGameById = vi.spyOn(IGDBService, 'getGameById').mockResolvedValue(null)
+    const service = serviceWithLibrary([{ igdbId: 10, status: 'PAUSED' }])
+
+    const result = await service.findGamesToDisplay('user-1')
+
+    expect(result).toEqual({ game: null, message: 'Que tal retomar este?' })
+    getGameById.mockRestore()
+  })
+
+  it('suggests a recent release the user does not own when nothing is paused or in the backlog', async () => {
+    const recent = vi
+      .spyOn(IGDBService, 'getRecentlyReleasedGames')
+      .mockResolvedValue([
+        { id: 1, name: 'Owned' },
+        { id: 2, name: 'New one' }
+      ] as never)
+    const service = serviceWithLibrary([
+      { igdbId: 1, status: 'PLAYED' },
+      { igdbId: 30, status: 'DROPPED' }
+    ])
+
+    const result = await service.findGamesToDisplay('user-1')
+
+    expect(result.game?.igdbId).toBe(2)
+    expect(result.message).toBe('Que tal adicionar um novo jogo a sua biblioteca?')
+    recent.mockRestore()
+  })
+
+  it('congratulates the user when every recent release is already in the library', async () => {
+    const recent = vi
+      .spyOn(IGDBService, 'getRecentlyReleasedGames')
+      .mockResolvedValue([{ id: 1, name: 'Owned' }] as never)
+    const service = serviceWithLibrary([{ igdbId: 1, status: 'PLAYED' }])
+
+    const result = await service.findGamesToDisplay('user-1')
+
+    expect(result).toEqual({ game: null, message: 'Parabéns! Você jogou todos.' })
+    recent.mockRestore()
+  })
 })
 
 describe('UserService.updateGame', () => {
