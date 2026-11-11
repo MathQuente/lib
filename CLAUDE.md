@@ -2,7 +2,7 @@
 
 Fastify + Prisma + PostgreSQL + Redis backend for "Lib", a personal game-library tracker. Serves a separate React+Vite frontend (`lib-front-end`) via `/api`. Game catalog data comes from IGDB (three-tier strategy: live API, a manually-synced Postgres mirror `games_cache`, and Redis cache-aside). Steam, PlayStation and Xbox libraries are imported by background jobs.
 
-**Stack**: Fastify 5, Prisma 5, `ioredis`, BullMQ (Steam/PSN/Xbox import jobs), Zod + `fastify-type-provider-zod`, `@fastify/jwt` + `@fastify/cookie` (httpOnly cookie sessions), `@fastify/oauth2` (Google/Discord, mostly hand-rolled), bcrypt, SendGrid.
+**Stack**: Fastify 5, Prisma 5, `ioredis`, BullMQ (Steam/PSN/Xbox import jobs), Zod + `fastify-type-provider-zod`, `@fastify/jwt` + `@fastify/cookie` (httpOnly cookie sessions), `@fastify/oauth2` (Google/Discord, mostly hand-rolled), bcrypt, nodemailer (SMTP do Gmail).
 
 **Structure**: layered — `src/routes/` → `src/controllers/` (thin) → `src/services/` (business rules + cache-aside) → `src/repositories/` (sole Prisma/Redis access point per domain, raw `Prisma.sql` only for joins/aggregates Prisma Client can't express). No DI container.
 
