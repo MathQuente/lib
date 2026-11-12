@@ -37,12 +37,13 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 async function main() {
   const repo = new GameCacheRepository()
 
+  const force = process.argv.includes('--force')
   let lastId = parseFromArg()
   let totalUpdated = 0
   let round = 0
 
   console.log(
-    `Backfilling game_modes for cached games with igdb_id > ${lastId}...`
+    `Backfilling game_modes for ${force ? 'all' : 'unchecked'} cached games with igdb_id > ${lastId}...`
   )
   console.log(
     'Press Ctrl+C to stop, then resume with: npm run backfill:game-modes -- --from <Last ID>\n'
@@ -51,10 +52,10 @@ async function main() {
   while (true) {
     round++
     const startedAt = Date.now()
-    const igdbIds = await repo.findIgdbIdsAfter(
-      lastId,
-      BATCH_SIZE * CONCURRENCY
-    )
+    const limit = BATCH_SIZE * CONCURRENCY
+    const igdbIds = force
+      ? await repo.findIgdbIdsAfter(lastId, limit)
+      : await repo.findIgdbIdsWithoutCheckedGameModesAfter(lastId, limit)
 
     if (igdbIds.length === 0) {
       console.log('\nBackfill complete — no more cached games.')
@@ -74,6 +75,9 @@ async function main() {
         chunk
           .filter(igdbId => modesMap.has(igdbId))
           .map(igdbId => ({ igdbId, gameModes: modesMap.get(igdbId)! }))
+      )
+      await repo.markGameModesChecked(
+        chunk.filter(igdbId => !modesMap.has(igdbId))
       )
     })
 

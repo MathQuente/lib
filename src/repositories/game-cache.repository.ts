@@ -263,6 +263,7 @@ export class GameCacheRepository {
         category: g.category ?? -1,
         parentGameId: g.parentGameId ?? null,
         gameModes: g.gameModes ?? [],
+        gameModesCheckedAt: g.gameModes ? new Date() : null,
         gameStatus: g.gameStatus ?? null
       })),
       skipDuplicates: true
@@ -302,6 +303,19 @@ export class GameCacheRepository {
     return rows.map(r => r.igdbId)
   }
 
+  async findIgdbIdsWithoutCheckedGameModesAfter(
+    afterId: number,
+    limit: number
+  ): Promise<number[]> {
+    const rows = await prisma.gameCache.findMany({
+      where: { igdbId: { gt: afterId }, gameModesCheckedAt: null },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true }
+    })
+    return rows.map(r => r.igdbId)
+  }
+
   async updateGameModes(
     updates: Array<{ igdbId: number; gameModes: number[] }>
   ) {
@@ -311,10 +325,19 @@ export class GameCacheRepository {
     )
     await prisma.$executeRaw(Prisma.sql`
       UPDATE games_cache gc
-      SET game_modes = ARRAY(SELECT jsonb_array_elements_text(v.modes)::int)
+      SET game_modes = ARRAY(SELECT jsonb_array_elements_text(v.modes)::int),
+          game_modes_checked_at = NOW()
       FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, modes jsonb)
       WHERE gc.igdb_id = v.id
     `)
+  }
+
+  async markGameModesChecked(igdbIds: number[]) {
+    if (igdbIds.length === 0) return
+    await prisma.gameCache.updateMany({
+      where: { igdbId: { in: igdbIds } },
+      data: { gameModesCheckedAt: new Date() }
+    })
   }
 
   async updateGameStatuses(

@@ -164,6 +164,7 @@ Table games_cache {
   category Int
   parentGameId Int
   gameModes Int[] [not null]
+  gameModesCheckedAt DateTime
   gameStatus Int
   syncedAt DateTime [default: `now()`, not null]
 }
