@@ -16,6 +16,13 @@ export interface PsnImportJobData {
   userId: string
 }
 
+export interface PsnAccountImportResult {
+  displayName: string
+  library?: ImportSectionResult
+  error?: string
+}
+
 export interface PsnImportJobResult {
   library: ImportSectionResult
+  accounts: PsnAccountImportResult[]
 }

@@ -25,7 +25,9 @@ export class PsnController {
   async disconnect(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
 
-    await this.psnService.disconnectPsn(userId)
+    const { accountId } = request.params as { accountId: string }
+
+    await this.psnService.disconnectPsn(userId, accountId)
 
     return reply.status(204).send()
   }

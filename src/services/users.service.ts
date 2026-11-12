@@ -158,7 +158,9 @@ export class UserService {
             steamId: account.externalId,
             personaName: account.displayName
           })),
-        psnOnlineId: user.psnOnlineId,
+        psnAccounts: user.accounts
+          .filter(account => account.platform === 'PLAYSTATION')
+          .map(account => ({ id: account.id, onlineId: account.displayName })),
         xboxAccounts: user.accounts
           .filter(account => account.platform === 'XBOX')
           .map(account => ({ id: account.id, gamertag: account.displayName })),

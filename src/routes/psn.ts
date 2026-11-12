@@ -36,6 +36,7 @@ export async function psnRoutes(app: FastifyInstance) {
           200: PsnSchema.StartPsnVerificationResponseSchema,
           400: ErrorSchemas.BadRequest,
           404: ErrorSchemas.NotFound,
+          409: ErrorSchemas.BadRequest,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -53,6 +54,7 @@ export async function psnRoutes(app: FastifyInstance) {
           200: PsnSchema.ConnectPsnResponseSchema,
           400: ErrorSchemas.BadRequest,
           404: ErrorSchemas.NotFound,
+          409: ErrorSchemas.BadRequest,
           500: ErrorSchemas.InternalServerError
         }
       }
@@ -61,10 +63,11 @@ export async function psnRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/',
+    '/:accountId',
     {
       preHandler: [app.authenticate],
       schema: {
+        params: PsnSchema.DisconnectParamsSchema,
         response: {
           204: PsnSchema.DisconnectResponseSchema,
           404: ErrorSchemas.NotFound,

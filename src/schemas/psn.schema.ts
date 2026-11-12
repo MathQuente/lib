@@ -5,6 +5,7 @@ import {
 } from './import.schema'
 
 export {
+  DisconnectParamsSchema,
   DisconnectResponseSchema,
   StartImportResponseSchema
 } from './import.schema'
@@ -28,6 +29,15 @@ export const ConnectPsnResponseSchema = z.object({
 
 export const ImportStatusResponseSchema = importStatusResponseSchema(
   z.object({
-    library: ImportSectionResultSchema
+    library: ImportSectionResultSchema,
+    accounts: z
+      .array(
+        z.object({
+          displayName: z.string(),
+          library: ImportSectionResultSchema.optional(),
+          error: z.string().optional()
+        })
+      )
+      .optional()
   })
 )

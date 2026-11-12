@@ -845,7 +845,6 @@ describe('UserService.findMe', () => {
         emailVerifiedAt: null,
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
-        psnOnlineId: 'psn-user',
         accounts,
         _count: { userGames: 3 }
       }),
@@ -882,6 +881,12 @@ describe('UserService.findMe', () => {
         platform: 'STEAM',
         externalId: '76561197960287931',
         displayName: 'Alt'
+      },
+      {
+        id: 'p-1',
+        platform: 'PLAYSTATION',
+        externalId: 'psn-1',
+        displayName: 'Player_1'
       }
     ])
 
@@ -900,7 +905,7 @@ describe('UserService.findMe', () => {
         { id: 's-1', steamId: '76561197960287930', personaName: 'MathQuente' },
         { id: 's-2', steamId: '76561197960287931', personaName: 'Alt' }
       ],
-      psnOnlineId: 'psn-user',
+      psnAccounts: [{ id: 'p-1', onlineId: 'Player_1' }],
       xboxAccounts: [{ id: 'x-1', gamertag: 'Gamer' }],
       followersCount: 2,
       followingCount: 5
@@ -911,6 +916,7 @@ describe('UserService.findMe', () => {
     const { user } = await build().findMe('user-1')
 
     expect(user.steamAccounts).toEqual([])
+    expect(user.psnAccounts).toEqual([])
     expect(user.xboxAccounts).toEqual([])
   })
 })

@@ -11,7 +11,7 @@ import { IGDBService } from './igdb.service'
 import { UserRepository } from '../repositories/users.repository'
 import { CacheRepository } from '../repositories/cache.repository'
 import { GameCacheService } from './game-cache.service'
-import { ClientError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 import { IGDBGame } from '../types/igdb'
 import {
   fakePlatformService,
@@ -24,14 +24,21 @@ function fakeUserRepository(
   overrides: Partial<UserRepository> = {}
 ): UserRepository {
   return {
-    findUserById: vi
+    findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+    listAccounts: vi
       .fn()
-      .mockResolvedValue({ id: 'user-1', psnAccountId: 'acc-1' }),
+      .mockResolvedValue([
+        { id: 'psn-acc-1', externalId: 'psn-1', displayName: 'Player' }
+      ]),
+    findAccount: vi.fn().mockResolvedValue(null),
+    addAccount: vi
+      .fn()
+      .mockResolvedValue({ id: 'psn-acc-2', displayName: 'Player_1' }),
+    updateAccountName: vi.fn().mockResolvedValue(null),
     findUserGame: vi.fn().mockResolvedValue(null),
     addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
     createUserGameStats: vi.fn().mockResolvedValue(null),
     upsertUserGameHours: vi.fn().mockResolvedValue(null),
-    setPsnAccount: vi.fn().mockResolvedValue(null),
     ...overrides
   } as unknown as UserRepository
 }
@@ -171,36 +178,42 @@ describe('PsnService.startPsnVerification', () => {
 
 describe('PsnService.connectPsn', () => {
   const pending = { accountId: '999', onlineId: 'Player_1', code: 'LIB-ABCD1234' }
+  const profileWithCode = {
+    accountId: '999',
+    onlineId: 'Player_1',
+    aboutMe: 'hi LIB-ABCD1234'
+  }
 
-  it('links the account when the code is in the profile "About me"', async () => {
-    const setPsnAccount = vi.fn().mockResolvedValue(null)
+  function build(overrides: Partial<UserRepository> = {}) {
+    const userRepository = fakeUserRepository(overrides)
     const cache = fakeCacheRepository(pending)
     const service = makeService(
-      fakeUserRepository({ setPsnAccount }),
-      fakePsnApi({
-        findProfile: vi.fn().mockResolvedValue({
-          accountId: '999',
-          onlineId: 'Player_1',
-          aboutMe: 'hi LIB-ABCD1234'
-        })
-      }),
+      userRepository,
+      fakePsnApi({ findProfile: vi.fn().mockResolvedValue(profileWithCode) }),
       cache
     )
+    return { service, userRepository, cache }
+  }
+
+  it('adds the account when the code is in the profile "About me"', async () => {
+    const { service, userRepository, cache } = build()
 
     const result = await service.connectPsn('user-1')
 
-    expect(setPsnAccount).toHaveBeenCalledWith('user-1', {
-      accountId: '999',
-      onlineId: 'Player_1'
-    })
+    expect(userRepository.addAccount).toHaveBeenCalledWith(
+      'user-1',
+      'PLAYSTATION',
+      { externalId: '999', displayName: 'Player_1' },
+      2
+    )
     expect(cache.del).toHaveBeenCalledWith('psn-verification:user-1')
     expect(result).toEqual({ psnOnlineId: 'Player_1' })
   })
 
   it('throws 400 and does not link when the code is missing', async () => {
-    const setPsnAccount = vi.fn()
+    const userRepository = fakeUserRepository()
     const service = makeService(
-      fakeUserRepository({ setPsnAccount }),
+      userRepository,
       fakePsnApi({
         findProfile: vi.fn().mockResolvedValue({
           accountId: '999',
@@ -214,13 +227,13 @@ describe('PsnService.connectPsn', () => {
     await expect(service.connectPsn('user-1')).rejects.toMatchObject({
       statusCode: 400
     })
-    expect(setPsnAccount).not.toHaveBeenCalled()
+    expect(userRepository.addAccount).not.toHaveBeenCalled()
   })
 
   it('throws 400 and does not link when the online id now belongs to another account', async () => {
-    const setPsnAccount = vi.fn()
+    const userRepository = fakeUserRepository()
     const service = makeService(
-      fakeUserRepository({ setPsnAccount }),
+      userRepository,
       fakePsnApi({
         findProfile: vi.fn().mockResolvedValue({
           accountId: '111',
@@ -234,7 +247,7 @@ describe('PsnService.connectPsn', () => {
     await expect(service.connectPsn('user-1')).rejects.toMatchObject({
       statusCode: 400
     })
-    expect(setPsnAccount).not.toHaveBeenCalled()
+    expect(userRepository.addAccount).not.toHaveBeenCalled()
   })
 
   it('throws 400 when no verification was started', async () => {
@@ -247,39 +260,170 @@ describe('PsnService.connectPsn', () => {
     expect(psnApi.findProfile).not.toHaveBeenCalled()
   })
 
-  it('throws 409 when the PSN account is linked to another user', async () => {
-    const duplicate = new Prisma.PrismaClientKnownRequestError('dup', {
-      code: 'P2002',
-      clientVersion: 'test'
+  it('relinking an account the user already has is idempotent and refreshes the online id', async () => {
+    const { service, userRepository, cache } = build({
+      findAccount: vi
+        .fn()
+        .mockResolvedValue({ id: 'psn-acc-1', userId: 'user-1', displayName: 'Old' })
     })
-    const service = makeService(
-      fakeUserRepository({
-        setPsnAccount: vi.fn().mockRejectedValue(duplicate)
-      }),
-      fakePsnApi({
-        findProfile: vi.fn().mockResolvedValue({
-          accountId: '999',
-          onlineId: 'Player_1',
-          aboutMe: 'LIB-ABCD1234'
-        })
-      }),
-      fakeCacheRepository(pending)
+
+    const result = await service.connectPsn('user-1')
+
+    expect(userRepository.addAccount).not.toHaveBeenCalled()
+    expect(userRepository.updateAccountName).toHaveBeenCalledWith(
+      'psn-acc-1',
+      'Player_1'
     )
+    expect(cache.del).toHaveBeenCalledWith('psn-verification:user-1')
+    expect(result).toEqual({ psnOnlineId: 'Player_1' })
+  })
+
+  it('throws 409 when the PSN account belongs to another user', async () => {
+    const { service, userRepository } = build({
+      findAccount: vi
+        .fn()
+        .mockResolvedValue({ id: 'x', userId: 'user-2', displayName: 'X' })
+    })
 
     await expect(service.connectPsn('user-1')).rejects.toMatchObject({
       statusCode: 409
     })
+    expect(userRepository.addAccount).not.toHaveBeenCalled()
+  })
+
+  it('throws 409 when a concurrent link of another user wins the unique account id', async () => {
+    const duplicate = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'test'
+    })
+    const { service } = build({
+      addAccount: vi.fn().mockRejectedValue(duplicate),
+      findAccount: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'x', userId: 'user-2', displayName: 'X' })
+    })
+
+    await expect(service.connectPsn('user-1')).rejects.toMatchObject({
+      statusCode: 409
+    })
+  })
+
+  it('treats a concurrent link of the same account by the same user as already linked', async () => {
+    const duplicate = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'test'
+    })
+    const { service, cache } = build({
+      addAccount: vi.fn().mockRejectedValue(duplicate),
+      findAccount: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'psn-acc-2',
+          userId: 'user-1',
+          displayName: 'Player_1'
+        })
+    })
+
+    await expect(service.connectPsn('user-1')).resolves.toEqual({
+      psnOnlineId: 'Player_1'
+    })
+    expect(cache.del).toHaveBeenCalledWith('psn-verification:user-1')
+  })
+
+  it('refuses a third account', async () => {
+    const { service, userRepository } = build({
+      listAccounts: vi.fn().mockResolvedValue([
+        { id: 'a1', externalId: '1', displayName: 'A' },
+        { id: 'a2', externalId: '2', displayName: 'B' }
+      ])
+    })
+
+    await expect(service.connectPsn('user-1')).rejects.toBeInstanceOf(
+      AccountLimitError
+    )
+    expect(userRepository.addAccount).not.toHaveBeenCalled()
+  })
+
+  it('refuses the account when a concurrent link took the last slot', async () => {
+    const { service } = build({ addAccount: vi.fn().mockResolvedValue(null) })
+
+    await expect(service.connectPsn('user-1')).rejects.toBeInstanceOf(
+      AccountLimitError
+    )
+  })
+})
+
+describe('PsnService.startPsnVerification with accounts', () => {
+  const twoAccounts = [
+    { id: 'a1', externalId: '1', displayName: 'A' },
+    { id: 'a2', externalId: '2', displayName: 'B' }
+  ]
+
+  it('refuses a third account before issuing a code', async () => {
+    const cache = fakeCacheRepository()
+    const service = makeService(
+      fakeUserRepository({
+        listAccounts: vi.fn().mockResolvedValue(twoAccounts)
+      }),
+      fakePsnApi({
+        findProfile: vi
+          .fn()
+          .mockResolvedValue({ accountId: '999', onlineId: 'New', aboutMe: '' })
+      }),
+      cache
+    )
+
+    await expect(
+      service.startPsnVerification('user-1', 'New')
+    ).rejects.toBeInstanceOf(AccountLimitError)
+    expect(cache.set).not.toHaveBeenCalled()
+  })
+
+  it('still issues a code to relink an account the user already has', async () => {
+    const service = makeService(
+      fakeUserRepository({
+        listAccounts: vi.fn().mockResolvedValue(twoAccounts)
+      }),
+      fakePsnApi({
+        findProfile: vi
+          .fn()
+          .mockResolvedValue({ accountId: '2', onlineId: 'B', aboutMe: '' })
+      })
+    )
+
+    const result = await service.startPsnVerification('user-1', 'B')
+
+    expect(result.code).toMatch(/^LIB-/)
+  })
+})
+
+describe('PsnService.disconnectPsn', () => {
+  it('removes the account through the platform service, scoped to PlayStation', async () => {
+    const removeAccount = vi.fn().mockResolvedValue(undefined)
+    const service = new PsnService(
+      fakeUserRepository(),
+      fakeGameCacheService(),
+      fakePsnApi(),
+      { removeAccount } as never,
+      fakeCacheRepository()
+    )
+
+    await service.disconnectPsn('user-1', 'psn-acc-1')
+
+    expect(removeAccount).toHaveBeenCalledWith(
+      'user-1',
+      'psn-acc-1',
+      'PLAYSTATION'
+    )
   })
 })
 
 describe('PsnService.enqueueImport', () => {
   it('throws when the user has not connected PSN yet', async () => {
     const service = makeService(
-      fakeUserRepository({
-        findUserById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', psnAccountId: null })
-      }),
+      fakeUserRepository({ listAccounts: vi.fn().mockResolvedValue([]) }),
       fakePsnApi()
     )
 
@@ -309,7 +453,8 @@ describe('PsnService.runImport', () => {
       'ug-10',
       'PLAYSTATION',
       'PS4',
-      expect.objectContaining({ hoursPlayed: 2 })
+      expect.objectContaining({ hoursPlayed: 2 }),
+      { accountId: 'psn-acc-1', hours: 2 }
     )
     expect(result.library).toEqual({
       imported: 1,
@@ -317,6 +462,9 @@ describe('PsnService.runImport', () => {
       skipped: 0,
       notFound: []
     })
+    expect(result.accounts).toEqual([
+      { displayName: 'Player', library: result.library }
+    ])
   })
 
   it('marks platinum games as played, using the last trophy date as completedAt', async () => {
@@ -403,7 +551,9 @@ describe('PsnService.runImport', () => {
 
     await service.runImport('user-1')
 
-    expect(getTrophySummariesByTitleId).toHaveBeenCalledWith('acc-1', ['CUSA9_00'])
+    expect(getTrophySummariesByTitleId).toHaveBeenCalledWith('psn-1', [
+      'CUSA9_00'
+    ])
     expect(addGameToUserLibrary).toHaveBeenCalledWith(
       expect.objectContaining({ statusIds: 1 })
     )
@@ -461,7 +611,8 @@ describe('PsnService.runImport', () => {
       'ug-10',
       'PLAYSTATION',
       expected,
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({ accountId: 'psn-acc-1' })
     )
   })
 
@@ -548,7 +699,8 @@ describe('PsnService.runImport', () => {
       'ug-10',
       'PLAYSTATION',
       'PS4',
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({ accountId: 'psn-acc-1' })
     )
   })
 
@@ -631,7 +783,8 @@ describe('PsnService.runImport', () => {
         'PS4',
         expect.objectContaining({
           completions: expectedStatusId === 1 ? 1 : 0
-        })
+        }),
+        expect.objectContaining({ accountId: 'psn-acc-1' })
       )
     }
   )
@@ -658,7 +811,8 @@ describe('PsnService.runImport', () => {
       'ug-10',
       'PLAYSTATION',
       'PS4',
-      expect.objectContaining({ hoursPlayed: 1 })
+      expect.objectContaining({ hoursPlayed: 1 }),
+      expect.objectContaining({ accountId: 'psn-acc-1' })
     )
   })
 
@@ -852,5 +1006,108 @@ describe('PsnService.runImport completion detection', () => {
     )
     expect(lookedUp).toContain('NPWR44_00')
     expect(lookedUp).not.toContain('NPWR0_00')
+  })
+})
+
+describe('PsnService.runImport with several accounts', () => {
+  const accounts = [
+    { id: 'psn-acc-1', externalId: 'psn-1', displayName: 'Main' },
+    { id: 'psn-acc-2', externalId: 'psn-2', displayName: 'Alt' }
+  ]
+
+  function build(
+    playedByAccount: Record<string, PsnPlayedGame[] | Error>,
+    psnOverrides: Partial<PsnApiService> = {}
+  ) {
+    const userRepository = fakeUserRepository({
+      listAccounts: vi.fn().mockResolvedValue(accounts)
+    })
+    const getPlayedGames = vi.fn(async (accountId: string) => {
+      const games = playedByAccount[accountId]
+      if (games instanceof Error) throw games
+      return games ?? []
+    })
+    const getTrophySummariesByName = vi.fn().mockResolvedValue(new Map())
+    const psnApi = fakePsnApi({
+      getPlayedGames,
+      getTrophySummariesByName,
+      ...psnOverrides
+    })
+    return {
+      service: makeService(userRepository, psnApi),
+      psnApi,
+      getPlayedGames,
+      getTrophySummariesByName
+    }
+  }
+
+  it('imports each account with its own PSN account id and platform account id, keeping hours per account', async () => {
+    mockIgdb([['100', 10]])
+    const { service, getPlayedGames, getTrophySummariesByName } = build({
+      'psn-1': [played({ playMinutes: 120 })],
+      'psn-2': [played({ playMinutes: 60 })]
+    })
+
+    const result = await service.runImport('user-1')
+
+    expect(getPlayedGames).toHaveBeenNthCalledWith(1, 'psn-1')
+    expect(getPlayedGames).toHaveBeenNthCalledWith(2, 'psn-2')
+    expect(getTrophySummariesByName).toHaveBeenNthCalledWith(1, 'psn-1')
+    expect(getTrophySummariesByName).toHaveBeenNthCalledWith(2, 'psn-2')
+    const saved = lastPlatformRepository.savePlatform.mock.calls.map(
+      ([, , , , accountHours]) => accountHours
+    )
+    expect(saved).toEqual([
+      { accountId: 'psn-acc-1', hours: 2 },
+      { accountId: 'psn-acc-2', hours: 1 }
+    ])
+    expect(result.accounts.map(a => a.displayName)).toEqual(['Main', 'Alt'])
+    expect(result.library.imported + result.library.updated).toBe(2)
+  })
+
+  it('lists a game that is not found in IGDB only once in the total', async () => {
+    mockIgdb([])
+    const { service } = build({
+      'psn-1': [played({ name: 'Obscure' })],
+      'psn-2': [played({ name: 'Obscure' })]
+    })
+
+    const result = await service.runImport('user-1')
+
+    expect(result.library.notFound).toEqual(['Obscure'])
+    expect(result.accounts.map(a => a.library?.notFound)).toEqual([
+      ['Obscure'],
+      ['Obscure']
+    ])
+  })
+
+  it('reports an account that fails without undoing the one that worked', async () => {
+    mockIgdb([['100', 10]])
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { service } = build({
+      'psn-1': [played({ playMinutes: 120 })],
+      'psn-2': new PsnApiError('boom')
+    })
+
+    const result = await service.runImport('user-1')
+
+    expect(result.accounts[0].library).toBeDefined()
+    expect(result.accounts[1]).toMatchObject({
+      displayName: 'Alt',
+      error: expect.stringContaining('PlayStation')
+    })
+    expect(result.library.imported).toBe(1)
+  })
+
+  it('fails the job when every account fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { service } = build({
+      'psn-1': new PsnApiError('boom'),
+      'psn-2': new PsnApiError('boom')
+    })
+
+    await expect(service.runImport('user-1')).rejects.toMatchObject({
+      statusCode: 400
+    })
   })
 })

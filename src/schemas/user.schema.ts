@@ -38,7 +38,7 @@ export const GetMeResponseSchema = z.object({
     steamAccounts: z.array(
       z.object({ id: z.string(), steamId: z.string(), personaName: z.string() })
     ),
-    psnOnlineId: z.string().nullable(),
+    psnAccounts: z.array(z.object({ id: z.string(), onlineId: z.string() })),
     xboxAccounts: z.array(z.object({ id: z.string(), gamertag: z.string() })),
     followersCount: z.number(),
     followingCount: z.number()

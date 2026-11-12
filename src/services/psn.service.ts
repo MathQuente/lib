@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { CacheRepository } from '../repositories/cache.repository'
-import { ClientError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
@@ -25,12 +25,18 @@ import { normalizeGameName } from '../utils/normalize-game-name'
 import {
   psnImportQueue,
   psnImportJobId,
+  PsnAccountImportResult,
   PsnImportJobResult
 } from '../queues/psn-import.queue'
-import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
+import {
+  enqueueUniqueImport,
+  getImportJobStatus,
+  ImportSectionResult
+} from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromPsnCategories } from '../utils/console-inference'
+import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
 import {
   PLAYED_STATUS_ID,
   PLAYING_STATUS_ID,
@@ -86,6 +92,11 @@ function finishedByTrophies(
       earliest(story) ?? earliest(rare) ?? summary.lastTrophyAt ?? undefined
   }
 }
+
+const TAKEN_MESSAGE =
+  'Este perfil da PlayStation já está vinculado a outra conta.'
+const GENERIC_ACCOUNT_ERROR =
+  'Não foi possível importar esta conta da PlayStation. Tente novamente mais tarde.'
 
 const PSN_VERIFICATION_TTL_SECONDS = 15 * 60
 const psnVerificationKey = (userId: string) => `psn-verification:${userId}`
@@ -170,6 +181,18 @@ export class PsnService {
     return user
   }
 
+  private async listPsnAccounts(userId: string) {
+    const accounts = await this.userRepository.listAccounts(
+      userId,
+      'PLAYSTATION'
+    )
+    return accounts.map(account => ({
+      id: account.id,
+      psnAccountId: account.externalId,
+      displayName: account.displayName
+    }))
+  }
+
   private async lookupProfile(onlineId: string) {
     try {
       return await this.psnApiService.findProfile(onlineId)
@@ -194,6 +217,14 @@ export class PsnService {
         'Não foi possível encontrar um perfil da PlayStation com esse ID.',
         400
       )
+    }
+
+    const accounts = await this.listPsnAccounts(userId)
+    const alreadyLinked = accounts.some(
+      account => account.psnAccountId === profile.accountId
+    )
+    if (!alreadyLinked && accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
+      throw new AccountLimitError('PLAYSTATION')
     }
 
     const code = `LIB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
@@ -240,22 +271,42 @@ export class PsnService {
       )
     }
 
-    try {
-      await this.userRepository.setPsnAccount(userId, {
-        accountId: profile.accountId,
-        onlineId: profile.onlineId
-      })
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
-        throw new ClientError(
-          'Este perfil da PlayStation já está vinculado a outra conta.',
-          409
-        )
+    const existing = await this.userRepository.findAccount(
+      'PLAYSTATION',
+      profile.accountId
+    )
+    if (existing) {
+      if (existing.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
+      await this.userRepository.updateAccountName(existing.id, profile.onlineId)
+    } else {
+      const accounts = await this.listPsnAccounts(userId)
+      if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
+        throw new AccountLimitError('PLAYSTATION')
       }
-      throw err
+
+      try {
+        const created = await this.userRepository.addAccount(
+          userId,
+          'PLAYSTATION',
+          { externalId: profile.accountId, displayName: profile.onlineId },
+          MAX_ACCOUNTS_PER_PLATFORM
+        )
+        if (!created) throw new AccountLimitError('PLAYSTATION')
+      } catch (err) {
+        if (
+          !(
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === 'P2002'
+          )
+        ) {
+          throw err
+        }
+        const winner = await this.userRepository.findAccount(
+          'PLAYSTATION',
+          profile.accountId
+        )
+        if (winner?.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
+      }
     }
 
     await this.cacheRepository.del(psnVerificationKey(userId))
@@ -263,14 +314,19 @@ export class PsnService {
     return { psnOnlineId: profile.onlineId }
   }
 
-  async disconnectPsn(userId: string) {
+  async disconnectPsn(userId: string, accountId: string) {
     await this.requireUser(userId)
-    await this.userRepository.setPsnAccount(userId, null)
+    await this.userGamePlatformService.removeAccount(
+      userId,
+      accountId,
+      'PLAYSTATION'
+    )
   }
 
   async enqueueImport(userId: string) {
-    const user = await this.requireUser(userId)
-    if (!user.psnAccountId) {
+    await this.requireUser(userId)
+    const accounts = await this.listPsnAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil da PlayStation primeiro.', 400)
     }
 
@@ -293,11 +349,65 @@ export class PsnService {
     userId: string,
     onProgress?: (percent: number) => void
   ): Promise<PsnImportJobResult> {
-    const user = await this.requireUser(userId)
-    if (!user.psnAccountId) {
+    await this.requireUser(userId)
+    const accounts = await this.listPsnAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil da PlayStation primeiro.', 400)
     }
-    const accountId = user.psnAccountId
+
+    const results: PsnAccountImportResult[] = []
+    const failures: unknown[] = []
+
+    for (const [index, account] of accounts.entries()) {
+      const report = (percent: number) =>
+        onProgress?.(
+          Math.round(((index + percent / 100) / accounts.length) * 100)
+        )
+      try {
+        const library = await this.importAccount(userId, account, report)
+        results.push({ displayName: account.displayName, library })
+      } catch (err) {
+        failures.push(err)
+        console.error('[PSN] account import failed', {
+          error: err instanceof Error ? err.message : 'unknown error'
+        })
+        results.push({
+          displayName: account.displayName,
+          error:
+            err instanceof ClientError ? err.message : GENERIC_ACCOUNT_ERROR
+        })
+      }
+    }
+
+    if (failures.length === accounts.length) throw failures[0]
+
+    onProgress?.(100)
+
+    const library: ImportSectionResult = {
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      notFound: []
+    }
+    const notFound = new Set<string>()
+    for (const { library: accountLibrary } of results) {
+      if (!accountLibrary) continue
+      library.imported += accountLibrary.imported
+      library.updated += accountLibrary.updated
+      library.skipped += accountLibrary.skipped
+      for (const name of accountLibrary.notFound) notFound.add(name)
+    }
+    library.notFound = [...notFound]
+
+    return { library, accounts: results }
+  }
+
+  private async importAccount(
+    userId: string,
+    account: { id: string; psnAccountId: string },
+    onProgress: (percent: number) => void
+  ): Promise<ImportSectionResult> {
+    const accountId = account.psnAccountId
 
     let playedGames: PsnPlayedGame[]
     try {
@@ -386,19 +496,20 @@ export class PsnService {
           completedAt,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
         },
-        consoleFromPsnCategories(game.categories)
+        consoleFromPsnCategories(game.categories),
+        account.id
       )
 
       if (outcome === 'imported') imported++
       else if (outcome === 'skipped') skipped++
       else updated++
       processed++
-      onProgress?.(Math.round((processed / total) * 100))
+      onProgress(Math.round((processed / total) * 100))
     }
 
-    onProgress?.(100)
+    onProgress(100)
 
-    return { library: { imported, updated, skipped, notFound } }
+    return { imported, updated, skipped, notFound }
   }
 
   private async detectCompletion(

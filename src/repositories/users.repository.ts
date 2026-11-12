@@ -191,8 +191,6 @@ export class UserRepository {
         userBanner: true,
         userName: true,
         profilePicture: true,
-        psnAccountId: true,
-        psnOnlineId: true,
         accounts: {
           select: {
             id: true,
@@ -204,20 +202,6 @@ export class UserRepository {
         },
         _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
-    })
-  }
-
-  async setPsnAccount(
-    userId: string,
-    account: { accountId: string; onlineId: string } | null
-  ) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: {
-        psnAccountId: account?.accountId ?? null,
-        psnOnlineId: account?.onlineId ?? null
-      },
-      select: { psnAccountId: true, psnOnlineId: true }
     })
   }
 

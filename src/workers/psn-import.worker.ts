@@ -18,7 +18,7 @@ import { toImportJobError } from '../queues/import-job'
 const GENERIC_IMPORT_ERROR =
   'Erro ao importar sua biblioteca da PlayStation. Tente novamente mais tarde.'
 
-const IMPORT_TIMEOUT_MS = 5 * 60 * 1000
+const IMPORT_TIMEOUT_MS = 10 * 60 * 1000
 
 export function startPsnImportWorker() {
   const psnService = new PsnService(
@@ -35,7 +35,7 @@ export function startPsnImportWorker() {
         return await withTimeout(
           psnService.runImport(userId, percent => job.updateProgress(percent)),
           IMPORT_TIMEOUT_MS,
-          'PSN import timed out after 5 minutes.'
+          'PSN import timed out after 10 minutes.'
         )
       } catch (err) {
         if (!(err instanceof ClientError)) {
