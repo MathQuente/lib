@@ -43,6 +43,7 @@ flowchart TB
         PSN[["PlayStation (psn-api)"]]
         XBOX[["Microsoft OAuth + OpenXBL"]]
         SMTP[["Gmail SMTP (nodemailer)"]]
+        CLOUDINARY[["Cloudinary (destroy old images)"]]
     end
 
     FE -->|HTTPS + cookies| ROUTES
@@ -62,6 +63,7 @@ flowchart TB
     SVC --> PSN
     SVC --> XBOX
     SVC -->|reset and verification emails| SMTP
+    SVC -->|destroy replaced or deleted images| CLOUDINARY
     CTRL -->|OAuth code exchange| GOOGLE
     CTRL -->|OAuth code exchange| DISCORD
 
@@ -176,7 +178,7 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 ### `/users` (routes/users.ts → UserController, UserGamePlatformController), 24 routes
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/users/me` | auth | own profile, with `email`, `emailVerified`, linked platform ids |
+| GET | `/users/me` | auth | own profile, with `email`, `emailVerified` and the linked accounts: `steamAccounts` (`id`, `steamId`, `personaName`), `psnAccounts` (`id`, `onlineId`) and `xboxAccounts` (`id`, `gamertag`), up to 2 each |
 | GET | `/users/:userId` | no | public profile (no email, no platform ids) |
 | GET | `/users/:userId/games` | no | public library, 6 games per status |
 | GET | `/users/:userId/followers`, `/users/:userId/following` | no | not paginated |
@@ -256,7 +258,7 @@ Generators: `prisma-client-js` + `prisma-dbml-generator`.
 
 ## Platform Imports (Steam, PlayStation, Xbox)
 
-**Flow, the same for the three platforms**: `POST /users/<platform>/import` → `XService.enqueueImport` → `enqueueUniqueImport` (`src/queues/import-job.ts`) adds a job to the platform's BullMQ queue → the worker (started in `Server.start()`, same process as the API, concurrency 1 per queue) calls `XService.runImport(userId, onProgress)` under a 5 minute timeout → each game goes through `UserGamePlatformService.importPlatform`. `GET /users/<platform>/import` reads the job: `idle`, `waiting`/`active`/`delayed` (with `progress`), `completed` (with `result`, `finishedAt` and `cooldownUntil`) or `failed` (with `error`).
+**Flow, the same for the three platforms**: `POST /users/<platform>/import` → `XService.enqueueImport` → `enqueueUniqueImport` (`src/queues/import-job.ts`) adds a job to the platform's BullMQ queue → the worker (started in `Server.start()`, same process as the API, concurrency 1 per queue) calls `XService.runImport(userId, onProgress)` under a 10 minute timeout (two accounts per platform) → each game goes through `UserGamePlatformService.importPlatform`. `GET /users/<platform>/import` reads the job: `idle`, `waiting`/`active`/`delayed` (with `progress`), `completed` (with `result`, `finishedAt` and `cooldownUntil`) or `failed` (with `error`).
 
 - **Queues**: `steam-import`, `psn-import`, `xbox-import`. Job id `<platform>-import-${userId}`.
 - **One at a time, 1 hour cooldown**: a waiting/active/delayed job answers 409; a job completed less than 1 hour ago answers 429 with the minutes left; a failed job can be retried at once. Jobs are never auto-removed: the finished job kept in Redis is what the cooldown reads.
@@ -440,7 +442,7 @@ Reasons that are not visible in the code. The code has no explanatory comments; 
 
 ## Environment variables (names only, see `.env.example`)
 
-- Runtime: `NODE_ENV`, `PORT`, `TRUST_PROXY`, `FRONTEND_URL`
+- Runtime: `NODE_ENV`, `PORT`, `TRUST_PROXY`, `SHUTDOWN_TIMEOUT_MS`, `FRONTEND_URL`
 - Auth: `SECRET_JWT_KEY`
 - Database and Redis: `DATABASE_URL`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `REDIS_URL`
 - Google / Discord: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_CALLBACK_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_OAUTH_CALLBACK_URL`
