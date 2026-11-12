@@ -4,10 +4,13 @@ import { GAME_STATUS, isHiddenFromCatalog } from './game-status'
 const DATE = 1_500_000_000
 
 describe('isHiddenFromCatalog', () => {
-  it.each([null, undefined])('shows a game with no status (%s), with or without date', status => {
-    expect(isHiddenFromCatalog(status, null)).toBe(false)
-    expect(isHiddenFromCatalog(status, DATE)).toBe(false)
-  })
+  it.each([null, undefined])(
+    'shows a game with no status (%s), with or without date',
+    status => {
+      expect(isHiddenFromCatalog(status, null)).toBe(false)
+      expect(isHiddenFromCatalog(status, DATE)).toBe(false)
+    }
+  )
 
   it('hides a rumored game with or without a date', () => {
     expect(isHiddenFromCatalog(GAME_STATUS.RUMORED, null)).toBe(true)

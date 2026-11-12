@@ -43,19 +43,25 @@ export class IGDBService {
     body: string
   ): Promise<number> {
     const token = await this.getAccessToken()
-    const response = await fetchWithTimeout(`https://api.igdb.com/v4/${endpoint}/count`, {
-      method: 'POST',
-      headers: {
-        'Client-ID': process.env.IGDB_CLIENT_ID!,
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'text/plain'
-      },
-      body
-    })
+    const response = await fetchWithTimeout(
+      `https://api.igdb.com/v4/${endpoint}/count`,
+      {
+        method: 'POST',
+        headers: {
+          'Client-ID': process.env.IGDB_CLIENT_ID!,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'text/plain'
+        },
+        body
+      }
+    )
     const data = (await response.json()) as { count?: number }
 
     if (!response.ok || 'title' in data) {
-      console.error('[IGDB] count request failed', { status: response.status, data })
+      console.error('[IGDB] count request failed', {
+        status: response.status,
+        data
+      })
       throw new IGDBRequestError('IGDB count request failed', data)
     }
 
@@ -65,15 +71,18 @@ export class IGDBService {
   private static async request<T>(endpoint: string, body: string): Promise<T> {
     const token = await this.getAccessToken()
 
-    const response = await fetchWithTimeout(`https://api.igdb.com/v4/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Client-ID': process.env.IGDB_CLIENT_ID!,
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'text/plain'
-      },
-      body
-    })
+    const response = await fetchWithTimeout(
+      `https://api.igdb.com/v4/${endpoint}`,
+      {
+        method: 'POST',
+        headers: {
+          'Client-ID': process.env.IGDB_CLIENT_ID!,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'text/plain'
+        },
+        body
+      }
+    )
 
     const data = await response.json()
     if (
@@ -286,7 +295,10 @@ export class IGDBService {
     name: string,
     platformIds: number[]
   ): Promise<IGDBGame[]> {
-    const term = name.replace(/[™®©"\\;]/g, ' ').replace(/\s+/g, ' ').trim()
+    const term = name
+      .replace(/[™®©"\\;]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
     if (!term) return []
     return this.request(
       'games',
@@ -333,7 +345,10 @@ export class IGDBService {
     )
   }
 
-  static async fetchEroticIds(lastId: number, limit: number): Promise<number[]> {
+  static async fetchEroticIds(
+    lastId: number,
+    limit: number
+  ): Promise<number[]> {
     const games = await this.request<{ id: number }[]>(
       'games',
       `fields id; where id > ${lastId} & themes = (${EROTIC_THEME_ID}) & id != (${EROTIC_EXCEPTION_LIST}); sort id asc; limit ${limit};`
@@ -407,11 +422,11 @@ export class IGDBService {
     return new Map(results.map(r => [r.id, r.total_rating_count ?? 0]))
   }
 
-  static async getGameModesByIds(ids: number[]): Promise<Map<number, number[]>> {
+  static async getGameModesByIds(
+    ids: number[]
+  ): Promise<Map<number, number[]>> {
     if (ids.length === 0) return new Map()
-    const results = await this.request<
-      { id: number; game_modes?: number[] }[]
-    >(
+    const results = await this.request<{ id: number; game_modes?: number[] }[]>(
       'games',
       `where id = (${ids.join(',')}); fields id,game_modes; limit ${Math.min(ids.length, 500)};`
     )

@@ -341,8 +341,7 @@ export class UserGamePlatformService {
     const isEndless = isNew ? !!data.endless : !!userGame?.endless
     const trustsHeuristic = isNew || isUndecided || isPromotableInProgress
     const countsAsCompletion =
-      !isEndless &&
-      (trustsHeuristic ? data.finished : data.confirmedFinished)
+      !isEndless && (trustsHeuristic ? data.finished : data.confirmedFinished)
 
     if (!userGame) {
       await this.userRepository.addGameToUserLibrary({

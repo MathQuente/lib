@@ -33,9 +33,15 @@ describe('IGDBService.getGamesByExternalIds', () => {
       { uid: '205023', game: 10 },
       { uid: '233449', game: 20 }
     ])
-    vi.spyOn(IGDBService, 'getGamesByIds').mockResolvedValue([game(10), game(20)])
+    vi.spyOn(IGDBService, 'getGamesByIds').mockResolvedValue([
+      game(10),
+      game(20)
+    ])
 
-    const result = await IGDBService.getGamesByExternalIds(['205023', '233449'], 36)
+    const result = await IGDBService.getGamesByExternalIds(
+      ['205023', '233449'],
+      36
+    )
 
     expect(request).toHaveBeenCalledWith(
       'external_games',
@@ -58,7 +64,10 @@ describe('IGDBService.getGamesByExternalIds', () => {
       .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValueOnce([{ uid: '500', game: 20 }])
-    vi.spyOn(IGDBService, 'getGamesByIds').mockResolvedValue([game(10), game(20)])
+    vi.spyOn(IGDBService, 'getGamesByIds').mockResolvedValue([
+      game(10),
+      game(20)
+    ])
 
     const result = await IGDBService.getGamesByExternalIds(
       firstPage.map(row => row.uid),
@@ -66,7 +75,9 @@ describe('IGDBService.getGamesByExternalIds', () => {
     )
 
     expect(request).toHaveBeenCalledTimes(2)
-    expect(request.mock.calls[0][1]).toContain('sort id asc; limit 500; offset 0;')
+    expect(request.mock.calls[0][1]).toContain(
+      'sort id asc; limit 500; offset 0;'
+    )
     expect(request.mock.calls[1][1]).toContain('limit 500; offset 500;')
     expect(result).toHaveLength(501)
   })
@@ -121,7 +132,10 @@ describe('IGDBService.searchGamesByName', () => {
       .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
       .mockResolvedValue([game(1)])
 
-    const result = await IGDBService.searchGamesByName('Far Cry® 4 "GOTY";', [12, 49])
+    const result = await IGDBService.searchGamesByName(
+      'Far Cry® 4 "GOTY";',
+      [12, 49]
+    )
 
     expect(result).toEqual([game(1)])
     expect(request).toHaveBeenCalledWith(
@@ -309,7 +323,10 @@ describe('IGDBService.toGameCacheInput', () => {
     const input = IGDBService.toGameCacheInput({
       id: 1,
       name: 'Valorant',
-      game_modes: [{ id: 2, name: 'Multiplayer' }, { id: 6, name: 'Battle Royale' }]
+      game_modes: [
+        { id: 2, name: 'Multiplayer' },
+        { id: 6, name: 'Battle Royale' }
+      ]
     } as IGDBGame)
 
     expect(input.gameModes).toEqual([2, 6])
@@ -340,16 +357,15 @@ describe('IGDBService.getGameStatusByIds', () => {
   it('maps the status id and uses null when IGDB omits the field', async () => {
     const request = vi
       .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
-      .mockResolvedValue([
-        { id: 288169, game_status: 7 },
-        { id: 81249 }
-      ])
+      .mockResolvedValue([{ id: 288169, game_status: 7 }, { id: 81249 }])
 
     const result = await IGDBService.getGameStatusByIds([288169, 81249])
 
     expect(request).toHaveBeenCalledWith(
       'games',
-      expect.stringContaining('where id = (288169,81249); fields id,game_status;')
+      expect.stringContaining(
+        'where id = (288169,81249); fields id,game_status;'
+      )
     )
     expect(result.get(288169)).toBe(7)
     expect(result.get(81249)).toBeNull()
@@ -359,8 +375,11 @@ describe('IGDBService.getGameStatusByIds', () => {
 describe('IGDBService status in the cache input and listings', () => {
   it('keeps the game status in the cache input, null when missing', () => {
     expect(
-      IGDBService.toGameCacheInput({ id: 1, name: 'A', game_status: 7 } as IGDBGame)
-        .gameStatus
+      IGDBService.toGameCacheInput({
+        id: 1,
+        name: 'A',
+        game_status: 7
+      } as IGDBGame).gameStatus
     ).toBe(7)
     expect(
       IGDBService.toGameCacheInput({ id: 2, name: 'B' } as IGDBGame).gameStatus
@@ -428,9 +447,7 @@ describe('IGDBService status in the cache input and listings', () => {
       await IGDBService.fetchForSync(0, 500)
 
       const query = request.mock.calls[0][1] as string
-      expect(query).toContain(
-        `(themes != (42) | id = (${EXCEPTION_LIST}))`
-      )
+      expect(query).toContain(`(themes != (42) | id = (${EXCEPTION_LIST}))`)
       expect(EROTIC_EXCEPTION_IDS).toContain(12328)
       expect(EROTIC_EXCEPTION_IDS).not.toContain(1)
       expect(query).not.toMatch(/ & themes != \(42\)/)
@@ -440,7 +457,9 @@ describe('IGDBService status in the cache input and listings', () => {
       expect([...EROTIC_EXCEPTION_IDS].sort((a, b) => a - b)).toEqual(
         EROTIC_EXCEPTION_IDS
       )
-      expect(new Set(EROTIC_EXCEPTION_IDS).size).toBe(EROTIC_EXCEPTION_IDS.length)
+      expect(new Set(EROTIC_EXCEPTION_IDS).size).toBe(
+        EROTIC_EXCEPTION_IDS.length
+      )
       expect(EROTIC_EXCEPTION_IDS).toHaveLength(22)
     })
 
@@ -470,7 +489,10 @@ describe('IGDBService status in the cache input and listings', () => {
   it('leaves rumored games out of the coming soon list and its count', async () => {
     const request = mockRequest([])
     const count = vi
-      .spyOn(IGDBService as unknown as { countRequest: RequestFn }, 'countRequest')
+      .spyOn(
+        IGDBService as unknown as { countRequest: RequestFn },
+        'countRequest'
+      )
       .mockResolvedValue(0 as never)
 
     await IGDBService.getComingSoonGames(20, 0)
@@ -533,7 +555,12 @@ describe('IGDBService.getRelatedGames', () => {
       { id: 2, name: 'Big Bundle', game_status: 0 },
       { id: 3, name: 'Rumored DLC', game_status: 7 },
       { id: 4, name: 'Cancelled DLC', game_status: 6 },
-      { id: 5, name: 'Cancelled but dated', game_status: 6, first_release_date: 1 }
+      {
+        id: 5,
+        name: 'Cancelled but dated',
+        game_status: 6,
+        first_release_date: 1
+      }
     ])
 
     const result = await IGDBService.getRelatedGames(10)

@@ -1,10 +1,5 @@
 export type ReviewAuthorStatus =
-  | 'PLAYED'
-  | 'PAUSED'
-  | 'PLAYING'
-  | 'BACKLOG'
-  | 'WISHLIST'
-  | 'DROPPED'
+  'PLAYED' | 'PAUSED' | 'PLAYING' | 'BACKLOG' | 'WISHLIST' | 'DROPPED'
 
 export type CommunityReviewRow = {
   userId: string

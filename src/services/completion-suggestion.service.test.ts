@@ -66,10 +66,21 @@ describe('CompletionSuggestionService.record', () => {
   it('records a pending suggestion for a game that is still being played', async () => {
     const { service, repository } = setup()
 
-    const recorded = await service.record('user-1', 26472, 'STEAM', evidence, false)
+    const recorded = await service.record(
+      'user-1',
+      26472,
+      'STEAM',
+      evidence,
+      false
+    )
 
     expect(recorded).toBe(true)
-    expect(repository.upsertPending).toHaveBeenCalledWith('ug-1', 'STEAM', evidence, false)
+    expect(repository.upsertPending).toHaveBeenCalledWith(
+      'ug-1',
+      'STEAM',
+      evidence,
+      false
+    )
   })
 
   it.each([2, 3, 4])('records for a game with status %i', async statusId => {
@@ -82,7 +93,9 @@ describe('CompletionSuggestionService.record', () => {
       })
     })
 
-    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(true)
+    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(
+      true
+    )
     expect(repository.upsertPending).toHaveBeenCalled()
   })
 
@@ -103,7 +116,9 @@ describe('CompletionSuggestionService.record', () => {
       })
     })
 
-    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(false)
+    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(
+      false
+    )
     expect(repository.upsertPending).not.toHaveBeenCalled()
   })
 
@@ -112,7 +127,9 @@ describe('CompletionSuggestionService.record', () => {
       findGameForRecord: vi.fn().mockResolvedValue(null)
     })
 
-    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(false)
+    expect(await service.record('user-1', 1, 'STEAM', evidence, false)).toBe(
+      false
+    )
     expect(repository.upsertPending).not.toHaveBeenCalled()
   })
 })
@@ -160,17 +177,30 @@ describe('CompletionSuggestionService.accept', () => {
       statusId: 1,
       completions: 1,
       completedAt: '2026-10-22T12:00:00.000Z',
-      platformRows: [{ id: 'row-1', completions: 1, completedAt: '2026-10-22T12:00:00.000Z' }]
+      platformRows: [
+        { id: 'row-1', completions: 1, completedAt: '2026-10-22T12:00:00.000Z' }
+      ]
     })
     const { service, repository, userService } = setup({
-      readGameState: vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(after)
+      readGameState: vi
+        .fn()
+        .mockResolvedValueOnce(before)
+        .mockResolvedValueOnce(after)
     })
 
     const result = await service.accept('user-1', 26472)
 
     expect(userService.updateGame).toHaveBeenCalledWith(26472, 'user-1', 1)
-    expect(repository.markAccepted).toHaveBeenCalledWith('sug-1', { before, after })
-    expect(result).toEqual({ igdbId: 26472, status: 'PLAYED', completions: 1, canUndo: true })
+    expect(repository.markAccepted).toHaveBeenCalledWith('sug-1', {
+      before,
+      after
+    })
+    expect(result).toEqual({
+      igdbId: 26472,
+      status: 'PLAYED',
+      completions: 1,
+      canUndo: true
+    })
   })
 
   it('claims the suggestion before changing the game', async () => {
@@ -183,7 +213,9 @@ describe('CompletionSuggestionService.accept', () => {
     userService.updateGame.mockImplementation(async () => {
       order.push('update')
     })
-    repository.readGameState.mockResolvedValue(state({ statusId: 3, completions: 1 }))
+    repository.readGameState.mockResolvedValue(
+      state({ statusId: 3, completions: 1 })
+    )
 
     await service.accept('user-1', 1)
 
@@ -195,7 +227,9 @@ describe('CompletionSuggestionService.accept', () => {
       claimPending: vi.fn().mockResolvedValue(false)
     })
 
-    await expect(service.accept('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.accept('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
     expect(userService.updateGame).not.toHaveBeenCalled()
   })
 
@@ -228,7 +262,9 @@ describe('CompletionSuggestionService.accept', () => {
 
     await service.accept('user-1', 1)
 
-    expect(platformRepository.markSinglePlatformCompleted).not.toHaveBeenCalled()
+    expect(
+      platformRepository.markSinglePlatformCompleted
+    ).not.toHaveBeenCalled()
   })
 
   it('releases the claim when changing the game fails', async () => {
@@ -241,9 +277,13 @@ describe('CompletionSuggestionService.accept', () => {
   })
 
   it('returns 404 when there is no suggestion', async () => {
-    const { service } = setup({ findByUserAndIgdbId: vi.fn().mockResolvedValue(null) })
+    const { service } = setup({
+      findByUserAndIgdbId: vi.fn().mockResolvedValue(null)
+    })
 
-    await expect(service.accept('user-1', 1)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(service.accept('user-1', 1)).rejects.toMatchObject({
+      statusCode: 404
+    })
   })
 
   it('returns 409 when the suggestion was already resolved', async () => {
@@ -257,7 +297,9 @@ describe('CompletionSuggestionService.accept', () => {
       })
     })
 
-    await expect(service.accept('user-1', 1)).rejects.toBeInstanceOf(ClientError)
+    await expect(service.accept('user-1', 1)).rejects.toBeInstanceOf(
+      ClientError
+    )
     expect(userService.updateGame).not.toHaveBeenCalled()
   })
 
@@ -266,7 +308,9 @@ describe('CompletionSuggestionService.accept', () => {
       readGameState: vi.fn().mockResolvedValue(state({ statusId: 1 }))
     })
 
-    await expect(service.accept('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.accept('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
     expect(userService.updateGame).not.toHaveBeenCalled()
   })
 })
@@ -307,7 +351,9 @@ describe('CompletionSuggestionService.dismiss', () => {
       })
     })
 
-    await expect(service.dismiss('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.dismiss('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
   })
 })
 
@@ -335,7 +381,9 @@ describe('CompletionSuggestionService.undo', () => {
       before,
       expect.any(Function)
     )
-    const isUnchanged = repository.restore.mock.calls[0][3] as (s: GameState) => boolean
+    const isUnchanged = repository.restore.mock.calls[0][3] as (
+      s: GameState
+    ) => boolean
     expect(isUnchanged(after)).toBe(true)
     expect(isUnchanged({ ...after, completions: 2 })).toBe(false)
     expect(result).toEqual({ igdbId: 26472, status: 'PLAYING', completions: 0 })
@@ -347,7 +395,9 @@ describe('CompletionSuggestionService.undo', () => {
       restore: vi.fn().mockResolvedValue('changed')
     })
 
-    await expect(service.undo('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.undo('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
   })
 
   it('returns 409 when another undo already restored it', async () => {
@@ -356,12 +406,16 @@ describe('CompletionSuggestionService.undo', () => {
       restore: vi.fn().mockResolvedValue('not_accepted')
     })
 
-    await expect(service.undo('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.undo('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
   })
 
   it('returns 409 when there is nothing to undo', async () => {
     const { service } = setup()
 
-    await expect(service.undo('user-1', 1)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.undo('user-1', 1)).rejects.toMatchObject({
+      statusCode: 409
+    })
   })
 })

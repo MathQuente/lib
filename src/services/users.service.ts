@@ -261,7 +261,8 @@ export class UserService {
       | 'dateAdded'
       | 'hoursPlayed'
       | 'completedAt' = 'dateAdded',
-    sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' || sortBy === 'completedAt'
+    sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' ||
+    sortBy === 'completedAt'
       ? 'desc'
       : 'asc',
     options: { previewPerStatus?: number; includeLibraryIds?: boolean } = {}
@@ -282,7 +283,8 @@ export class UserService {
       skip: filter ? pageIndex * this.USER_GAMES_PER_PAGE : undefined,
       take: filter ? this.USER_GAMES_PER_PAGE : undefined,
       previewPerStatus,
-      uncappedStatuses: previewPerStatus === undefined ? undefined : [Status.PLAYING]
+      uncappedStatuses:
+        previewPerStatus === undefined ? undefined : [Status.PLAYING]
     })
 
     const enriched = await this.fillMissingGameCacheEntries(rows)
@@ -438,12 +440,16 @@ export class UserService {
 
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
 
-    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+    if (!userGame)
+      throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     const currentStatus = userGame.UserGamesStatus.id
     const hasPlatforms = (userGame._count?.platforms ?? 0) > 0
 
-    if (statusId === WISHLIST_STATUS_ID && currentStatus !== WISHLIST_STATUS_ID) {
+    if (
+      statusId === WISHLIST_STATUS_ID &&
+      currentStatus !== WISHLIST_STATUS_ID
+    ) {
       const { igdbId: updatedId, UserGamesStatus } =
         await this.userRepository.moveToWishlist(igdbId, userId, statusId)
 
@@ -559,7 +565,10 @@ export class UserService {
       throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
     }
 
-    const { stats } = await this.userRepository.findUserGameStats(igdbId, userId)
+    const { stats } = await this.userRepository.findUserGameStats(
+      igdbId,
+      userId
+    )
     const minimum = userGame?.UserGamesStatus?.id === PLAYED_STATUS_ID ? 1 : 0
     if ((stats?.completions ?? 0) + incrementValue < minimum) {
       throw new ClientError(
@@ -597,7 +606,8 @@ export class UserService {
       igdbId,
       userId
     )
-    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+    if (!userGame)
+      throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     return {
       completedAt: userGame.completedAt
@@ -617,7 +627,8 @@ export class UserService {
       igdbId,
       userId
     )
-    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+    if (!userGame)
+      throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     if ((userGame._count?.platforms ?? 0) > 0) {
       throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
@@ -658,14 +669,18 @@ export class UserService {
       igdbId,
       userId
     )
-    if (!userGame) throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+    if (!userGame)
+      throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
 
     if ((userGame._count?.platforms ?? 0) > 0) {
       throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
     }
 
     if (userGame.UserGamesStatus?.status === Status.WISHLIST) {
-      throw new ClientError('Não é possível definir horas jogadas para um jogo da lista de desejos.', 400)
+      throw new ClientError(
+        'Não é possível definir horas jogadas para um jogo da lista de desejos.',
+        400
+      )
     }
 
     const stats = await this.userRepository.upsertUserGameHours(

@@ -36,10 +36,13 @@ export function hasSinglePlayerMode(game: IGDBGame): boolean {
 }
 
 const OPEN_ENDED_GENRES = new Set(['sport', 'racing'])
-const MULTIPLAYER_MODE_PATTERN = /multiplayer|co-operative|massively|battle royale/i
+const MULTIPLAYER_MODE_PATTERN =
+  /multiplayer|co-operative|massively|battle royale/i
 
 export function hasMultiplayerMode(game: IGDBGame): boolean {
-  return game.game_modes?.some(m => MULTIPLAYER_MODE_PATTERN.test(m.name)) ?? false
+  return (
+    game.game_modes?.some(m => MULTIPLAYER_MODE_PATTERN.test(m.name)) ?? false
+  )
 }
 
 function isOpenEnded(game: IGDBGame): boolean {
@@ -48,12 +51,17 @@ function isOpenEnded(game: IGDBGame): boolean {
   return openEndedGenre && hasMultiplayerMode(game)
 }
 
-const NARRATIVE_GENRES = new Set(['adventure', 'role-playing (rpg)', 'visual novel'])
+const NARRATIVE_GENRES = new Set([
+  'adventure',
+  'role-playing (rpg)',
+  'visual novel'
+])
 const PARTY_THEME = 'party'
 
 function lacksCampaign(game: IGDBGame): boolean {
   if (!hasMultiplayerMode(game)) return false
-  const isParty = game.themes?.some(t => t.name.toLowerCase() === PARTY_THEME) ?? false
+  const isParty =
+    game.themes?.some(t => t.name.toLowerCase() === PARTY_THEME) ?? false
   if (isParty) return true
   if (!game.genres || game.genres.length === 0) return false
   return !game.genres.some(g => NARRATIVE_GENRES.has(g.name.toLowerCase()))
@@ -86,14 +94,22 @@ export function completedChapterSequenceEnd(
     const last = Math.max(...chapters.keys())
     const first = Math.min(...chapters.keys())
     const count = chapters.size
-    if (first > 1 || count !== last - first + 1 || count < MIN_CHAPTERS_FOR_SEQUENCE) {
+    if (
+      first > 1 ||
+      count !== last - first + 1 ||
+      count < MIN_CHAPTERS_FOR_SEQUENCE
+    ) {
       continue
     }
-    const ordered = Array.from({ length: count }, (_, i) => chapters.get(first + i)!)
+    const ordered = Array.from({ length: count }, (_, i) =>
+      chapters.get(first + i)!
+    )
     if (!ordered.every(name => unlocked.has(name))) continue
 
     const times = ordered.map(name => achieved.unlockTimes.get(name) ?? 0)
-    const inOrder = times.every((time, i) => time > 0 && (i === 0 || time >= times[i - 1]))
+    const inOrder = times.every(
+      (time, i) => time > 0 && (i === 0 || time >= times[i - 1])
+    )
     if (!inOrder) continue
 
     return ordered[ordered.length - 1]
@@ -144,7 +160,9 @@ export function hasLockedPlainEndAchievement(
 }
 
 export function hasPracticalEnd(normallyHours: number | undefined): boolean {
-  return normallyHours === undefined || normallyHours < OPEN_ENDED_TIME_TO_BEAT_HOURS
+  return (
+    normallyHours === undefined || normallyHours < OPEN_ENDED_TIME_TO_BEAT_HOURS
+  )
 }
 
 export type FinishSignal = 'heuristic' | 'playtime'

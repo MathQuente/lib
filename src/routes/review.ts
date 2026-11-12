@@ -80,6 +80,7 @@ export async function reviewRoutes(app: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => reviewController.getCommunityReviews(request, reply)
+    async (request, reply) =>
+      reviewController.getCommunityReviews(request, reply)
   )
 }

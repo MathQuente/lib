@@ -36,7 +36,10 @@ export function startSteamImportWorker() {
   const steamService = new SteamService(
     userRepository,
     gameCacheService,
-    new UserGamePlatformService(new UserGamePlatformRepository(), userRepository),
+    new UserGamePlatformService(
+      new UserGamePlatformRepository(),
+      userRepository
+    ),
     new CompletionSuggestionService(
       new CompletionSuggestionRepository(),
       userService,

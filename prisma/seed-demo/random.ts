@@ -13,7 +13,8 @@ export function createRng(seed: number) {
 
   const chance = (probability: number) => next() < probability
 
-  const pick = <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)]
+  const pick = <T>(items: readonly T[]): T =>
+    items[Math.floor(next() * items.length)]
 
   const weightedIndex = (weights: readonly number[]) => {
     const total = weights.reduce((sum, w) => sum + w, 0)
@@ -25,8 +26,10 @@ export function createRng(seed: number) {
     return weights.length - 1
   }
 
-  const weightedPick = <T>(items: readonly T[], weights: readonly number[]): T =>
-    items[weightedIndex(weights)]
+  const weightedPick = <T>(
+    items: readonly T[],
+    weights: readonly number[]
+  ): T => items[weightedIndex(weights)]
 
   const weightedSample = <T>(
     items: readonly T[],
@@ -50,7 +53,15 @@ export function createRng(seed: number) {
     return median * Math.exp(normal * spread)
   }
 
-  return { next, between, chance, pick, weightedPick, weightedSample, logNormal }
+  return {
+    next,
+    between,
+    chance,
+    pick,
+    weightedPick,
+    weightedSample,
+    logNormal
+  }
 }
 
 export type Rng = ReturnType<typeof createRng>

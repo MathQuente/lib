@@ -29,7 +29,11 @@ describe('UserGamePlatformRepository recomputeTotals', () => {
   it('sets the game date to the earliest platform date', async () => {
     const early = new Date('2024-01-01')
     tx.userGamePlatform.findMany.mockResolvedValue([
-      { hoursPlayed: null, completions: 1, completedAt: new Date('2025-01-01') },
+      {
+        hoursPlayed: null,
+        completions: 1,
+        completedAt: new Date('2025-01-01')
+      },
       { hoursPlayed: null, completions: 1, completedAt: early }
     ])
 

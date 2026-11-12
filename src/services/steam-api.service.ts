@@ -64,9 +64,10 @@ export class SteamApiService {
     if (param('op_endpoint') !== STEAM_OPENID_ENDPOINT) return null
     if (param('return_to') !== expectedReturnTo) return null
 
-    const claimed = /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/.exec(
-      param('claimed_id')
-    )
+    const claimed =
+      /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/.exec(
+        param('claimed_id')
+      )
     if (!claimed || param('identity') !== param('claimed_id')) return null
 
     const signedFields = param('signed').split(',')
@@ -158,7 +159,9 @@ export class SteamApiService {
     return data.response.items
   }
 
-  private static async fetchAchievementData(url: string): Promise<Response | null> {
+  private static async fetchAchievementData(
+    url: string
+  ): Promise<Response | null> {
     for (let attempt = 0; ; attempt++) {
       let response: Response | null = null
       try {
@@ -198,7 +201,11 @@ export class SteamApiService {
     }
 
     const achievements = data.playerstats?.achievements
-    if (!data.playerstats?.success || !achievements || achievements.length === 0) {
+    if (
+      !data.playerstats?.success ||
+      !achievements ||
+      achievements.length === 0
+    ) {
       return null
     }
 

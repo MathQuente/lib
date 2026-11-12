@@ -102,7 +102,8 @@ export class AuthController {
   async refreshTokenHandler(request: FastifyRequest, reply: FastifyReply) {
     const refreshToken = request.cookies.refreshToken
 
-    if (!refreshToken) throw new ClientError('Token de atualização não enviado.', 401)
+    if (!refreshToken)
+      throw new ClientError('Token de atualização não enviado.', 401)
 
     let tokens: Awaited<ReturnType<AuthService['refreshTokens']>>
     try {

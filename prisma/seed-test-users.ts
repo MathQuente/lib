@@ -26,10 +26,30 @@ interface TestUserPlan {
 }
 
 const PLANS: TestUserPlan[] = [
-  { email: 'sem.jogos@teste.com', userName: 'SemJogosTeste', gameCount: 0, withReviews: false },
-  { email: 'poucos.jogos@teste.com', userName: 'PoucosJogosTeste', gameCount: 3, withReviews: true },
-  { email: 'muitos.jogos@teste.com', userName: 'MuitosJogosTeste', gameCount: 80, withReviews: true },
-  { email: 'reviewer@teste.com', userName: 'ReviewerTeste', gameCount: 15, withReviews: true }
+  {
+    email: 'sem.jogos@teste.com',
+    userName: 'SemJogosTeste',
+    gameCount: 0,
+    withReviews: false
+  },
+  {
+    email: 'poucos.jogos@teste.com',
+    userName: 'PoucosJogosTeste',
+    gameCount: 3,
+    withReviews: true
+  },
+  {
+    email: 'muitos.jogos@teste.com',
+    userName: 'MuitosJogosTeste',
+    gameCount: 80,
+    withReviews: true
+  },
+  {
+    email: 'reviewer@teste.com',
+    userName: 'ReviewerTeste',
+    gameCount: 15,
+    withReviews: true
+  }
 ]
 
 async function main() {
@@ -79,7 +99,13 @@ async function main() {
       const igdbId = igdbIds[i]
 
       const statusId =
-        i % 5 === 0 ? WISHLIST : i % 4 === 0 ? BACKLOG : i % 7 === 0 ? PLAYING : PLAYED
+        i % 5 === 0
+          ? WISHLIST
+          : i % 4 === 0
+            ? BACKLOG
+            : i % 7 === 0
+              ? PLAYING
+              : PLAYED
 
       const userGame = await prisma.userGame.upsert({
         where: { userId_igdbId: { userId: user.id, igdbId } },

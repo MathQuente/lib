@@ -26,12 +26,16 @@ describe('canInferCompletion', () => {
     expect(canInferCompletion(game(['Sport'], ['Single player']))).toBe(true)
   })
 
-  it.each(['Multiplayer', 'Co-operative', 'Massively Multiplayer Online (MMO)', 'Battle Royale'])(
-    'rejects a racing game that also has %s',
-    mode => {
-      expect(canInferCompletion(game(['Racing'], ['Single player', mode]))).toBe(false)
-    }
-  )
+  it.each([
+    'Multiplayer',
+    'Co-operative',
+    'Massively Multiplayer Online (MMO)',
+    'Battle Royale'
+  ])('rejects a racing game that also has %s', mode => {
+    expect(canInferCompletion(game(['Racing'], ['Single player', mode]))).toBe(
+      false
+    )
+  })
 
   it('rejects a game with no single-player mode', () => {
     expect(canInferCompletion(game(['Shooter'], ['Multiplayer']))).toBe(false)
@@ -60,7 +64,9 @@ describe('meetsPlaytimeSignal', () => {
   })
 
   it('fails without a known time to beat', () => {
-    expect(meetsPlaytimeSignal({ ...base, normallyHours: undefined })).toBe(false)
+    expect(meetsPlaytimeSignal({ ...base, normallyHours: undefined })).toBe(
+      false
+    )
   })
 
   it('fails when there are too few achievements to mean anything', () => {
@@ -136,21 +142,32 @@ describe('evaluateFinishSuggestion', () => {
   })
 
   it('does not suggest below 10% of the achievements', () => {
-    expect(evaluateFinishSuggestion({ ...base, achieved: 4 }).suggest).toBe(false)
+    expect(evaluateFinishSuggestion({ ...base, achieved: 4 }).suggest).toBe(
+      false
+    )
   })
 
   it('does not suggest before the time to beat', () => {
-    expect(evaluateFinishSuggestion({ ...base, hoursPlayed: 30 }).suggest).toBe(false)
+    expect(evaluateFinishSuggestion({ ...base, hoursPlayed: 30 }).suggest).toBe(
+      false
+    )
   })
 
   it('does not suggest without a time to beat or with too few achievements', () => {
-    expect(evaluateFinishSuggestion({ ...base, normallyHours: undefined }).suggest).toBe(false)
-    expect(evaluateFinishSuggestion({ ...base, achieved: 1, total: 4 }).suggest).toBe(false)
+    expect(
+      evaluateFinishSuggestion({ ...base, normallyHours: undefined }).suggest
+    ).toBe(false)
+    expect(
+      evaluateFinishSuggestion({ ...base, achieved: 1, total: 4 }).suggest
+    ).toBe(false)
   })
 
   it('does not suggest for a game that cannot be completed', () => {
     expect(
-      evaluateFinishSuggestion({ ...base, game: game(['Shooter'], ['Multiplayer']) }).suggest
+      evaluateFinishSuggestion({
+        ...base,
+        game: game(['Shooter'], ['Multiplayer'])
+      }).suggest
     ).toBe(false)
   })
 
@@ -168,7 +185,10 @@ describe('evaluateFinishSuggestion', () => {
 
   it('does not suggest a party game with no campaign', () => {
     const among = {
-      ...game(['Strategy', 'Indie'], ['Single player', 'Multiplayer', 'Co-operative']),
+      ...game(
+        ['Strategy', 'Indie'],
+        ['Single player', 'Multiplayer', 'Co-operative']
+      ),
       themes: [{ name: 'Party' }]
     }
     expect(
@@ -195,13 +215,12 @@ describe('COMPLETION_KEYWORD_PATTERN with the main story wording', () => {
 })
 
 describe('isPlainEndAchievement', () => {
-  it.each([
-    'Finish the main storyline',
-    'Complete the game',
-    'Beat the game'
-  ])('accepts "%s"', text => {
-    expect(isPlainEndAchievement(text)).toBe(true)
-  })
+  it.each(['Finish the main storyline', 'Complete the game', 'Beat the game'])(
+    'accepts "%s"',
+    text => {
+      expect(isPlainEndAchievement(text)).toBe(true)
+    }
+  )
 
   it.each([
     'Beat the game in 300 days.',
@@ -268,7 +287,11 @@ describe('evaluateFinishSuggestion with blocked weak signals', () => {
 })
 
 describe('canInferCompletion for multiplayer games without a campaign', () => {
-  const withThemes = (genres: string[], modes: string[], themes: string[]): IGDBGame => ({
+  const withThemes = (
+    genres: string[],
+    modes: string[],
+    themes: string[]
+  ): IGDBGame => ({
     ...game(genres, modes),
     themes: themes.map(name => ({ name }))
   })
@@ -276,21 +299,30 @@ describe('canInferCompletion for multiplayer games without a campaign', () => {
   it('rejects a party game that lists single player', () => {
     expect(
       canInferCompletion(
-        withThemes(['Strategy', 'Indie'], ['Single player', 'Multiplayer'], ['Party'])
+        withThemes(
+          ['Strategy', 'Indie'],
+          ['Single player', 'Multiplayer'],
+          ['Party']
+        )
       )
     ).toBe(false)
   })
 
   it('rejects a multiplayer shooter with no narrative genre', () => {
     expect(
-      canInferCompletion(game(['Shooter', 'Tactical'], ['Single player', 'Multiplayer']))
+      canInferCompletion(
+        game(['Shooter', 'Tactical'], ['Single player', 'Multiplayer'])
+      )
     ).toBe(false)
   })
 
   it('accepts a multiplayer game with an adventure or RPG genre', () => {
     expect(
       canInferCompletion(
-        game(['Platform', 'Adventure'], ['Single player', 'Multiplayer', 'Co-operative'])
+        game(
+          ['Platform', 'Adventure'],
+          ['Single player', 'Multiplayer', 'Co-operative']
+        )
       )
     ).toBe(true)
   })
@@ -300,14 +332,22 @@ describe('canInferCompletion for multiplayer games without a campaign', () => {
   })
 
   it('does not decide when genres are unknown', () => {
-    expect(canInferCompletion(game([], ['Single player', 'Multiplayer']))).toBe(true)
+    expect(canInferCompletion(game([], ['Single player', 'Multiplayer']))).toBe(
+      true
+    )
   })
 })
 
 describe('completedChapterSequenceEnd', () => {
-  const names = ['ACH_PROLOGUE', ...Array.from({ length: 10 }, (_, i) => `ACH_C${i + 1}`), 'ACH_X']
+  const names = [
+    'ACH_PROLOGUE',
+    ...Array.from({ length: 10 }, (_, i) => `ACH_C${i + 1}`),
+    'ACH_X'
+  ]
   const times = (n: number, step = 10) =>
-    new Map(Array.from({ length: n }, (_, i) => [`ACH_C${i + 1}`, 100 + i * step]))
+    new Map(
+      Array.from({ length: n }, (_, i) => [`ACH_C${i + 1}`, 100 + i * step])
+    )
 
   it('returns the last chapter when the whole sequence is unlocked in order', () => {
     const apiNames = names.filter(n => n.startsWith('ACH_C'))
@@ -326,21 +366,30 @@ describe('completedChapterSequenceEnd', () => {
   it('returns null when unlocks are out of order', () => {
     const apiNames = names.filter(n => n.startsWith('ACH_C'))
     expect(
-      completedChapterSequenceEnd(names, { apiNames, unlockTimes: times(10, -10) })
+      completedChapterSequenceEnd(names, {
+        apiNames,
+        unlockTimes: times(10, -10)
+      })
     ).toBeNull()
   })
 
   it('ignores sequences shorter than five chapters', () => {
     const short = ['ACH_C1', 'ACH_C2', 'ACH_C3']
     expect(
-      completedChapterSequenceEnd(short, { apiNames: short, unlockTimes: times(3) })
+      completedChapterSequenceEnd(short, {
+        apiNames: short,
+        unlockTimes: times(3)
+      })
     ).toBeNull()
   })
 
   it('ignores a sequence with a gap', () => {
     const gap = ['ACH_C1', 'ACH_C2', 'ACH_C4', 'ACH_C5', 'ACH_C6', 'ACH_C7']
     expect(
-      completedChapterSequenceEnd(gap, { apiNames: gap, unlockTimes: new Map(gap.map((n, i) => [n, 100 + i])) })
+      completedChapterSequenceEnd(gap, {
+        apiNames: gap,
+        unlockTimes: new Map(gap.map((n, i) => [n, 100 + i]))
+      })
     ).toBeNull()
   })
 })

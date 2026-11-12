@@ -19,8 +19,7 @@ export class PsnAuthService {
 
   async getAuthorization(): Promise<AuthorizationPayload> {
     const cached = (await this.cacheRepository.get(ACCESS_TOKEN_KEY)) as
-      | string
-      | null
+      string | null
     if (cached) return { accessToken: cached }
 
     if (!this.pending) {
@@ -36,18 +35,20 @@ export class PsnAuthService {
   }
 
   private async renewTokens(): Promise<AuthorizationPayload> {
-    const refreshToken = (await this.cacheRepository.get(
-      REFRESH_TOKEN_KEY
-    )) as string | null
+    const refreshToken = (await this.cacheRepository.get(REFRESH_TOKEN_KEY)) as
+      string | null
 
     if (refreshToken) {
       try {
         const tokens = await exchangeRefreshTokenForAuthTokens(refreshToken)
         return await this.storeTokens(tokens)
       } catch (err) {
-        console.warn('[PsnAuth] refresh token exchange failed, falling back to NPSSO', {
-          error: err instanceof Error ? err.message : err
-        })
+        console.warn(
+          '[PsnAuth] refresh token exchange failed, falling back to NPSSO',
+          {
+            error: err instanceof Error ? err.message : err
+          }
+        )
       }
     }
 
@@ -59,9 +60,12 @@ export class PsnAuthService {
       const tokens = await exchangeAccessCodeForAuthTokens(accessCode)
       return await this.storeTokens(tokens)
     } catch (err) {
-      console.error('[PsnAuth] NPSSO exchange failed — PSN_NPSSO may be expired', {
-        error: err instanceof Error ? err.message : err
-      })
+      console.error(
+        '[PsnAuth] NPSSO exchange failed — PSN_NPSSO may be expired',
+        {
+          error: err instanceof Error ? err.message : err
+        }
+      )
       throw new ClientError(
         'Integração com a PlayStation indisponível no momento. Tente novamente mais tarde.',
         503

@@ -110,13 +110,11 @@ describe('SteamService.connectSteam', () => {
   it('relinking an account the user already has is idempotent and refreshes the name', async () => {
     vi.spyOn(SteamApiService, 'getPersonaName').mockResolvedValue('New name')
     const { service, userRepository } = build({
-      findAccount: vi
-        .fn()
-        .mockResolvedValue({
-          id: 'acc-1',
-          userId: 'user-1',
-          displayName: 'Old'
-        })
+      findAccount: vi.fn().mockResolvedValue({
+        id: 'acc-1',
+        userId: 'user-1',
+        displayName: 'Old'
+      })
     })
 
     const result = await service.connectSteam('user-1', STEAM_ID)
@@ -169,14 +167,11 @@ describe('SteamService.connectSteam', () => {
     const { service } = build({
       listAccounts: vi.fn().mockResolvedValue([]),
       addAccount: vi.fn().mockRejectedValue(duplicate),
-      findAccount: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          id: 'acc-1',
-          userId: 'user-1',
-          displayName: 'Gamer'
-        })
+      findAccount: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
+        id: 'acc-1',
+        userId: 'user-1',
+        displayName: 'Gamer'
+      })
     })
 
     await expect(service.connectSteam('user-1', STEAM_ID)).resolves.toEqual({
@@ -243,9 +238,7 @@ describe('SteamService.enqueueImport', () => {
 
   it('throws 409 when a job is already waiting/active', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' })
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' })
     })
     vi.spyOn(steamImportQueue, 'getJob').mockResolvedValue({
       getState: vi.fn().mockResolvedValue('active')
@@ -292,9 +285,7 @@ describe('SteamService.runImport', () => {
     schema?: Map<string, string> | null
   }) {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 7 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -320,9 +311,10 @@ describe('SteamService.runImport', () => {
       achievedApiNames,
       unlockTimesByName: new Map()
     })
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+    vi.spyOn(
+      SteamApiService,
+      'getGlobalAchievementPercentages'
+    ).mockResolvedValue(null)
     vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(schema)
     communityTextsSpy = vi
       .spyOn(SteamApiService, 'getUnlockedAchievementTexts')
@@ -405,19 +397,26 @@ describe('SteamService.runImport', () => {
 
   it.each([
     ['few achievements are earned', { achieved: 8, total: 51 }, 90 * 3600],
-    ['playtime is below the time to beat', { achieved: 15, total: 51 }, 200 * 3600],
+    [
+      'playtime is below the time to beat',
+      { achieved: 15, total: 51 },
+      200 * 3600
+    ],
     ['the time to beat is unknown', { achieved: 15, total: 51 }, undefined]
-  ])('keeps a new game out of PLAYED when %s', async (_label, ach, normally) => {
-    const addGame = await importSingleGame({
-      playtimeMinutes: 100 * 60,
-      normallySeconds: normally,
-      ...ach
-    })
+  ])(
+    'keeps a new game out of PLAYED when %s',
+    async (_label, ach, normally) => {
+      const addGame = await importSingleGame({
+        playtimeMinutes: 100 * 60,
+        normallySeconds: normally,
+        ...ach
+      })
 
-    expect(addGame).toHaveBeenCalledWith(
-      expect.objectContaining({ igdbId: 7, statusIds: 4 })
-    )
-  })
+      expect(addGame).toHaveBeenCalledWith(
+        expect.objectContaining({ igdbId: 7, statusIds: 4 })
+      )
+    }
+  )
 
   it('still imports the game when the time to beat lookup fails', async () => {
     const addGame = await importSingleGame({
@@ -516,13 +515,13 @@ describe('SteamService.runImport', () => {
 
   it('imports matched games, updates existing ones, and lists unmatched by name', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi
         .fn()
         .mockImplementation((igdbId: number) =>
-          Promise.resolve(igdbId === 999 ? { igdbId, UserGamesStatus: { id: 4 } } : null)
+          Promise.resolve(
+            igdbId === 999 ? { igdbId, UserGamesStatus: { id: 4 } } : null
+          )
         ),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -549,9 +548,10 @@ describe('SteamService.runImport', () => {
       { appId: 999, game: { id: 999, name: 'Already Owned Game' } }
     ] as never)
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue(null)
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+    vi.spyOn(
+      SteamApiService,
+      'getGlobalAchievementPercentages'
+    ).mockResolvedValue(null)
 
     const service = new SteamService(
       userRepository,
@@ -595,9 +595,7 @@ describe('SteamService.runImport', () => {
 
   it('puts games with playtime but not played in the last 14 days in BACKLOG, not PLAYING', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -617,9 +615,10 @@ describe('SteamService.runImport', () => {
       { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
     ] as never)
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue(null)
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+    vi.spyOn(
+      SteamApiService,
+      'getGlobalAchievementPercentages'
+    ).mockResolvedValue(null)
 
     const service = new SteamService(
       userRepository,
@@ -638,57 +637,75 @@ describe('SteamService.runImport', () => {
   })
 
   it.each([
-    ['90% of the achievements and opened today, so the game stays in progress', 18, 0, 3],
-    ['90% of the achievements and not opened for 30 days, so the game is marked as played', 18, 30, 1],
-    ['every achievement is earned, so the game is marked as played even if opened today', 20, 0, 1]
-  ])('for a new game, %s', async (_label, achieved, daysSinceLastPlayed, expectedStatusId) => {
-    const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
-      findUserGame: vi.fn().mockResolvedValue(null),
-      addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
-      createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
-      upsertUserGameHours: vi.fn().mockResolvedValue({ hoursPlayed: 1 })
-    })
+    [
+      '90% of the achievements and opened today, so the game stays in progress',
+      18,
+      0,
+      3
+    ],
+    [
+      '90% of the achievements and not opened for 30 days, so the game is marked as played',
+      18,
+      30,
+      1
+    ],
+    [
+      'every achievement is earned, so the game is marked as played even if opened today',
+      20,
+      0,
+      1
+    ]
+  ])(
+    'for a new game, %s',
+    async (_label, achieved, daysSinceLastPlayed, expectedStatusId) => {
+      const userRepository = fakeUserRepository({
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+        findUserGame: vi.fn().mockResolvedValue(null),
+        addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
+        createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
+        upsertUserGameHours: vi.fn().mockResolvedValue({ hoursPlayed: 1 })
+      })
 
-    vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
-      {
-        appid: 730,
-        name: 'Counter-Strike 2',
-        playtime_forever: 500,
-        rtime_last_played: Math.floor(Date.now() / 1000) - daysSinceLastPlayed * 86400
-      }
-    ])
-    vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
-      { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
-    ] as never)
-    vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
-      achieved,
-      total: 20,
-      achievedApiNames: [],
-      unlockTimesByName: new Map()
-    })
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+      vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+        {
+          appid: 730,
+          name: 'Counter-Strike 2',
+          playtime_forever: 500,
+          rtime_last_played:
+            Math.floor(Date.now() / 1000) - daysSinceLastPlayed * 86400
+        }
+      ])
+      vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+        { appId: 730, game: { id: 2, name: 'Counter-Strike 2' } }
+      ] as never)
+      vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
+        achieved,
+        total: 20,
+        achievedApiNames: [],
+        unlockTimesByName: new Map()
+      })
+      vi.spyOn(
+        SteamApiService,
+        'getGlobalAchievementPercentages'
+      ).mockResolvedValue(null)
 
-    const service = new SteamService(
-      userRepository,
-      fakeGameCacheService(),
-      platformServiceFor(userRepository)
-    )
+      const service = new SteamService(
+        userRepository,
+        fakeGameCacheService(),
+        platformServiceFor(userRepository)
+      )
 
-    await service.runImport('user-1')
+      await service.runImport('user-1')
 
-    expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
-      igdbId: 2,
-      userId: 'user-1',
-      statusIds: expectedStatusId,
-      endless: false,
-      completedAt: expectedStatusId === 1 ? expect.any(Date) : undefined
-    })
-  })
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
+        igdbId: 2,
+        userId: 'user-1',
+        statusIds: expectedStatusId,
+        endless: false,
+        completedAt: expectedStatusId === 1 ? expect.any(Date) : undefined
+      })
+    }
+  )
 
   describe('completion suggestions', () => {
     function arrange(
@@ -696,9 +713,7 @@ describe('SteamService.runImport', () => {
       progress = { achieved: 7, total: 45, minutes: 2030, normallyHours: 33.14 }
     ) {
       const userRepository = fakeUserRepository({
-        findUserById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1' }),
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
         findUserGame: vi
           .fn()
           .mockResolvedValue({ igdbId: 26472, UserGamesStatus: { id: 3 } })
@@ -734,9 +749,10 @@ describe('SteamService.runImport', () => {
         SteamApiService,
         'getGlobalAchievementPercentages'
       ).mockResolvedValue(null)
-      vi.spyOn(SteamApiService, 'getUnlockedAchievementTexts').mockResolvedValue(
-        null
-      )
+      vi.spyOn(
+        SteamApiService,
+        'getUnlockedAchievementTexts'
+      ).mockResolvedValue(null)
       return new SteamService(
         userRepository,
         fakeGameCacheService(),
@@ -780,7 +796,11 @@ describe('SteamService.runImport', () => {
         'user-1',
         26472,
         'STEAM',
-        expect.objectContaining({ achieved: 15, total: 34, signals: ['heuristic'] }),
+        expect.objectContaining({
+          achieved: 15,
+          total: 34,
+          signals: ['heuristic']
+        }),
         false
       )
       expect(result.library.suggestions).toBe(1)
@@ -797,7 +817,9 @@ describe('SteamService.runImport', () => {
 
     it('finishes the import when recording a suggestion fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined)
-      const recorder = { record: vi.fn().mockRejectedValue(new Error('db down')) }
+      const recorder = {
+        record: vi.fn().mockRejectedValue(new Error('db down'))
+      }
 
       const result = await arrange(recorder).runImport('user-1')
 
@@ -845,9 +867,7 @@ describe('SteamService.runImport', () => {
     async (_label, achieved, expectedStatusId) => {
       const updateGameStatus = vi.fn().mockResolvedValue(null)
       const userRepository = fakeUserRepository({
-        findUserById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1' }),
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
         findUserGame: vi
           .fn()
           .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 2 } }),
@@ -905,9 +925,7 @@ describe('SteamService.runImport', () => {
   it('does not upgrade an existing game on a trivially small achievement set', async () => {
     const updateGameStatus = vi.fn().mockResolvedValue(null)
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi
         .fn()
         .mockResolvedValue({ igdbId: 2, UserGamesStatus: { id: 2 } }),
@@ -931,9 +949,10 @@ describe('SteamService.runImport', () => {
       achievedApiNames: [],
       unlockTimesByName: new Map()
     })
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+    vi.spyOn(
+      SteamApiService,
+      'getGlobalAchievementPercentages'
+    ).mockResolvedValue(null)
 
     const service = new SteamService(
       userRepository,
@@ -948,9 +967,7 @@ describe('SteamService.runImport', () => {
 
   it('does not treat a trivially small achievement set as a completion signal', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -974,9 +991,10 @@ describe('SteamService.runImport', () => {
       achievedApiNames: [],
       unlockTimesByName: new Map()
     })
-    vi.spyOn(SteamApiService, 'getGlobalAchievementPercentages').mockResolvedValue(
-      null
-    )
+    vi.spyOn(
+      SteamApiService,
+      'getGlobalAchievementPercentages'
+    ).mockResolvedValue(null)
 
     const service = new SteamService(
       userRepository,
@@ -996,9 +1014,7 @@ describe('SteamService.runImport', () => {
 
   it('marks a game as PLAYED via a rare achievement even when the overall ratio is low', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1051,9 +1067,7 @@ describe('SteamService.runImport', () => {
 
   it('never trusts achievements for a game with no single-player mode at all', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1108,9 +1122,7 @@ describe('SteamService.runImport', () => {
 
   it('still trusts achievements for a single-player game that also has co-op/multiplayer (Dark Souls-shaped)', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1169,9 +1181,7 @@ describe('SteamService.runImport', () => {
 
   it('regression: an ending achievement reads as completion even when it is not rare (Dark Souls: Remastered)', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1212,10 +1222,7 @@ describe('SteamService.runImport', () => {
     ).mockResolvedValue(new Map([['ACHIEVEMENT_FRPG_ACHIEVEMENTS_01', 31.2]]))
     vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(
       new Map([
-        [
-          'ACHIEVEMENT_FRPG_ACHIEVEMENTS_01',
-          'Reach "To Link the Fire" ending.'
-        ]
+        ['ACHIEVEMENT_FRPG_ACHIEVEMENTS_01', 'Reach "To Link the Fire" ending.']
       ])
     )
 
@@ -1238,9 +1245,7 @@ describe('SteamService.runImport', () => {
 
   it('uses the completion-keyword achievement unlocktime as completedAt, not the latest unlock', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1272,7 +1277,10 @@ describe('SteamService.runImport', () => {
     vi.spyOn(SteamApiService, 'getPlayerAchievements').mockResolvedValue({
       achieved: 2,
       total: 41,
-      achievedApiNames: ['ACHIEVEMENT_FRPG_ACHIEVEMENTS_01', 'ACH_POST_ENDING_GRIND'],
+      achievedApiNames: [
+        'ACHIEVEMENT_FRPG_ACHIEVEMENTS_01',
+        'ACH_POST_ENDING_GRIND'
+      ],
       unlockTimesByName: new Map([
         ['ACHIEVEMENT_FRPG_ACHIEVEMENTS_01', endingUnlockTime],
         ['ACH_POST_ENDING_GRIND', laterGrindUnlockTime]
@@ -1311,9 +1319,7 @@ describe('SteamService.runImport', () => {
 
   it('falls back to the latest unlock time when every achievement is earned but none reads as the ending', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1354,7 +1360,12 @@ describe('SteamService.runImport', () => {
     vi.spyOn(
       SteamApiService,
       'getGlobalAchievementPercentages'
-    ).mockResolvedValue(new Map([['ACH_1', 40], ['ACH_2', 35]]))
+    ).mockResolvedValue(
+      new Map([
+        ['ACH_1', 40],
+        ['ACH_2', 35]
+      ])
+    )
     vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(
       new Map([
         ['ACH_1', 'Did a normal thing.'],
@@ -1381,9 +1392,7 @@ describe('SteamService.runImport', () => {
 
   it('regression: a hard-but-optional achievement in the 8-15% range does not read as completion (Necroking)', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1448,9 +1457,7 @@ describe('SteamService.runImport', () => {
 
   it('regression: a rare achievement in a sprawling completionist list does not read as completion (Tower Unite)', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1514,9 +1521,7 @@ describe('SteamService.runImport', () => {
 
   it('imports wishlist items as WISHLIST status, separately from the library', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 1 }),
@@ -1529,7 +1534,7 @@ describe('SteamService.runImport', () => {
       { appid: 999999 }
     ])
     vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
-      { appId: 1091500, game: { id: 3, name: "Cyberpunk 2077" } }
+      { appId: 1091500, game: { id: 3, name: 'Cyberpunk 2077' } }
     ] as never)
 
     const service = new SteamService(
@@ -1567,9 +1572,7 @@ describe('SteamService.runImport', () => {
 
   it('skips a wishlist item already present in the library under another status', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' }),
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi
         .fn()
         .mockResolvedValue({ igdbId: 3, UserGamesStatus: { id: 3 } })
@@ -1580,7 +1583,7 @@ describe('SteamService.runImport', () => {
       { appid: 1091500 }
     ])
     vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
-      { appId: 1091500, game: { id: 3, name: "Cyberpunk 2077" } }
+      { appId: 1091500, game: { id: 3, name: 'Cyberpunk 2077' } }
     ] as never)
 
     const service = new SteamService(
@@ -1608,9 +1611,7 @@ describe('SteamService.runImport', () => {
     'tells the user Steam is the problem, not the profile, when Steam is %s',
     async (_label, status, expectedCode, message) => {
       const userRepository = fakeUserRepository({
-        findUserById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1' })
+        findUserById: vi.fn().mockResolvedValue({ id: 'user-1' })
       })
       vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.spyOn(SteamApiService, 'getOwnedGames').mockRejectedValue(
@@ -1636,9 +1637,7 @@ describe('SteamService.runImport', () => {
 
   it('still asks for a public profile when Steam answers without games', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' })
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' })
     })
     vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue(null)
     const service = new SteamService(
@@ -1655,9 +1654,7 @@ describe('SteamService.runImport', () => {
 
   it('throws when the Steam profile is private or invalid', async () => {
     const userRepository = fakeUserRepository({
-      findUserById: vi
-        .fn()
-        .mockResolvedValue({ id: 'user-1' })
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' })
     })
     vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue(null)
     const service = new SteamService(

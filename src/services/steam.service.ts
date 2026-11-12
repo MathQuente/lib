@@ -252,8 +252,7 @@ export class SteamService {
       const report = (percent: number) =>
         onProgress?.(
           Math.round(
-            ((index + percent / 100) / accounts.length) *
-              LIBRARY_PROGRESS_SHARE
+            ((index + percent / 100) / accounts.length) * LIBRARY_PROGRESS_SHARE
           )
         )
       try {
@@ -291,20 +290,16 @@ export class SteamService {
       true
     )
     let wishlistDone = 0
-    const wishlist = await this.importWishlist(
-      wishlistResolved,
-      userId,
-      () => {
-        wishlistDone++
-        onProgress?.(
-          LIBRARY_PROGRESS_SHARE +
-            Math.round(
-              (wishlistDone / wishlistResolved.toImport.length) *
-                (100 - LIBRARY_PROGRESS_SHARE)
-            )
-        )
-      }
-    )
+    const wishlist = await this.importWishlist(wishlistResolved, userId, () => {
+      wishlistDone++
+      onProgress?.(
+        LIBRARY_PROGRESS_SHARE +
+          Math.round(
+            (wishlistDone / wishlistResolved.toImport.length) *
+              (100 - LIBRARY_PROGRESS_SHARE)
+          )
+      )
+    })
 
     onProgress?.(100)
 
@@ -445,11 +440,10 @@ export class SteamService {
 
         const hasSignalAlready =
           !!achievements &&
-          (matchingCompletionKeywordNames(
-            achievements.achievedApiNames,
-            schema
-          ).length > 0 ||
-            hasRareAchievementSignal(achievements, globalPercentages).length > 0)
+          (matchingCompletionKeywordNames(achievements.achievedApiNames, schema)
+            .length > 0 ||
+            hasRareAchievementSignal(achievements, globalPercentages).length >
+              0)
         const communityTexts =
           achievements &&
           achievements.achieved >= MIN_ACHIEVEMENTS_FOR_SIGNAL &&
@@ -549,7 +543,11 @@ export class SteamService {
 
       const completedAt =
         isFinished && achievements
-          ? resolveCompletedAt(achievements, matchedKeywordNames, matchedRareNames)
+          ? resolveCompletedAt(
+              achievements,
+              matchedKeywordNames,
+              matchedRareNames
+            )
           : undefined
 
       const outcome = await this.userGamePlatformService.importPlatform(

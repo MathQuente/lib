@@ -75,11 +75,7 @@ interface MergedXboxGame {
 }
 
 function looseName(name: string) {
-  return name
-    .replace(/[™®©]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
+  return name.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 export function nameVariants(titleName: string): string[] {
@@ -92,11 +88,7 @@ export function nameVariants(titleName: string): string[] {
     /^[A-Z]+\b/,
     token => ABBREVIATIONS[token] ?? token
   )
-  const variants = [
-    cleaned,
-    expanded,
-    cleaned.replace(PUBLISHER_PREFIX, '')
-  ]
+  const variants = [cleaned, expanded, cleaned.replace(PUBLISHER_PREFIX, '')]
   const original = looseName(titleName)
   return [...new Set(variants)].filter(v => v && looseName(v) !== original)
 }
@@ -185,12 +177,16 @@ function completionDateFrom(
   achievements: { description: string; unlockedAt: Date | null }[]
 ): Date | undefined {
   const dated = achievements.flatMap(a =>
-    a.unlockedAt ? [{ description: a.description, unlockedAt: a.unlockedAt }] : []
+    a.unlockedAt
+      ? [{ description: a.description, unlockedAt: a.unlockedAt }]
+      : []
   )
   if (dated.length === 0) return undefined
   const times = (list: typeof dated) => list.map(a => a.unlockedAt.getTime())
 
-  const story = dated.filter(a => COMPLETION_KEYWORD_PATTERN.test(a.description))
+  const story = dated.filter(a =>
+    COMPLETION_KEYWORD_PATTERN.test(a.description)
+  )
   return story.length > 0
     ? new Date(Math.min(...times(story)))
     : new Date(Math.max(...times(dated)))
@@ -211,7 +207,8 @@ export function collapsePortsIntoParent(
   const collapsed = new Map<string, IGDBGame>()
   for (const [titleId, game] of igdbByTitleId) {
     const parentId = parentIdOf(game)
-    const parent = parentId !== undefined ? matchedById.get(parentId) : undefined
+    const parent =
+      parentId !== undefined ? matchedById.get(parentId) : undefined
     const isPort =
       !!parent &&
       normalizeGameName(parent.name) === normalizeGameName(game.name)
@@ -259,7 +256,10 @@ function finishVerdict(title: XboxTitle, igdbGame: IGDBGame): FinishVerdict {
   if (title.achievementsEarned <= 0) return 'no'
 
   if (title.achievementsTotal > 0) {
-    return meetsCompletionRatio(title.achievementsEarned, title.achievementsTotal)
+    return meetsCompletionRatio(
+      title.achievementsEarned,
+      title.achievementsTotal
+    )
       ? 'finished'
       : 'no'
   }
@@ -335,7 +335,10 @@ export class XboxService {
     preferredConsole: Console | null
   ) {
     await this.requireUser(userId)
-    if (preferredConsole !== null && !isXboxPreferredConsole(preferredConsole)) {
+    if (
+      preferredConsole !== null &&
+      !isXboxPreferredConsole(preferredConsole)
+    ) {
       throw new ClientError('Console inválido para uma conta do Xbox.', 400)
     }
 
@@ -392,12 +395,19 @@ export class XboxService {
 
     for (const [index, account] of accounts.entries()) {
       const report = (percent: number) =>
-        onProgress?.(Math.round(((index + percent / 100) / accounts.length) * 100))
+        onProgress?.(
+          Math.round(((index + percent / 100) / accounts.length) * 100)
+        )
       try {
         let hoursIncomplete = false
-        const library = await this.importAccount(userId, account, report, () => {
-          hoursIncomplete = true
-        })
+        const library = await this.importAccount(
+          userId,
+          account,
+          report,
+          () => {
+            hoursIncomplete = true
+          }
+        )
         results.push({
           gamertag: account.gamertag,
           library,
@@ -705,9 +715,12 @@ export class XboxService {
         }
       } catch (err) {
         if (!(err instanceof XboxApiError)) throw err
-        console.warn('[Xbox] story achievement lookup failed, skipping the rest', {
-          error: err.message
-        })
+        console.warn(
+          '[Xbox] story achievement lookup failed, skipping the rest',
+          {
+            error: err.message
+          }
+        )
         break
       }
     }
@@ -747,22 +760,21 @@ export class XboxService {
   ) {
     if (titleIds.length === 0) return new Map<string, number>()
     try {
-      return await this.xboxApiService.getMinutesPlayed(
-        xuid,
-        titleIds,
-        err => {
-          onIncomplete()
-          console.warn('[Xbox] minutes played batch failed, skipping its hours', {
-            error: err.message
-          })
-        }
-      )
+      return await this.xboxApiService.getMinutesPlayed(xuid, titleIds, err => {
+        onIncomplete()
+        console.warn('[Xbox] minutes played batch failed, skipping its hours', {
+          error: err.message
+        })
+      })
     } catch (err) {
       if (!(err instanceof XboxApiError)) throw err
       onIncomplete()
-      console.warn('[Xbox] minutes played lookup failed, importing without hours', {
-        error: err.message
-      })
+      console.warn(
+        '[Xbox] minutes played lookup failed, importing without hours',
+        {
+          error: err.message
+        }
+      )
       return new Map<string, number>()
     }
   }

@@ -825,7 +825,9 @@ describe('UserService.findGamesToDisplay', () => {
   })
 
   it('returns no game when the picked one cannot be fetched from IGDB', async () => {
-    const getGameById = vi.spyOn(IGDBService, 'getGameById').mockResolvedValue(null)
+    const getGameById = vi
+      .spyOn(IGDBService, 'getGameById')
+      .mockResolvedValue(null)
     const service = serviceWithLibrary([{ igdbId: 10, status: 'PAUSED' }])
 
     const result = await service.findGamesToDisplay('user-1')
@@ -849,7 +851,9 @@ describe('UserService.findGamesToDisplay', () => {
     const result = await service.findGamesToDisplay('user-1')
 
     expect(result.game?.igdbId).toBe(2)
-    expect(result.message).toBe('Que tal adicionar um novo jogo a sua biblioteca?')
+    expect(result.message).toBe(
+      'Que tal adicionar um novo jogo a sua biblioteca?'
+    )
     recent.mockRestore()
   })
 
@@ -861,7 +865,10 @@ describe('UserService.findGamesToDisplay', () => {
 
     const result = await service.findGamesToDisplay('user-1')
 
-    expect(result).toEqual({ game: null, message: 'Parabéns! Você jogou todos.' })
+    expect(result).toEqual({
+      game: null,
+      message: 'Parabéns! Você jogou todos.'
+    })
     recent.mockRestore()
   })
 })

@@ -17,8 +17,7 @@ import { normalizeEmail } from '../utils/normalize-email'
 const BCRYPT_COST = 12
 
 const PASSWORD_RESET_TTL_SECONDS = 60 * 60
-const passwordResetKey = (token: string) =>
-  `password-reset:${hashToken(token)}`
+const passwordResetKey = (token: string) => `password-reset:${hashToken(token)}`
 
 const MAX_RESET_REQUESTS_PER_HOUR = 3
 const RESET_REQUESTS_WINDOW_SECONDS = 60 * 60

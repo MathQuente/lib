@@ -79,7 +79,9 @@ export class Server {
     console.log(`🚀 Server running on http://${Server.host}:${Server.port}`)
   }
 
-  private static initGracefulShutdown(workers: Array<{ close: () => Promise<unknown> }>) {
+  private static initGracefulShutdown(
+    workers: Array<{ close: () => Promise<unknown> }>
+  ) {
     const configuredDelay = Number(process.env.SHUTDOWN_TIMEOUT_MS)
     closeWithGrace(
       {

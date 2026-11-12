@@ -1332,7 +1332,14 @@ describe('UserGamePlatformService.importPlatform with an Xbox account', () => {
       userGame({ statusId: 3, platforms: [] })
     )
 
-    await service.importPlatform('user-1', 10, 'XBOX', data, 'XBOX_ONE', 'acc-1')
+    await service.importPlatform(
+      'user-1',
+      10,
+      'XBOX',
+      data,
+      'XBOX_ONE',
+      'acc-1'
+    )
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
@@ -1380,7 +1387,14 @@ describe('UserGamePlatformService.importPlatform with an Xbox account', () => {
       })
     )
 
-    await service.importPlatform('user-1', 10, 'XBOX', data, 'XBOX_ONE', 'acc-2')
+    await service.importPlatform(
+      'user-1',
+      10,
+      'XBOX',
+      data,
+      'XBOX_ONE',
+      'acc-2'
+    )
 
     expect(platformRepository.savePlatform).toHaveBeenCalledWith(
       'ug-1',
@@ -1393,7 +1407,7 @@ describe('UserGamePlatformService.importPlatform with an Xbox account', () => {
 })
 
 describe('UserGamePlatformService.removeAccount', () => {
-  it('rejects with 404 when the account is not the user\'s', async () => {
+  it("rejects with 404 when the account is not the user's", async () => {
     const { service, platformRepository } = setup(null)
     const removeAccount = vi.fn().mockResolvedValue(false)
     Object.assign(platformRepository, { removeAccount })

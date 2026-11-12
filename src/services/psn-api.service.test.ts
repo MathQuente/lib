@@ -225,10 +225,13 @@ describe('PsnApiService.getEarnedTrophies', () => {
       ]
     } as never)
 
-    const result = await new PsnApiService(fakeAuth()).getEarnedTrophies('acc', {
-      npCommunicationId: 'NPWR12345_00',
-      npServiceName: 'trophy2'
-    })
+    const result = await new PsnApiService(fakeAuth()).getEarnedTrophies(
+      'acc',
+      {
+        npCommunicationId: 'NPWR12345_00',
+        npServiceName: 'trophy2'
+      }
+    )
 
     expect(result).toEqual([
       {

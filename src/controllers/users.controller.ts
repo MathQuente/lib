@@ -116,9 +116,7 @@ export class UserController {
   async setEndless(request: FastifyRequest, reply: FastifyReply) {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-    const { endless } = UserSchema.UserGameEndlessBodySchema.parse(
-      request.body
-    )
+    const { endless } = UserSchema.UserGameEndlessBodySchema.parse(request.body)
 
     const result = await this.userService.setEndless(igdbId, userId, endless)
 
@@ -276,9 +274,8 @@ export class UserController {
   ) {
     const { igdbId } = UserSchema.UserGameParamsSchema.parse(request.params)
     const userId = request.user.userId
-    const { completedAt } = UserSchema.UserGameCompletedAtUpdateBodySchema.parse(
-      request.body
-    )
+    const { completedAt } =
+      UserSchema.UserGameCompletedAtUpdateBodySchema.parse(request.body)
 
     const { completedAt: updated } =
       await this.userService.updateUserGameCompletedAt(

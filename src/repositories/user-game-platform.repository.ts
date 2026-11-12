@@ -246,41 +246,44 @@ export class UserGamePlatformRepository {
   }
 
   async removeAccount(userId: string, accountId: string, platform: Platform) {
-    return prisma.$transaction(async tx => {
-      const account = await tx.platformAccount.findFirst({
-        where: { id: accountId, userId, platform },
-        select: { id: true }
-      })
-      if (!account) return false
+    return prisma.$transaction(
+      async tx => {
+        const account = await tx.platformAccount.findFirst({
+          where: { id: accountId, userId, platform },
+          select: { id: true }
+        })
+        if (!account) return false
 
-      const locked = await tx.$queryRaw<{ id: string }[]>`
+        const locked = await tx.$queryRaw<{ id: string }[]>`
         SELECT id FROM platform_accounts
         WHERE id = ${accountId}
           AND user_id = ${userId}
           AND platform = ${platform}::"Platform"
         FOR UPDATE
       `
-      if (locked.length === 0) return false
-      const affected = await tx.platformAccountHours.findMany({
-        where: { platformAccountId: accountId },
-        select: {
-          userGamePlatformId: true,
-          userGamePlatform: { select: { userGameId: true } }
-        }
-      })
-      await tx.platformAccount.delete({ where: { id: accountId } })
+        if (locked.length === 0) return false
+        const affected = await tx.platformAccountHours.findMany({
+          where: { platformAccountId: accountId },
+          select: {
+            userGamePlatformId: true,
+            userGamePlatform: { select: { userGameId: true } }
+          }
+        })
+        await tx.platformAccount.delete({ where: { id: accountId } })
 
-      for (const { userGamePlatformId } of affected) {
-        await this.syncRowHours(tx, userGamePlatformId)
-      }
-      const userGameIds = new Set(
-        affected.map(row => row.userGamePlatform.userGameId)
-      )
-      for (const userGameId of userGameIds) {
-        await this.recomputeTotals(tx, userGameId)
-      }
-      return true
-    }, { timeout: REMOVE_ACCOUNT_TIMEOUT_MS })
+        for (const { userGamePlatformId } of affected) {
+          await this.syncRowHours(tx, userGamePlatformId)
+        }
+        const userGameIds = new Set(
+          affected.map(row => row.userGamePlatform.userGameId)
+        )
+        for (const userGameId of userGameIds) {
+          await this.recomputeTotals(tx, userGameId)
+        }
+        return true
+      },
+      { timeout: REMOVE_ACCOUNT_TIMEOUT_MS }
+    )
   }
 
   private async recomputeTotals(

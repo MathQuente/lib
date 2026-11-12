@@ -38,7 +38,10 @@ export function startXboxImportWorker() {
     userRepository,
     gameCacheService,
     new XboxApiService(),
-    new UserGamePlatformService(new UserGamePlatformRepository(), userRepository),
+    new UserGamePlatformService(
+      new UserGamePlatformRepository(),
+      userRepository
+    ),
     undefined,
     new CompletionSuggestionService(
       new CompletionSuggestionRepository(),

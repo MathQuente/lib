@@ -48,10 +48,7 @@ export class GameController {
     const { igdbId } = GameSchema.GameParamsSchema.parse(request.params)
     const userId = request.user?.userId
 
-    const similarGames = await this.gameService.findSimilarGames(
-      igdbId,
-      userId
-    )
+    const similarGames = await this.gameService.findSimilarGames(igdbId, userId)
 
     return reply.send({ similarGames })
   }

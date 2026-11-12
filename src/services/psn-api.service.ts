@@ -49,11 +49,14 @@ export class PsnApiError extends Error {
   }
 }
 
-export function parseIsoDurationToMinutes(duration: string | undefined): number {
+export function parseIsoDurationToMinutes(
+  duration: string | undefined
+): number {
   if (!duration) return 0
-  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
-    duration
-  )
+  const match =
+    /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
+      duration
+    )
   if (!match) return 0
   const [, days, hours, minutes, seconds] = match
   return (
@@ -65,7 +68,9 @@ export function parseIsoDurationToMinutes(duration: string | undefined): number 
 }
 
 function countTrophies(
-  counts: Partial<Record<'bronze' | 'silver' | 'gold' | 'platinum', number>> | undefined
+  counts:
+    | Partial<Record<'bronze' | 'silver' | 'gold' | 'platinum', number>>
+    | undefined
 ) {
   return (
     (counts?.bronze ?? 0) +
@@ -159,7 +164,8 @@ export class PsnApiService {
         games.push({
           titleId: title.titleId,
           category: title.category,
-          conceptId: title.concept?.id != null ? String(title.concept.id) : null,
+          conceptId:
+            title.concept?.id != null ? String(title.concept.id) : null,
           name: title.name,
           playMinutes: parseIsoDurationToMinutes(title.playDuration),
           lastPlayedAt: title.lastPlayedDateTime

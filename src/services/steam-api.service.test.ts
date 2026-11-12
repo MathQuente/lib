@@ -229,7 +229,11 @@ describe('SteamApiService.getUnlockedAchievementTexts', () => {
   </achievements></playerstats>`
 
   function answer(status: number, body = '') {
-    return { ok: status >= 200 && status < 300, status, text: () => Promise.resolve(body) }
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      text: () => Promise.resolve(body)
+    }
   }
 
   it('returns name and description of the unlocked achievements, keyed by lower-case api name', async () => {
@@ -252,7 +256,11 @@ describe('SteamApiService.getUnlockedAchievementTexts', () => {
   it('returns null when the profile is private or has no achievements', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(answer(200, '<playerstats><error>private</error></playerstats>'))
+      vi
+        .fn()
+        .mockResolvedValue(
+          answer(200, '<playerstats><error>private</error></playerstats>')
+        )
     )
 
     expect(await SteamApiService.getUnlockedAchievementTexts('1', 2)).toBeNull()
@@ -287,14 +295,20 @@ describe('SteamApiService.getOwnedGames', () => {
   it('returns the games of a public profile', async () => {
     vi.stubEnv('STEAM_API_KEY', 'key')
     const games = [{ appid: 1, name: 'A', playtime_forever: 10 }]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(200, { response: { games } })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(answer(200, { response: { games } }))
+    )
 
     expect(await SteamApiService.getOwnedGames('1')).toEqual(games)
   })
 
   it('returns null when the profile is private (200 without games)', async () => {
     vi.stubEnv('STEAM_API_KEY', 'key')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(answer(200, { response: {} })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(answer(200, { response: {} }))
+    )
 
     expect(await SteamApiService.getOwnedGames('1')).toBeNull()
   })

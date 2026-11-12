@@ -133,9 +133,11 @@ describe('PsnService.startPsnVerification', () => {
   it('stores a one-time code for the looked-up profile', async () => {
     const cache = fakeCacheRepository()
     const psnApi = fakePsnApi({
-      findProfile: vi
-        .fn()
-        .mockResolvedValue({ accountId: '999', onlineId: 'Player_1', aboutMe: '' })
+      findProfile: vi.fn().mockResolvedValue({
+        accountId: '999',
+        onlineId: 'Player_1',
+        aboutMe: ''
+      })
     })
     const service = makeService(fakeUserRepository(), psnApi, cache)
 
@@ -177,7 +179,11 @@ describe('PsnService.startPsnVerification', () => {
 })
 
 describe('PsnService.connectPsn', () => {
-  const pending = { accountId: '999', onlineId: 'Player_1', code: 'LIB-ABCD1234' }
+  const pending = {
+    accountId: '999',
+    onlineId: 'Player_1',
+    code: 'LIB-ABCD1234'
+  }
   const profileWithCode = {
     accountId: '999',
     onlineId: 'Player_1',
@@ -262,9 +268,11 @@ describe('PsnService.connectPsn', () => {
 
   it('relinking an account the user already has is idempotent and refreshes the online id', async () => {
     const { service, userRepository, cache } = build({
-      findAccount: vi
-        .fn()
-        .mockResolvedValue({ id: 'psn-acc-1', userId: 'user-1', displayName: 'Old' })
+      findAccount: vi.fn().mockResolvedValue({
+        id: 'psn-acc-1',
+        userId: 'user-1',
+        displayName: 'Old'
+      })
     })
 
     const result = await service.connectPsn('user-1')
@@ -316,14 +324,11 @@ describe('PsnService.connectPsn', () => {
     })
     const { service, cache } = build({
       addAccount: vi.fn().mockRejectedValue(duplicate),
-      findAccount: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          id: 'psn-acc-2',
-          userId: 'user-1',
-          displayName: 'Player_1'
-        })
+      findAccount: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
+        id: 'psn-acc-2',
+        userId: 'user-1',
+        displayName: 'Player_1'
+      })
     })
 
     await expect(service.connectPsn('user-1')).resolves.toEqual({
@@ -438,10 +443,12 @@ describe('PsnService.runImport', () => {
     const service = makeService(
       fakeUserRepository({ addGameToUserLibrary }),
       fakePsnApi({
-        getPlayedGames: vi.fn().mockResolvedValue([
-          played({ titleId: 'CUSA1_00', playMinutes: 90 }),
-          played({ titleId: 'PPSA1_00', playMinutes: 30 })
-        ])
+        getPlayedGames: vi
+          .fn()
+          .mockResolvedValue([
+            played({ titleId: 'CUSA1_00', playMinutes: 90 }),
+            played({ titleId: 'PPSA1_00', playMinutes: 30 })
+          ])
       })
     )
 
@@ -477,11 +484,16 @@ describe('PsnService.runImport', () => {
         getPlayedGames: vi
           .fn()
           .mockResolvedValue([played({ name: 'Bloodborne™' })]),
-        getTrophySummariesByName: vi.fn().mockResolvedValue(
-          new Map<string, PsnTrophySummary>([
-            ['bloodborne', summary({ progress: 100, hasPlatinum: true, lastTrophyAt })]
-          ])
-        )
+        getTrophySummariesByName: vi
+          .fn()
+          .mockResolvedValue(
+            new Map<string, PsnTrophySummary>([
+              [
+                'bloodborne',
+                summary({ progress: 100, hasPlatinum: true, lastTrophyAt })
+              ]
+            ])
+          )
       })
     )
 
@@ -528,23 +540,23 @@ describe('PsnService.runImport', () => {
 
   it('falls back to the title id lookup when the trophy name does not match', async () => {
     const addGameToUserLibrary = vi.fn().mockResolvedValue({ igdbId: 10 })
-    const getTrophySummariesByTitleId = vi.fn().mockResolvedValue(
-      new Map<string, PsnTrophySummary>([
-        [
-          'CUSA9_00',
-          summary({ progress: 100, lastTrophyAt: new Date() })
-        ]
-      ])
-    )
+    const getTrophySummariesByTitleId = vi
+      .fn()
+      .mockResolvedValue(
+        new Map<string, PsnTrophySummary>([
+          ['CUSA9_00', summary({ progress: 100, lastTrophyAt: new Date() })]
+        ])
+      )
     mockIgdb([['100', 10]])
     const service = makeService(
       fakeUserRepository({ addGameToUserLibrary }),
       fakePsnApi({
-        getPlayedGames: vi
-          .fn()
-          .mockResolvedValue([
-            played({ titleId: 'CUSA9_00', name: 'Kena: Bridge of Spirits PS4 & PS5' })
-          ]),
+        getPlayedGames: vi.fn().mockResolvedValue([
+          played({
+            titleId: 'CUSA9_00',
+            name: 'Kena: Bridge of Spirits PS4 & PS5'
+          })
+        ]),
         getTrophySummariesByTitleId
       })
     )
@@ -717,7 +729,11 @@ describe('PsnService.runImport', () => {
       fakePsnApi({
         getPlayedGames: vi.fn().mockResolvedValue([
           played({ conceptId: '100', name: 'Owned' }),
-          played({ conceptId: '300', titleId: 'CUSA3_00', name: 'Unknown to IGDB' }),
+          played({
+            conceptId: '300',
+            titleId: 'CUSA3_00',
+            name: 'Unknown to IGDB'
+          }),
           played({ conceptId: null, titleId: 'CUSA4_00', name: 'No concept' })
         ])
       })
@@ -820,11 +836,15 @@ describe('PsnService.runImport', () => {
     const service = makeService(
       fakeUserRepository(),
       fakePsnApi({
-        getPlayedGames: vi.fn().mockRejectedValue(new PsnApiError('Access denied'))
+        getPlayedGames: vi
+          .fn()
+          .mockRejectedValue(new PsnApiError('Access denied'))
       })
     )
 
-    await expect(service.runImport('user-1')).rejects.toBeInstanceOf(ClientError)
+    await expect(service.runImport('user-1')).rejects.toBeInstanceOf(
+      ClientError
+    )
   })
 })
 
@@ -881,7 +901,11 @@ describe('PsnService.runImport completion detection', () => {
             earnedAt: new Date('2024-01-01T00:00:00Z'),
             earnedRate: 60
           },
-          { detail: 'Watch the credits roll', earnedAt: endingAt, earnedRate: 30 }
+          {
+            detail: 'Watch the credits roll',
+            earnedAt: endingAt,
+            earnedRate: 30
+          }
         ])
       }
     )
@@ -889,7 +913,11 @@ describe('PsnService.runImport completion detection', () => {
     await service.runImport('user-1')
 
     expect(addGameToUserLibrary).toHaveBeenCalledWith(
-      expect.objectContaining({ igdbId: 10, statusIds: 1, completedAt: endingAt })
+      expect.objectContaining({
+        igdbId: 10,
+        statusIds: 1,
+        completedAt: endingAt
+      })
     )
   })
 
@@ -898,7 +926,11 @@ describe('PsnService.runImport completion detection', () => {
       summary({ progress: 20, earned: 10, total: 50 }),
       {
         getEarnedTrophies: vi.fn().mockResolvedValue([
-          { detail: 'Collect 10 feathers', earnedAt: new Date(), earnedRate: 60 }
+          {
+            detail: 'Collect 10 feathers',
+            earnedAt: new Date(),
+            earnedRate: 60
+          }
         ])
       }
     )

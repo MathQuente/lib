@@ -14,13 +14,17 @@ type Clause = {
   releaseDate?: { not: null }
 }
 
-function matches(clause: Clause, row: { status: number | null; date: number | null }) {
+function matches(
+  clause: Clause,
+  row: { status: number | null; date: number | null }
+) {
   const { gameStatus, releaseDate } = clause
   if (gameStatus === null) return row.status === null
   if (typeof gameStatus === 'number') {
     if (row.status !== gameStatus) return false
   } else if (gameStatus) {
-    if (row.status === null || gameStatus.notIn.includes(row.status)) return false
+    if (row.status === null || gameStatus.notIn.includes(row.status))
+      return false
   }
   if (releaseDate && row.date === null) return false
   return true
@@ -92,7 +96,9 @@ describe('relevanceOrderSql', () => {
     const fragment = relevanceOrderSql('mario')
 
     expect(fragment.values).toEqual(['mario', 'mario%', '% mario%'])
-    expect(fragment.sql).toMatch(/THEN 0[\s\S]*THEN 1[\s\S]*THEN 2[\s\S]*ELSE 3/)
+    expect(fragment.sql).toMatch(
+      /THEN 0[\s\S]*THEN 1[\s\S]*THEN 2[\s\S]*ELSE 3/
+    )
   })
 
   it('puts base games before derived ones, then popularity, name and id', () => {

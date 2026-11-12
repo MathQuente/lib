@@ -216,9 +216,12 @@ async function main() {
       email: `${EMAIL_PREFIX}${String(i + 1).padStart(2, '0')}${EMAIL_DOMAIN}`,
       userName,
       password: passwordHash,
-      profilePicture: createAvatar(avatarStyle as Parameters<typeof createAvatar>[0], {
-        seed: userName
-      }).toDataUri(),
+      profilePicture: createAvatar(
+        avatarStyle as Parameters<typeof createAvatar>[0],
+        {
+          seed: userName
+        }
+      ).toDataUri(),
       emailVerifiedAt: createdAt,
       createdAt,
       updatedAt: createdAt
@@ -238,10 +241,7 @@ async function main() {
   const usedTextsByGame = new Map<number, Set<string>>()
 
   for (const user of users) {
-    const size = Math.min(
-      games.length,
-      12 + Math.floor(40 * rng.next() ** 1.4)
-    )
+    const size = Math.min(games.length, 12 + Math.floor(40 * rng.next() ** 1.4))
     const library: Game[] = rng.weightedSample(games, gameWeights, size)
 
     for (const game of library) {
@@ -304,7 +304,9 @@ async function main() {
         RATING_VALUES,
         statusId === DROPPED ? DROPPED_RATING_WEIGHTS : RATING_WEIGHTS
       )
-      const ratedAt = new Date(addedAt.getTime() + rng.next() * (now - addedAt.getTime()))
+      const ratedAt = new Date(
+        addedAt.getTime() + rng.next() * (now - addedAt.getTime())
+      )
       ratings.push({
         userId: user.id,
         igdbId: game.igdbId,
@@ -319,7 +321,9 @@ async function main() {
 
       const used = usedTextsByGame.get(game.igdbId) ?? new Set<string>()
       usedTextsByGame.set(game.igdbId, used)
-      const reviewedAt = new Date(ratedAt.getTime() + rng.next() * (now - ratedAt.getTime()))
+      const reviewedAt = new Date(
+        ratedAt.getTime() + rng.next() * (now - ratedAt.getTime())
+      )
       reviews.push({
         userId: user.id,
         igdbId: game.igdbId,
@@ -337,7 +341,10 @@ async function main() {
     users.length
   )
   const weightByUser = new Map(
-    shuffledPopularity.map((userIndex, rank) => [userIndex, 1 / (rank + 1) ** 0.8])
+    shuffledPopularity.map((userIndex, rank) => [
+      userIndex,
+      1 / (rank + 1) ** 0.8
+    ])
   )
 
   const follows: Prisma.FollowCreateManyInput[] = []
@@ -380,14 +387,14 @@ async function main() {
         })
       }
     } else {
-      console.warn(`SEED_DEMO_FOLLOW_EMAIL ${FOLLOW_EMAIL} not found; skipping.`)
+      console.warn(
+        `SEED_DEMO_FOLLOW_EMAIL ${FOLLOW_EMAIL} not found; skipping.`
+      )
     }
   }
 
   await insertInBatches(users, data => prisma.user.createMany({ data }))
-  await insertInBatches(userGames, data =>
-    prisma.userGame.createMany({ data })
-  )
+  await insertInBatches(userGames, data => prisma.userGame.createMany({ data }))
   await insertInBatches(stats, data =>
     prisma.userGameStats.createMany({ data })
   )

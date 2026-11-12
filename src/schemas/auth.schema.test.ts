@@ -49,8 +49,7 @@ describe('RegisterBodySchema', () => {
         email: 'Ana@Mail.COM',
         password: 'k3!fPq9z',
         acceptedTerms: true
-      })
-        .email
+      }).email
     ).toBe('ana@mail.com')
     expect(
       LoginBodySchema.parse({ email: ' Ana@Mail.COM ', password: 'x' }).email
@@ -66,8 +65,7 @@ describe('RegisterBodySchema', () => {
         email: ' a@a.com ',
         password: 'k3!fPq9z',
         acceptedTerms: true
-      })
-        .email
+      }).email
     ).toBe('a@a.com')
     expect(
       RegisterBodySchema.safeParse({

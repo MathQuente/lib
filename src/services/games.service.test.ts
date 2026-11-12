@@ -31,11 +31,21 @@ describe('GameService.findSimilarGames', () => {
   it('hides rumored games and cancelled games with no date, and caches only what it shows', async () => {
     const { service, cacheRepository } = setup()
     vi.spyOn(IGDBService, 'getSimilarGames').mockResolvedValue([
-      { id: 1, name: 'Released', game_status: 0, first_release_date: 1_500_000_000 },
+      {
+        id: 1,
+        name: 'Released',
+        game_status: 0,
+        first_release_date: 1_500_000_000
+      },
       { id: 2, name: 'No status' },
       { id: 3, name: 'Rumored', game_status: 7 },
       { id: 4, name: 'Cancelled without date', game_status: 6 },
-      { id: 5, name: 'Cancelled with date', game_status: 6, first_release_date: 1_400_000_000 }
+      {
+        id: 5,
+        name: 'Cancelled with date',
+        game_status: 6,
+        first_release_date: 1_400_000_000
+      }
     ] as IGDBGame[])
 
     const result = await service.findSimilarGames(10)
@@ -73,19 +83,21 @@ describe('GameService.findFeaturedGames', () => {
       } as unknown as RatingRepository,
       {} as GameCacheRepository,
       {
-        findTrendingIgdbIds: vi
-          .fn()
-          .mockResolvedValue([{ igdbId: 1, playingCount: 2 }, { igdbId: 2, playingCount: 1 }])
+        findTrendingIgdbIds: vi.fn().mockResolvedValue([
+          { igdbId: 1, playingCount: 2 },
+          { igdbId: 2, playingCount: 1 }
+        ])
       } as unknown as UserRepository,
       cacheRepository as unknown as CacheRepository
     )
-    vi.spyOn(IGDBService, 'getGamesByIds').mockImplementation(async ids =>
-      ids.map(id => ({
-        id,
-        name: `Game ${id}`,
-        first_release_date: 1_400_000_000,
-        game_status: id === 2 ? 7 : id === 3 ? 6 : 0
-      })) as IGDBGame[]
+    vi.spyOn(IGDBService, 'getGamesByIds').mockImplementation(
+      async ids =>
+        ids.map(id => ({
+          id,
+          name: `Game ${id}`,
+          first_release_date: 1_400_000_000,
+          game_status: id === 2 ? 7 : id === 3 ? 6 : 0
+        })) as IGDBGame[]
     )
     vi.spyOn(IGDBService, 'getRecentlyReleasedGames').mockResolvedValue([])
     vi.spyOn(service, 'findComingSoonGames').mockResolvedValue({

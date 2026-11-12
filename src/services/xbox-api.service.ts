@@ -203,7 +203,10 @@ export class XboxApiService {
     const dated = (achievements ?? []).flatMap(achievement => {
       if (achievement.progressState !== 'Achieved') return []
       const unlockedAt = new Date(achievement.progression?.timeUnlocked ?? '')
-      if (Number.isNaN(unlockedAt.getTime()) || unlockedAt.getFullYear() < 2005) {
+      if (
+        Number.isNaN(unlockedAt.getTime()) ||
+        unlockedAt.getFullYear() < 2005
+      ) {
         return []
       }
       return [{ description: achievement.description ?? '', unlockedAt }]
@@ -266,9 +269,14 @@ export class XboxApiService {
         continue
       }
 
-      for (const stat of statlistscollection?.flatMap(c => c.stats ?? []) ?? []) {
+      for (const stat of statlistscollection?.flatMap(c => c.stats ?? []) ??
+        []) {
         const value = Number(stat.value)
-        if (stat.titleid && stat.value !== undefined && Number.isFinite(value)) {
+        if (
+          stat.titleid &&
+          stat.value !== undefined &&
+          Number.isFinite(value)
+        ) {
           minutes.set(stat.titleid, value)
         }
       }

@@ -68,13 +68,11 @@ describe('linkPlatformAccount', () => {
 
   it('refreshes the name of an account the user already has when it changed', async () => {
     const repo = repository({
-      findAccount: vi
-        .fn()
-        .mockResolvedValue({
-          id: 'acc-1',
-          userId: 'user-1',
-          displayName: 'Old'
-        })
+      findAccount: vi.fn().mockResolvedValue({
+        id: 'acc-1',
+        userId: 'user-1',
+        displayName: 'Old'
+      })
     })
 
     await link(repo)
@@ -85,13 +83,11 @@ describe('linkPlatformAccount', () => {
 
   it('leaves the stored name alone when it did not change or could not be resolved', async () => {
     const repo = repository({
-      findAccount: vi
-        .fn()
-        .mockResolvedValue({
-          id: 'acc-1',
-          userId: 'user-1',
-          displayName: 'Name'
-        })
+      findAccount: vi.fn().mockResolvedValue({
+        id: 'acc-1',
+        userId: 'user-1',
+        displayName: 'Name'
+      })
     })
 
     await link(repo)

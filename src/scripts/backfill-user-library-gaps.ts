@@ -32,7 +32,9 @@ async function main() {
   let batch = 0
   const permanentlyMissing: number[] = []
 
-  console.log('Backfilling games_cache gaps for games already in user libraries...')
+  console.log(
+    'Backfilling games_cache gaps for games already in user libraries...'
+  )
   console.log(
     'Press Ctrl+C to stop (safe — next run resumes from where it stopped)\n'
   )

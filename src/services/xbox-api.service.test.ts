@@ -158,7 +158,11 @@ describe('XboxApiService.getUnlockedAchievements for Xbox 360 titles', () => {
           description: 'Completed the final mission.',
           lockedDescription: 'Complete the final mission.'
         },
-        { unlocked: false, description: 'Not yet', lockedDescription: 'Not yet' }
+        {
+          unlocked: false,
+          description: 'Not yet',
+          lockedDescription: 'Not yet'
+        }
       ]
     }
   }
@@ -400,7 +404,9 @@ describe('XboxApiService.getMinutesPlayed', () => {
         json({
           content: {
             statlistscollection: [
-              { stats: [{ titleid: '200', name: 'MinutesPlayed', value: '90' }] }
+              {
+                stats: [{ titleid: '200', name: 'MinutesPlayed', value: '90' }]
+              }
             ]
           }
         })

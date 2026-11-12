@@ -144,7 +144,7 @@ describe('UserGamePlatformRepository.removeAccount', () => {
     tx.$queryRaw.mockResolvedValue([{ id: 'acc-2' }])
   })
 
-  it('returns false and changes nothing when the account is not the user\'s', async () => {
+  it("returns false and changes nothing when the account is not the user's", async () => {
     tx.platformAccount.findFirst.mockResolvedValue(null)
 
     const removed = await new UserGamePlatformRepository().removeAccount(

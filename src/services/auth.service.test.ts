@@ -482,10 +482,13 @@ describe('AuthService.loginWithGoogle', () => {
     })
     const service = new AuthService(authRepository, fakeJwt(), recordingCache())
 
-    const result = await service.loginWithGoogle({
-      ...profile,
-      email_verified: false
-    }, true)
+    const result = await service.loginWithGoogle(
+      {
+        ...profile,
+        email_verified: false
+      },
+      true
+    )
 
     expect(result.user).toEqual({ id: 'user-1' })
     expect(updatePassword).not.toHaveBeenCalled()
@@ -502,13 +505,16 @@ describe('AuthService.loginWithDiscord', () => {
     const service = new AuthService(authRepository, fakeJwt(), recordingCache())
 
     await expect(
-      service.loginWithDiscord({
-        id: 'discord-1',
-        email: 'victim@a.com',
-        verified: false,
-        username: 'x',
-        avatar: null
-      }, true)
+      service.loginWithDiscord(
+        {
+          id: 'discord-1',
+          email: 'victim@a.com',
+          verified: false,
+          username: 'x',
+          avatar: null
+        },
+        true
+      )
     ).rejects.toMatchObject({ statusCode: 403 })
     expect(findByEmail).not.toHaveBeenCalled()
   })
@@ -1211,9 +1217,9 @@ describe('AuthService provider linking', () => {
     const { service, linkGoogle, cache } = googleSetup({ discordId: null })
     cache.set.mockRejectedValueOnce(new Error('redis down'))
 
-    await expect(
-      service.loginWithGoogle(googleProfile, true)
-    ).rejects.toThrow('redis down')
+    await expect(service.loginWithGoogle(googleProfile, true)).rejects.toThrow(
+      'redis down'
+    )
     expect(linkGoogle).not.toHaveBeenCalled()
   })
 
@@ -1268,13 +1274,16 @@ describe('AuthService provider linking', () => {
       fakeCache()
     )
 
-    await service.loginWithDiscord({
-      id: 'discord-1',
-      email: 'user@a.com',
-      verified: true,
-      username: 'user',
-      avatar: null
-    }, true)
+    await service.loginWithDiscord(
+      {
+        id: 'discord-1',
+        email: 'user@a.com',
+        verified: true,
+        username: 'user',
+        avatar: null
+      },
+      true
+    )
 
     expect(linkDiscord).toHaveBeenCalledWith(
       'user-1',
@@ -1305,13 +1314,16 @@ describe('AuthService provider already linked', () => {
     )
 
     await expect(
-      service.loginWithGoogle({
-        sub: 'google-2',
-        email: 'user@a.com',
-        email_verified: true,
-        name: 'User',
-        picture: 'https://example.com/p.png'
-      }, true)
+      service.loginWithGoogle(
+        {
+          sub: 'google-2',
+          email: 'user@a.com',
+          email_verified: true,
+          name: 'User',
+          picture: 'https://example.com/p.png'
+        },
+        true
+      )
     ).rejects.toMatchObject({ statusCode: 409 })
     expect(linkGoogle).not.toHaveBeenCalled()
     expect(updatePassword).not.toHaveBeenCalled()
@@ -1336,13 +1348,16 @@ describe('AuthService provider already linked', () => {
     )
 
     await expect(
-      service.loginWithDiscord({
-        id: 'discord-2',
-        email: 'user@a.com',
-        verified: true,
-        username: 'user',
-        avatar: null
-      }, true)
+      service.loginWithDiscord(
+        {
+          id: 'discord-2',
+          email: 'user@a.com',
+          verified: true,
+          username: 'user',
+          avatar: null
+        },
+        true
+      )
     ).rejects.toMatchObject({ statusCode: 409 })
     expect(linkDiscord).not.toHaveBeenCalled()
     expect(updatePassword).not.toHaveBeenCalled()
@@ -1364,13 +1379,16 @@ describe('AuthService provider emails', () => {
       fakeCache()
     )
 
-    const result = await service.loginWithGoogle({
-      sub: 'google-1',
-      email: 'Ana@Mail.COM',
-      email_verified: true,
-      name: 'Ana',
-      picture: 'https://example.com/p.png'
-    }, true)
+    const result = await service.loginWithGoogle(
+      {
+        sub: 'google-1',
+        email: 'Ana@Mail.COM',
+        email_verified: true,
+        name: 'Ana',
+        picture: 'https://example.com/p.png'
+      },
+      true
+    )
 
     expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
     expect(createUserWithGoogle).toHaveBeenCalledWith(
@@ -1393,13 +1411,16 @@ describe('AuthService provider emails', () => {
       fakeCache()
     )
 
-    await service.loginWithDiscord({
-      id: 'discord-1',
-      email: 'Ana@Mail.COM',
-      verified: true,
-      username: 'ana',
-      avatar: null
-    }, true)
+    await service.loginWithDiscord(
+      {
+        id: 'discord-1',
+        email: 'Ana@Mail.COM',
+        verified: true,
+        username: 'ana',
+        avatar: null
+      },
+      true
+    )
 
     expect(findByEmail).toHaveBeenCalledWith('ana@mail.com')
     expect(createWithDiscord).toHaveBeenCalledWith(

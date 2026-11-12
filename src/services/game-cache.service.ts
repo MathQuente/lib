@@ -20,7 +20,8 @@ export class GameCacheService {
   }
 
   async assertReleased(igdbId: number): Promise<{ suggestsEndless: boolean }> {
-    const cached = await this.gameCacheRepository.findReleaseInfoByIgdbId(igdbId)
+    const cached =
+      await this.gameCacheRepository.findReleaseInfoByIgdbId(igdbId)
     if (cached?.releaseDate != null && cached.releaseDate * 1000 > Date.now()) {
       throw new ClientError('Este jogo ainda não foi lançado.', 400)
     }
@@ -30,9 +31,8 @@ export class GameCacheService {
   }
 
   async suggestsEndless(igdbId: number): Promise<boolean> {
-    const cached = await this.gameCacheRepository.findEndlessInputByIgdbId(
-      igdbId
-    )
+    const cached =
+      await this.gameCacheRepository.findEndlessInputByIgdbId(igdbId)
     return cached ? IGDBService.suggestsEndless(cached) : false
   }
 

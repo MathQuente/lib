@@ -55,7 +55,9 @@ interface CompletionSignal {
 }
 
 function earliest(trophies: PsnEarnedTrophy[]): Date | undefined {
-  const times = trophies.flatMap(t => (t.earnedAt ? [t.earnedAt.getTime()] : []))
+  const times = trophies.flatMap(t =>
+    t.earnedAt ? [t.earnedAt.getTime()] : []
+  )
   return times.length > 0 ? new Date(Math.min(...times)) : undefined
 }
 
@@ -424,7 +426,11 @@ export class PsnService {
       toImport.map(t => t.game)
     )
 
-    const completion = await this.detectCompletion(accountId, toImport, trophies)
+    const completion = await this.detectCompletion(
+      accountId,
+      toImport,
+      trophies
+    )
 
     const total = toImport.length
     let imported = 0
@@ -508,7 +514,8 @@ export class PsnService {
     const lookups = needsLookup
       .sort(
         (a, b) =>
-          b.summary.earned / b.summary.total - a.summary.earned / a.summary.total
+          b.summary.earned / b.summary.total -
+          a.summary.earned / a.summary.total
       )
       .slice(0, MAX_TROPHY_LOOKUPS)
 
@@ -548,9 +555,8 @@ export class PsnService {
     if (games.length === 0) return result
 
     try {
-      const byName = await this.psnApiService.getTrophySummariesByName(
-        accountId
-      )
+      const byName =
+        await this.psnApiService.getTrophySummariesByName(accountId)
       const unmatched: MergedPsnGame[] = []
 
       for (const game of games) {
@@ -573,9 +579,12 @@ export class PsnService {
       }
     } catch (err) {
       if (!(err instanceof PsnApiError)) throw err
-      console.warn('[PSN] trophy lookup failed, importing without completion data', {
-        error: err.message
-      })
+      console.warn(
+        '[PSN] trophy lookup failed, importing without completion data',
+        {
+          error: err.message
+        }
+      )
     }
 
     return result

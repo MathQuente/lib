@@ -307,7 +307,9 @@ describe('RatingService.createRating', () => {
     const gameCacheService = fakeGameCacheService({
       assertReleased: vi
         .fn()
-        .mockRejectedValue(new ClientError('Este jogo ainda não foi lançado.', 400))
+        .mockRejectedValue(
+          new ClientError('Este jogo ainda não foi lançado.', 400)
+        )
     })
     const ratingRepository = fakeRatingRepository({
       create: vi.fn()
