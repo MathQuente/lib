@@ -9,7 +9,6 @@ import { RatingRepository } from '../repositories/rating.repository'
 import { FollowRepository } from '../repositories/follow.repository'
 import { ClientError } from '../errors/client-error'
 import { CacheRepository } from '../repositories/cache.repository'
-import { SteamApiService } from './steam-api.service'
 import { CloudinaryService } from './cloudinary.service'
 
 function fakeUserRepository(
