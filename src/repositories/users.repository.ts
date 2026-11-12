@@ -302,7 +302,8 @@ export class UserRepository {
     sortBy,
     sortOrder = 'asc',
     skip,
-    take
+    take,
+    previewPerStatus
   }: {
     userId: string
     filter?: Status
@@ -311,6 +312,7 @@ export class UserRepository {
     sortOrder?: UserGameSortOrder
     skip?: number
     take?: number
+    previewPerStatus?: number
   }): Promise<PaginatedUserGameRow[]> {
     const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
 
@@ -340,8 +342,14 @@ export class UserRepository {
         ? Prisma.sql`LIMIT ${take} OFFSET ${skip ?? 0}`
         : Prisma.empty
 
-    return prisma.$queryRaw<PaginatedUserGameRow[]>(Prisma.sql`
+    const ranked = previewPerStatus !== undefined && take === undefined
+    const rowNumber = ranked
+      ? Prisma.sql`ROW_NUMBER() OVER (PARTITION BY ugs.status ORDER BY ${orderByClause}, ug.id) AS rn,`
+      : Prisma.empty
+
+    const rows = Prisma.sql`
       SELECT
+        ${rowNumber}
         ug.igdb_id                    AS "igdbId",
         ugs.status                    AS "status",
         ug.endless                    AS "endless",
@@ -369,9 +377,32 @@ export class UserRepository {
       WHERE ug.user_id = ${userId}
       ${statusFilter}
       ${queryFilter}
-      ORDER BY ${orderByClause}
+      ORDER BY ${orderByClause}, ug.id
       ${limitClause}
+    `
+
+    if (!ranked) {
+      return prisma.$queryRaw<PaginatedUserGameRow[]>(rows)
+    }
+
+    return prisma.$queryRaw<PaginatedUserGameRow[]>(Prisma.sql`
+      SELECT
+        ranked."igdbId", ranked."status", ranked."endless", ranked."name",
+        ranked."coverUrl", ranked."platforms", ranked."releaseDate",
+        ranked."rating", ranked."completions", ranked."hoursPlayed",
+        ranked."playedOn"
+      FROM (${rows}) ranked
+      WHERE ranked.rn <= ${previewPerStatus}
+      ORDER BY ranked.rn
     `)
+  }
+
+  async findLibraryIgdbIds(userId: string) {
+    const rows = await prisma.userGame.findMany({
+      where: { userId },
+      select: { igdbId: true }
+    })
+    return rows.map(row => row.igdbId)
   }
 
   async findGamesCountByStatus(userId: string) {

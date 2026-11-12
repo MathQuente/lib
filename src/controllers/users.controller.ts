@@ -40,7 +40,7 @@ export class UserController {
       UserSchema.QueryStringSchema.parse(request.query)
     const userId = request.user.userId
 
-    const { totalPerStatus, games, total } =
+    const { totalPerStatus, games, total, libraryIgdbIds } =
       await this.userService.findManyUserGames(
         userId,
         pageIndex,
@@ -50,7 +50,9 @@ export class UserController {
         sortOrder
       )
 
-    return reply.status(200).send({ games, totalPerStatus, total })
+    return reply
+      .status(200)
+      .send({ games, totalPerStatus, total, libraryIgdbIds })
   }
 
   async getMe(request: FastifyRequest, reply: FastifyReply) {

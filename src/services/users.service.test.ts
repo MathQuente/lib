@@ -17,6 +17,7 @@ function fakeUserRepository(
 ): UserRepository {
   return {
     findUserGameStats: vi.fn().mockResolvedValue({ stats: null }),
+    findLibraryIgdbIds: vi.fn().mockResolvedValue([]),
     ...overrides
   } as unknown as UserRepository
 }
@@ -448,7 +449,8 @@ describe('UserService.findManyUserGames', () => {
       sortBy: 'rating',
       sortOrder: 'desc',
       skip: undefined,
-      take: undefined
+      take: undefined,
+      previewPerStatus: 24
     })
   })
 
@@ -622,6 +624,144 @@ describe('UserService.findManyUserGames', () => {
     )
 
     expect(result.games.WISHLIST[0].releaseDate).toBeUndefined()
+  })
+})
+
+describe('UserService.findManyUserGames overview', () => {
+  function build(overrides: Partial<UserRepository> = {}) {
+    const findManyGamesOfUser = vi.fn().mockResolvedValue([])
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findManyGamesOfUser,
+      findGamesCountByStatus: vi
+        .fn()
+        .mockResolvedValue(statusCounts({ PLAYED: 40, BACKLOG: 266 })),
+      findLibraryIgdbIds: vi.fn().mockResolvedValue([1, 2, 3]),
+      ...overrides
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+    return { service, findManyGamesOfUser, userRepository }
+  }
+
+  it('returns the exact totals and the ids of the whole library next to the preview', async () => {
+    const { service } = build()
+
+    const result = await service.findManyUserGames(
+      'user-1',
+      0,
+      undefined,
+      undefined
+    )
+
+    expect(result.total).toBe(306)
+    expect(result.totalPerStatus.find(t => t.status === 'BACKLOG')).toEqual({
+      status: 'BACKLOG',
+      totalGames: 266
+    })
+    expect(result.libraryIgdbIds).toEqual([1, 2, 3])
+  })
+
+  it('does not return the library ids for a filtered page', async () => {
+    const { service, userRepository } = build()
+
+    const result = await service.findManyUserGames(
+      'user-1',
+      0,
+      'PLAYED',
+      undefined
+    )
+
+    expect(result).not.toHaveProperty('libraryIgdbIds')
+    expect(userRepository.findLibraryIgdbIds).not.toHaveBeenCalled()
+  })
+
+  it('does not cut a search that has no status filter', async () => {
+    const { service, findManyGamesOfUser } = build()
+
+    const result = await service.findManyUserGames(
+      'user-1',
+      0,
+      undefined,
+      'zelda'
+    )
+
+    expect(findManyGamesOfUser).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'zelda', previewPerStatus: undefined })
+    )
+    expect(result).not.toHaveProperty('libraryIgdbIds')
+  })
+
+  it('treats an empty search like no search', async () => {
+    const { service, findManyGamesOfUser } = build()
+
+    await service.findManyUserGames('user-1', 0, undefined, '')
+
+    expect(findManyGamesOfUser).toHaveBeenCalledWith(
+      expect.objectContaining({ previewPerStatus: 24 })
+    )
+  })
+
+  it('only completes the games of the preview from IGDB', async () => {
+    const getGamesByIds = vi
+      .spyOn(IGDBService, 'getGamesByIds')
+      .mockResolvedValue([])
+    const { service } = build({
+      findManyGamesOfUser: vi.fn().mockResolvedValue([
+        {
+          igdbId: 7,
+          status: 'BACKLOG',
+          name: null,
+          coverUrl: null,
+          platforms: null,
+          releaseDate: null,
+          rating: null,
+          completions: 0,
+          hoursPlayed: 0,
+          playedOn: [],
+          endless: false
+        }
+      ])
+    })
+
+    await service.findManyUserGames('user-1', 0, undefined, undefined)
+
+    expect(getGamesByIds).toHaveBeenCalledWith([7])
+    getGamesByIds.mockRestore()
+  })
+})
+
+describe('UserService.findPublicUserGames', () => {
+  it('asks the repository for 6 games per status and returns no library ids', async () => {
+    const findManyGamesOfUser = vi.fn().mockResolvedValue([])
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findManyGamesOfUser,
+      findGamesCountByStatus: vi.fn().mockResolvedValue(statusCounts({})),
+      findLibraryIgdbIds: vi.fn().mockResolvedValue([1])
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+
+    const result = await service.findPublicUserGames('user-1')
+
+    expect(findManyGamesOfUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sortBy: 'completedAt',
+        sortOrder: 'desc',
+        previewPerStatus: 6
+      })
+    )
+    expect(result).not.toHaveProperty('libraryIgdbIds')
+    expect(userRepository.findLibraryIgdbIds).not.toHaveBeenCalled()
   })
 })
 

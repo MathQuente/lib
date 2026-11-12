@@ -167,7 +167,8 @@ export const GetAllUserGamesResponseSchema = z.object({
       totalGames: z.number()
     })
   ),
-  total: z.number()
+  total: z.number(),
+  libraryIgdbIds: z.array(z.number()).optional()
 })
 
 const ALLOWED_IMAGE_HOSTS = new Set([

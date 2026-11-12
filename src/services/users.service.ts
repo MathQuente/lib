@@ -21,6 +21,7 @@ const EDIT_BY_PLATFORM_MESSAGE =
 export class UserService {
   private readonly ITEMS_PER_PAGE = 30
   private readonly USER_GAMES_PER_PAGE = 48
+  private readonly LIBRARY_PREVIEW_PER_STATUS = 24
 
   constructor(
     private userRepository: UserRepository,
@@ -258,9 +259,15 @@ export class UserService {
       | 'completedAt' = 'dateAdded',
     sortOrder: 'asc' | 'desc' = sortBy === 'dateAdded' || sortBy === 'completedAt'
       ? 'desc'
-      : 'asc'
+      : 'asc',
+    options: { previewPerStatus?: number; includeLibraryIds?: boolean } = {}
   ) {
     await this.requireUser(userId)
+
+    const isOverview = !filter && !query
+    const previewPerStatus = isOverview
+      ? (options.previewPerStatus ?? this.LIBRARY_PREVIEW_PER_STATUS)
+      : undefined
 
     const rows = await this.userRepository.findManyGamesOfUser({
       userId,
@@ -269,7 +276,8 @@ export class UserService {
       sortBy,
       sortOrder,
       skip: filter ? pageIndex * this.USER_GAMES_PER_PAGE : undefined,
-      take: filter ? this.USER_GAMES_PER_PAGE : undefined
+      take: filter ? this.USER_GAMES_PER_PAGE : undefined,
+      previewPerStatus
     })
 
     const enriched = await this.fillMissingGameCacheEntries(rows)
@@ -289,8 +297,13 @@ export class UserService {
       }
     }
 
-    const totalPerStatus =
-      await this.userRepository.findGamesCountByStatus(userId)
+    const includeLibraryIds = isOverview && (options.includeLibraryIds ?? true)
+    const [totalPerStatus, libraryIgdbIds] = await Promise.all([
+      this.userRepository.findGamesCountByStatus(userId),
+      includeLibraryIds
+        ? this.userRepository.findLibraryIgdbIds(userId)
+        : undefined
+    ])
 
     const totalPerStatusMapped = totalPerStatus.map(item => ({
       status: item.status,
@@ -301,31 +314,29 @@ export class UserService {
       ? (totalPerStatusMapped.find(t => t.status === filter)?.totalGames ?? 0)
       : totalPerStatusMapped.reduce((acc, t) => acc + t.totalGames, 0)
 
-    return { games, totalPerStatus: totalPerStatusMapped, total }
+    return {
+      games,
+      totalPerStatus: totalPerStatusMapped,
+      total,
+      ...(libraryIgdbIds ? { libraryIgdbIds } : {})
+    }
   }
 
   private readonly PUBLIC_PROFILE_PREVIEW_PER_STATUS = 6
 
   async findPublicUserGames(userId: string) {
-    await this.requireUser(userId)
-
-    const result = await this.findManyUserGames(
+    return this.findManyUserGames(
       userId,
       0,
       undefined,
       undefined,
       'completedAt',
-      'desc'
+      'desc',
+      {
+        previewPerStatus: this.PUBLIC_PROFILE_PREVIEW_PER_STATUS,
+        includeLibraryIds: false
+      }
     )
-
-    const games = Object.fromEntries(
-      Object.entries(result.games).map(([status, list]) => [
-        status,
-        list.slice(0, this.PUBLIC_PROFILE_PREVIEW_PER_STATUS)
-      ])
-    ) as typeof result.games
-
-    return { ...result, games }
   }
 
   async findUserFollowers(userId: string) {
