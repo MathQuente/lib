@@ -191,23 +191,19 @@ export class UserRepository {
         userBanner: true,
         userName: true,
         profilePicture: true,
-        steamId: true,
         psnAccountId: true,
         psnOnlineId: true,
         accounts: {
-          select: { id: true, platform: true, displayName: true },
+          select: {
+            id: true,
+            platform: true,
+            externalId: true,
+            displayName: true
+          },
           orderBy: { createdAt: 'asc' }
         },
         _count: { select: { userGames: { where: NOT_WISHLIST } } }
       }
-    })
-  }
-
-  async setSteamId(userId: string, steamId: string | null) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: { steamId },
-      select: { steamId: true }
     })
   }
 

@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify'
 import { SteamService } from '../services/steam.service'
 import { SteamApiService } from '../services/steam-api.service'
 import { CacheRepository } from '../repositories/cache.repository'
-import { ClientError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 
 const STEAM_LINK_STATE_TTL_SECONDS = 600
 const steamLinkStateKey = (state: string) => `steam-link-state:${state}`
@@ -70,6 +70,9 @@ export class SteamController {
       await this.steamService.connectSteam(request.user.userId, steamId)
       return this.redirectToLibrary(reply, 'connected')
     } catch (err) {
+      if (err instanceof AccountLimitError) {
+        return this.redirectToLibrary(reply, 'limit')
+      }
       if (err instanceof ClientError && err.statusCode === 409) {
         return this.redirectToLibrary(reply, 'taken')
       }
@@ -83,7 +86,9 @@ export class SteamController {
   async disconnect(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user.userId
 
-    await this.steamService.disconnectSteam(userId)
+    const { accountId } = request.params as { accountId: string }
+
+    await this.steamService.disconnectSteam(userId, accountId)
 
     return reply.status(204).send()
   }

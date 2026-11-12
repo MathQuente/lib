@@ -20,7 +20,14 @@ export type SteamImportSectionResult = ImportSectionResult & {
   suggestions?: number
 }
 
+export interface SteamAccountImportResult {
+  displayName: string
+  library?: SteamImportSectionResult
+  error?: string
+}
+
 export interface SteamImportJobResult {
   library: SteamImportSectionResult
   wishlist: SteamImportSectionResult
+  accounts: SteamAccountImportResult[]
 }

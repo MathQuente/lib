@@ -35,7 +35,6 @@ Table users {
   userBanner String
   googleId String [unique]
   discordId String [unique]
-  steamId String [unique]
   psnAccountId String [unique]
   psnOnlineId String
   emailVerifiedAt DateTime

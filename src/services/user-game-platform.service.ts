@@ -126,7 +126,7 @@ export class UserGamePlatformService {
         completions: p.completions,
         completedAt: toDateString(p.completedAt),
         accountHours: p.accountHours.map(a => ({
-          gamertag: a.platformAccount.displayName,
+          accountName: a.platformAccount.displayName,
           hoursPlayed: Number(a.hoursPlayed)
         }))
       })),

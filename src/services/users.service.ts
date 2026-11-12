@@ -8,7 +8,6 @@ import { FollowRepository } from '../repositories/follow.repository'
 import { PaginatedUserGameRow } from '../types/user'
 import { IGDBService } from './igdb.service'
 import { CloudinaryService } from './cloudinary.service'
-import { SteamApiService } from './steam-api.service'
 import { GameCacheService } from './game-cache.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { CacheRepository } from '../repositories/cache.repository'
@@ -16,9 +15,6 @@ import { markSessionsRevoked } from '../utils/session-revocation'
 import { randomInt } from 'crypto'
 import { PLAYED_STATUS_ID, WISHLIST_STATUS_ID } from '../utils/library-status'
 
-const STEAM_PERSONA_TTL_SECONDS = 6 * 60 * 60
-const STEAM_PERSONA_FAILURE_TTL_SECONDS = 60
-const steamPersonaKey = (steamId: string) => `steam:persona:${steamId}`
 const EDIT_BY_PLATFORM_MESSAGE =
   'Este jogo tem plataformas cadastradas. Edite os valores por plataforma.'
 
@@ -137,38 +133,6 @@ export class UserService {
     })
   }
 
-  private async getSteamPersonaName(
-    steamId: string | null
-  ): Promise<string | null> {
-    if (!steamId) return null
-
-    try {
-      const key = steamPersonaKey(steamId)
-      const cached = await this.cacheRepository.get(key)
-      if (cached && typeof cached === 'object' && 'name' in cached) {
-        return (cached as { name: string | null }).name
-      }
-
-      let name: string | null = null
-      try {
-        name = await SteamApiService.getPersonaName(steamId)
-      } catch (error) {
-        console.error('Steam persona lookup failed:', {
-          error: error instanceof Error ? error.message : 'unknown error'
-        })
-      }
-
-      await this.cacheRepository.set(
-        key,
-        { name },
-        name ? STEAM_PERSONA_TTL_SECONDS : STEAM_PERSONA_FAILURE_TTL_SECONDS
-      )
-      return name
-    } catch {
-      return null
-    }
-  }
-
   async findMe(userId: string) {
     const user = await this.requireUser(userId)
 
@@ -187,8 +151,13 @@ export class UserService {
         emailVerified: user.emailVerifiedAt !== null,
         gamesAmount: user._count.userGames,
         totalHoursPlayed: totalHoursPlayed ? Number(totalHoursPlayed) : 0,
-        steamId: user.steamId,
-        steamPersonaName: await this.getSteamPersonaName(user.steamId),
+        steamAccounts: user.accounts
+          .filter(account => account.platform === 'STEAM')
+          .map(account => ({
+            id: account.id,
+            steamId: account.externalId,
+            personaName: account.displayName
+          })),
         psnOnlineId: user.psnOnlineId,
         xboxAccounts: user.accounts
           .filter(account => account.platform === 'XBOX')

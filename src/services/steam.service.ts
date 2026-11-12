@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { ClientError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
@@ -26,6 +26,7 @@ import {
 import {
   steamImportQueue,
   steamImportJobId,
+  SteamAccountImportResult,
   SteamImportJobResult,
   SteamImportSectionResult
 } from '../queues/steam-import.queue'
@@ -33,6 +34,7 @@ import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
+import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
 import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
 import { STEAM_CONSOLE } from '../utils/console-inference'
 import {
@@ -46,6 +48,11 @@ const UNAVAILABLE_MESSAGE =
   'Não foi possível consultar a Steam agora. Tente novamente mais tarde.'
 const RATE_LIMITED_MESSAGE =
   'A integração com a Steam atingiu o limite de consultas. Tente novamente mais tarde.'
+
+const TAKEN_MESSAGE = 'Este perfil da Steam já está vinculado a outra conta.'
+const GENERIC_ACCOUNT_ERROR =
+  'Não foi possível importar esta conta da Steam. Tente novamente mais tarde.'
+const LIBRARY_PROGRESS_SHARE = 90
 
 const RECENT_PLAY_THRESHOLD_SECONDS = 14 * 24 * 60 * 60
 
@@ -169,20 +176,67 @@ export class SteamService {
     return { toImport, skipped, notFound }
   }
 
+  private async listSteamAccounts(userId: string) {
+    const accounts = await this.userRepository.listAccounts(userId, 'STEAM')
+    return accounts.map(account => ({
+      id: account.id,
+      steamId: account.externalId,
+      displayName: account.displayName
+    }))
+  }
+
+  private async lookupPersonaName(steamId: string) {
+    try {
+      return await SteamApiService.getPersonaName(steamId)
+    } catch {
+      return null
+    }
+  }
+
   async connectSteam(userId: string, verifiedSteamId: string) {
     await this.requireUser(userId)
 
+    const existing = await this.userRepository.findAccount(
+      'STEAM',
+      verifiedSteamId
+    )
+    if (existing) {
+      if (existing.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
+      const personaName = await this.lookupPersonaName(verifiedSteamId)
+      if (personaName && personaName !== existing.displayName) {
+        await this.userRepository.updateAccountName(existing.id, personaName)
+      }
+      return { steamId: verifiedSteamId }
+    }
+
+    const accounts = await this.listSteamAccounts(userId)
+    if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
+      throw new AccountLimitError('STEAM')
+    }
+
+    const personaName = await this.lookupPersonaName(verifiedSteamId)
     try {
-      await this.userRepository.setSteamId(userId, verifiedSteamId)
+      const created = await this.userRepository.addAccount(
+        userId,
+        'STEAM',
+        {
+          externalId: verifiedSteamId,
+          displayName: personaName ?? verifiedSteamId
+        },
+        MAX_ACCOUNTS_PER_PLATFORM
+      )
+      if (!created) throw new AccountLimitError('STEAM')
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
-        throw new ClientError(
-          'Este perfil da Steam já está vinculado a outra conta.',
-          409
+        const winner = await this.userRepository.findAccount(
+          'STEAM',
+          verifiedSteamId
         )
+        if (winner?.userId === userId) return { steamId: verifiedSteamId }
+        throw new ClientError(TAKEN_MESSAGE, 409)
       }
       throw err
     }
@@ -190,14 +244,15 @@ export class SteamService {
     return { steamId: verifiedSteamId }
   }
 
-  async disconnectSteam(userId: string) {
+  async disconnectSteam(userId: string, accountId: string) {
     await this.requireUser(userId)
-    await this.userRepository.setSteamId(userId, null)
+    await this.userGamePlatformService.removeAccount(userId, accountId, 'STEAM')
   }
 
   async enqueueImport(userId: string) {
-    const user = await this.requireUser(userId)
-    if (!user.steamId) {
+    await this.requireUser(userId)
+    const accounts = await this.listSteamAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil da Steam primeiro.', 400)
     }
 
@@ -220,11 +275,117 @@ export class SteamService {
     userId: string,
     onProgress?: (percent: number) => void
   ): Promise<SteamImportJobResult> {
-    const user = await this.requireUser(userId)
-    if (!user.steamId) {
+    await this.requireUser(userId)
+    const accounts = await this.listSteamAccounts(userId)
+    if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil da Steam primeiro.', 400)
     }
-    const steamId = user.steamId
+
+    const results: SteamAccountImportResult[] = []
+    const failures: unknown[] = []
+    const wishlistByAppId = new Map<number, { appid: number; name: string }>()
+    const igdbByAppId = new Map<number, IGDBGame>()
+
+    for (const [index, account] of accounts.entries()) {
+      const report = (percent: number) =>
+        onProgress?.(
+          Math.round(
+            ((index + percent / 100) / accounts.length) *
+              LIBRARY_PROGRESS_SHARE
+          )
+        )
+      try {
+        await this.refreshPersonaName(account)
+        const imported = await this.importAccount(userId, account, report)
+        for (const item of imported.wishlist) {
+          wishlistByAppId.set(item.appid, item)
+        }
+        for (const [appId, game] of imported.igdbByAppId) {
+          igdbByAppId.set(appId, game)
+        }
+        results.push({
+          displayName: account.displayName,
+          library: imported.library
+        })
+      } catch (err) {
+        failures.push(err)
+        console.error('[Steam] account import failed', {
+          error: err instanceof Error ? err.message : 'unknown error'
+        })
+        results.push({
+          displayName: account.displayName,
+          error:
+            err instanceof ClientError ? err.message : GENERIC_ACCOUNT_ERROR
+        })
+      }
+    }
+
+    if (failures.length === accounts.length) throw failures[0]
+
+    const wishlistResolved = await this.resolveImportTargets(
+      [...wishlistByAppId.values()],
+      igdbByAppId,
+      userId,
+      true
+    )
+    let wishlistDone = 0
+    const wishlist = await this.importWishlist(
+      wishlistResolved,
+      userId,
+      () => {
+        wishlistDone++
+        onProgress?.(
+          LIBRARY_PROGRESS_SHARE +
+            Math.round(
+              (wishlistDone / wishlistResolved.toImport.length) *
+                (100 - LIBRARY_PROGRESS_SHARE)
+            )
+        )
+      }
+    )
+
+    onProgress?.(100)
+
+    const library: SteamImportSectionResult = {
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      notFound: []
+    }
+    const notFound = new Set<string>()
+    let suggestions = 0
+    for (const { library: accountLibrary } of results) {
+      if (!accountLibrary) continue
+      library.imported += accountLibrary.imported
+      library.updated += accountLibrary.updated
+      library.skipped += accountLibrary.skipped
+      for (const name of accountLibrary.notFound) notFound.add(name)
+      suggestions += accountLibrary.suggestions ?? 0
+    }
+    library.notFound = [...notFound]
+    if (suggestions > 0) library.suggestions = suggestions
+
+    return { library, wishlist, accounts: results }
+  }
+
+  private async refreshPersonaName(account: {
+    id: string
+    steamId: string
+    displayName: string
+  }) {
+    const personaName = await this.lookupPersonaName(account.steamId)
+    if (personaName && personaName !== account.displayName) {
+      await this.userRepository.updateAccountName(account.id, personaName)
+      account.displayName = personaName
+    }
+  }
+
+  private async importAccount(
+    userId: string,
+    account: { id: string; steamId: string },
+    onProgress: (percent: number) => void
+  ) {
+    const { steamId } = account
 
     let ownedGames: SteamOwnedGame[] | null
     let wishlistItemsRaw: { appid: number }[] | null
@@ -250,37 +411,30 @@ export class SteamService {
       )
     }
 
-    const wishlistItems = (wishlistItemsRaw ?? []).map(w => ({
+    const wishlist = (wishlistItemsRaw ?? []).map(w => ({
       appid: w.appid,
       name: `App ${w.appid}`
     }))
 
     const allAppIds = [
       ...ownedGames.map(g => g.appid),
-      ...wishlistItems.map(w => w.appid)
+      ...wishlist.map(w => w.appid)
     ]
     const matches = await IGDBService.getGamesBySteamAppIds(allAppIds)
-    const appIdToIgdb = new Map(matches.map(m => [m.appId, m.game]))
+    const igdbByAppId = new Map(matches.map(m => [m.appId, m.game]))
 
     const ownedResolved = await this.resolveImportTargets(
       ownedGames,
-      appIdToIgdb,
+      igdbByAppId,
       userId,
       false
     )
-    const wishlistResolved = await this.resolveImportTargets(
-      wishlistItems,
-      appIdToIgdb,
-      userId,
-      true
-    )
 
-    const total =
-      ownedResolved.toImport.length + wishlistResolved.toImport.length
+    const total = ownedResolved.toImport.length
     let processed = 0
     const bump = () => {
       processed++
-      onProgress?.(total === 0 ? 100 : Math.round((processed / total) * 100))
+      onProgress(total === 0 ? 100 : Math.round((processed / total) * 100))
     }
 
     const timeToBeatByGame = await IGDBService.getTimeToBeatByGameIds(
@@ -290,15 +444,13 @@ export class SteamService {
     const library = await this.importOwnedGames(
       ownedResolved,
       userId,
-      steamId,
+      account,
       timeToBeatByGame,
       bump
     )
-    const wishlist = await this.importWishlist(wishlistResolved, userId, bump)
+    onProgress(100)
 
-    onProgress?.(100)
-
-    return { library, wishlist }
+    return { library, wishlist, igdbByAppId }
   }
 
   private async importOwnedGames(
@@ -312,7 +464,7 @@ export class SteamService {
       notFound: string[]
     },
     userId: string,
-    steamId: string,
+    { id: accountId, steamId }: { id: string; steamId: string },
     timeToBeatByGame: Map<number, number>,
     onItemDone: () => void
   ): Promise<SteamImportSectionResult> {
@@ -452,7 +604,8 @@ export class SteamService {
           completedAt,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
         },
-        STEAM_CONSOLE
+        STEAM_CONSOLE,
+        accountId
       )
 
       if (outcome === 'imported') imported++

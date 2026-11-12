@@ -40,10 +40,11 @@ export async function steamRoutes(app: FastifyInstance) {
   )
 
   app.withTypeProvider<ZodTypeProvider>().delete(
-    '/',
+    '/:accountId',
     {
       preHandler: [app.authenticate],
       schema: {
+        params: SteamSchema.DisconnectParamsSchema,
         response: {
           204: SteamSchema.DisconnectResponseSchema,
           404: ErrorSchemas.NotFound,

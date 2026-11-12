@@ -5,16 +5,13 @@ import {
 } from './import.schema'
 
 export {
+  DisconnectParamsSchema,
   DisconnectResponseSchema,
   StartImportResponseSchema
 } from './import.schema'
 
 export const StartXboxLinkResponseSchema = z.object({
   url: z.string().url()
-})
-
-export const DisconnectParamsSchema = z.object({
-  accountId: z.string().uuid()
 })
 
 export const ImportStatusResponseSchema = importStatusResponseSchema(

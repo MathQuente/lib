@@ -836,17 +836,7 @@ describe('UserService.findById', () => {
 })
 
 describe('UserService.findMe', () => {
-  function build(
-    options: {
-      steamId?: string | null
-      cache?: Partial<CacheRepository>
-    } = {}
-  ) {
-    const cache = {
-      get: vi.fn().mockResolvedValue(null),
-      set: vi.fn().mockResolvedValue(undefined),
-      ...options.cache
-    }
+  function build(accounts: unknown[] = []) {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({
         id: 'user-1',
@@ -855,12 +845,8 @@ describe('UserService.findMe', () => {
         emailVerifiedAt: null,
         profilePicture: 'pic.png',
         userBanner: 'banner.png',
-        steamId: options.steamId === undefined ? '12345' : options.steamId,
         psnOnlineId: 'psn-user',
-        accounts: [
-          { id: 'acc-1', platform: 'XBOX', displayName: 'Gamer' },
-          { id: 'acc-2', platform: 'STEAM', displayName: 'Other' }
-        ],
+        accounts,
         _count: { userGames: 3 }
       }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
@@ -869,24 +855,35 @@ describe('UserService.findMe', () => {
       countFollowers: vi.fn().mockResolvedValue(2),
       countFollowing: vi.fn().mockResolvedValue(5)
     })
-    const service = new UserService(
+    return new UserService(
       userRepository,
       fakeRatingRepository(),
       fakeGameCacheService(),
-      followRepository,
-      undefined,
-      cache as unknown as CacheRepository
+      followRepository
     )
-    return { service, cache }
   }
 
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('returns the full self profile, including linked accounts and follow counts', async () => {
-    vi.spyOn(SteamApiService, 'getPersonaName').mockResolvedValue('Matheus')
-    const { service } = build()
+  it('returns the full self profile, with each linked account listed under its own platform', async () => {
+    const service = build([
+      {
+        id: 'x-1',
+        platform: 'XBOX',
+        externalId: 'xuid-1',
+        displayName: 'Gamer'
+      },
+      {
+        id: 's-1',
+        platform: 'STEAM',
+        externalId: '76561197960287930',
+        displayName: 'MathQuente'
+      },
+      {
+        id: 's-2',
+        platform: 'STEAM',
+        externalId: '76561197960287931',
+        displayName: 'Alt'
+      }
+    ])
 
     const { user } = await service.findMe('user-1')
 
@@ -899,77 +896,22 @@ describe('UserService.findMe', () => {
       emailVerified: false,
       gamesAmount: 3,
       totalHoursPlayed: 12.5,
-      steamId: '12345',
-      steamPersonaName: 'Matheus',
+      steamAccounts: [
+        { id: 's-1', steamId: '76561197960287930', personaName: 'MathQuente' },
+        { id: 's-2', steamId: '76561197960287931', personaName: 'Alt' }
+      ],
       psnOnlineId: 'psn-user',
-      xboxAccounts: [{ id: 'acc-1', gamertag: 'Gamer' }],
+      xboxAccounts: [{ id: 'x-1', gamertag: 'Gamer' }],
       followersCount: 2,
       followingCount: 5
     })
   })
 
-  it('caches the Steam profile name for six hours', async () => {
-    vi.spyOn(SteamApiService, 'getPersonaName').mockResolvedValue('Matheus')
-    const { service, cache } = build()
+  it('returns empty lists when no account is linked', async () => {
+    const { user } = await build().findMe('user-1')
 
-    await service.findMe('user-1')
-
-    expect(cache.set).toHaveBeenCalledWith(
-      'steam:persona:12345',
-      { name: 'Matheus' },
-      6 * 60 * 60
-    )
-  })
-
-  it('does not call Steam when the name is already cached', async () => {
-    const getPersonaName = vi.spyOn(SteamApiService, 'getPersonaName')
-    const { service } = build({
-      cache: { get: vi.fn().mockResolvedValue({ name: 'Cached' }) }
-    })
-
-    const { user } = await service.findMe('user-1')
-
-    expect(user.steamPersonaName).toBe('Cached')
-    expect(getPersonaName).not.toHaveBeenCalled()
-  })
-
-  it('returns a null name and caches the failure briefly when Steam fails', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(SteamApiService, 'getPersonaName').mockRejectedValue(
-      new Error('timeout')
-    )
-    const { service, cache } = build()
-
-    const { user } = await service.findMe('user-1')
-
-    expect(user.steamId).toBe('12345')
-    expect(user.steamPersonaName).toBeNull()
-    expect(cache.set).toHaveBeenCalledWith(
-      'steam:persona:12345',
-      { name: null },
-      60
-    )
-  })
-
-  it('still answers when the cache is down', async () => {
-    vi.spyOn(SteamApiService, 'getPersonaName').mockResolvedValue('Matheus')
-    const { service } = build({
-      cache: { get: vi.fn().mockRejectedValue(new Error('redis down')) }
-    })
-
-    const { user } = await service.findMe('user-1')
-
-    expect(user.steamPersonaName).toBeNull()
-  })
-
-  it('does not call Steam when no account is linked', async () => {
-    const getPersonaName = vi.spyOn(SteamApiService, 'getPersonaName')
-    const { service } = build({ steamId: null })
-
-    const { user } = await service.findMe('user-1')
-
-    expect(user.steamPersonaName).toBeNull()
-    expect(getPersonaName).not.toHaveBeenCalled()
+    expect(user.steamAccounts).toEqual([])
+    expect(user.xboxAccounts).toEqual([])
   })
 })
 

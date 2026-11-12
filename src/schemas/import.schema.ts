@@ -4,6 +4,10 @@ export const StartImportResponseSchema = z.object({
   status: z.literal('queued')
 })
 
+export const DisconnectParamsSchema = z.object({
+  accountId: z.string().uuid()
+})
+
 export const DisconnectResponseSchema = z.void()
 
 export const ImportSectionResultSchema = z.object({

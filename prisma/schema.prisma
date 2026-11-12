@@ -47,7 +47,6 @@ model User {
   userBanner      String?        @map("user_banner")
   googleId        String?        @unique @map("google_id")
   discordId       String?        @unique @map("discord_id")
-  steamId         String?        @unique @map("steam_id")
   psnAccountId    String?        @unique @map("psn_account_id")
   psnOnlineId     String?        @map("psn_online_id")
   emailVerifiedAt DateTime?      @map("email_verified_at")

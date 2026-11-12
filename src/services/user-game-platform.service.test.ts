@@ -108,8 +108,8 @@ describe('UserGamePlatformService.getPlatforms', () => {
     const { platforms } = await service.getPlatforms('user-1', 10)
 
     expect(platforms[0].accountHours).toEqual([
-      { gamertag: 'MathQuente', hoursPlayed: 31.83 },
-      { gamertag: 'Other', hoursPlayed: 62.5 }
+      { accountName: 'MathQuente', hoursPlayed: 31.83 },
+      { accountName: 'Other', hoursPlayed: 62.5 }
     ])
   })
 
