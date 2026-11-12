@@ -419,7 +419,7 @@ describe('UserService.findManyUserGames', () => {
     })
   })
 
-  it('fetches unpaginated when no status filter is set, so one large bucket cannot crowd the others out', async () => {
+  it('fetches a preview per status when no status filter is set, so one large bucket cannot crowd the others out', async () => {
     const findManyGamesOfUser = vi.fn().mockResolvedValue([])
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
@@ -450,7 +450,8 @@ describe('UserService.findManyUserGames', () => {
       sortOrder: 'desc',
       skip: undefined,
       take: undefined,
-      previewPerStatus: 24
+      previewPerStatus: 24,
+      uncappedStatuses: ['PLAYING']
     })
   })
 
@@ -680,6 +681,16 @@ describe('UserService.findManyUserGames overview', () => {
     expect(userRepository.findLibraryIgdbIds).not.toHaveBeenCalled()
   })
 
+  it('never cuts the playing shelf, so the now and endless tabs see every game', async () => {
+    const { service, findManyGamesOfUser } = build()
+
+    await service.findManyUserGames('user-1', 0, undefined, undefined)
+
+    expect(findManyGamesOfUser).toHaveBeenCalledWith(
+      expect.objectContaining({ uncappedStatuses: ['PLAYING'] })
+    )
+  })
+
   it('does not cut a search that has no status filter', async () => {
     const { service, findManyGamesOfUser } = build()
 
@@ -757,7 +768,8 @@ describe('UserService.findPublicUserGames', () => {
       expect.objectContaining({
         sortBy: 'completedAt',
         sortOrder: 'desc',
-        previewPerStatus: 6
+        previewPerStatus: 6,
+        uncappedStatuses: ['PLAYING']
       })
     )
     expect(result).not.toHaveProperty('libraryIgdbIds')

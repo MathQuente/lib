@@ -303,7 +303,8 @@ export class UserRepository {
     sortOrder = 'asc',
     skip,
     take,
-    previewPerStatus
+    previewPerStatus,
+    uncappedStatuses = []
   }: {
     userId: string
     filter?: Status
@@ -313,6 +314,7 @@ export class UserRepository {
     skip?: number
     take?: number
     previewPerStatus?: number
+    uncappedStatuses?: Status[]
   }): Promise<PaginatedUserGameRow[]> {
     const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`
 
@@ -385,6 +387,11 @@ export class UserRepository {
       return prisma.$queryRaw<PaginatedUserGameRow[]>(rows)
     }
 
+    const uncapped =
+      uncappedStatuses.length > 0
+        ? Prisma.sql` OR ranked."status"::text IN (${Prisma.join(uncappedStatuses)})`
+        : Prisma.empty
+
     return prisma.$queryRaw<PaginatedUserGameRow[]>(Prisma.sql`
       SELECT
         ranked."igdbId", ranked."status", ranked."endless", ranked."name",
@@ -392,7 +399,7 @@ export class UserRepository {
         ranked."rating", ranked."completions", ranked."hoursPlayed",
         ranked."playedOn"
       FROM (${rows}) ranked
-      WHERE ranked.rn <= ${previewPerStatus}
+      WHERE ranked.rn <= ${previewPerStatus}${uncapped}
       ORDER BY ranked.rn
     `)
   }

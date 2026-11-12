@@ -277,7 +277,8 @@ export class UserService {
       sortOrder,
       skip: filter ? pageIndex * this.USER_GAMES_PER_PAGE : undefined,
       take: filter ? this.USER_GAMES_PER_PAGE : undefined,
-      previewPerStatus
+      previewPerStatus,
+      uncappedStatuses: previewPerStatus === undefined ? undefined : [Status.PLAYING]
     })
 
     const enriched = await this.fillMissingGameCacheEntries(rows)

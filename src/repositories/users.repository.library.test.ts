@@ -35,6 +35,27 @@ describe('UserRepository.findManyGamesOfUser preview', () => {
     expect(values).toContain(24)
   })
 
+  it('keeps every game of the statuses that must not be cut', async () => {
+    await new UserRepository().findManyGamesOfUser({
+      userId: 'user-1',
+      previewPerStatus: 24,
+      uncappedStatuses: ['PLAYING']
+    })
+
+    const { sql, values } = lastQuery()
+    expect(sql).toContain('OR ranked."status"::text IN (')
+    expect(values).toContain('PLAYING')
+  })
+
+  it('adds no exception when every status is capped', async () => {
+    await new UserRepository().findManyGamesOfUser({
+      userId: 'user-1',
+      previewPerStatus: 24
+    })
+
+    expect(lastQuery().sql).not.toContain('OR ranked')
+  })
+
   it('selects named columns from the ranked rows, so rn never reaches the result', async () => {
     await new UserRepository().findManyGamesOfUser({
       userId: 'user-1',
