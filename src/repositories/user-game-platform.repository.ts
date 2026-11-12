@@ -25,9 +25,9 @@ const platformSelect = {
   accountHours: {
     select: {
       hoursPlayed: true,
-      xboxAccount: { select: { gamertag: true } }
+      platformAccount: { select: { displayName: true } }
     },
-    orderBy: { xboxAccount: { gamertag: 'asc' } }
+    orderBy: { platformAccount: { displayName: 'asc' } }
   }
 } satisfies Prisma.UserGamePlatformSelect
 
@@ -48,7 +48,7 @@ const REMOVE_ACCOUNT_TIMEOUT_MS = 30_000
 
 type AccountHoursRow = {
   hoursPlayed: Prisma.Decimal
-  xboxAccount: { gamertag: string }
+  platformAccount: { displayName: string }
 }
 
 export class UserGamePlatformRepository {
@@ -93,7 +93,7 @@ export class UserGamePlatformRepository {
     accountHours?: AccountHours
   ) {
     return prisma.$transaction(async tx => {
-      const accountExists = await this.lockAccount(tx, accountHours)
+      const accountExists = await this.lockAccount(tx, accountHours, platform)
       const row = await tx.userGamePlatform.upsert({
         where: {
           userGameId_platform_console: {
@@ -121,7 +121,7 @@ export class UserGamePlatformRepository {
     accountHours?: AccountHours
   ) {
     return prisma.$transaction(async tx => {
-      const accountExists = await this.lockAccount(tx, accountHours)
+      const accountExists = await this.lockAccount(tx, accountHours, platform)
       const row = await tx.userGamePlatform.update({
         where: {
           userGameId_platform_console: { userGameId, platform, console: from }
@@ -191,11 +191,14 @@ export class UserGamePlatformRepository {
 
   private async lockAccount(
     tx: Prisma.TransactionClient,
-    accountHours?: AccountHours
+    accountHours: AccountHours | undefined,
+    platform: Platform
   ) {
     if (!accountHours) return true
     const locked = await tx.$queryRaw<{ id: string }[]>`
-      SELECT id FROM xbox_accounts WHERE id = ${accountHours.accountId} FOR SHARE
+      SELECT id FROM platform_accounts
+      WHERE id = ${accountHours.accountId} AND platform = ${platform}::"Platform"
+      FOR SHARE
     `
     return locked.length > 0
   }
@@ -210,15 +213,19 @@ export class UserGamePlatformRepository {
       await this.syncRowHours(tx, userGamePlatformId)
       return
     }
-    await tx.xboxAccountHours.upsert({
+    await tx.platformAccountHours.upsert({
       where: {
-        userGamePlatformId_xboxAccountId: {
+        userGamePlatformId_platformAccountId: {
           userGamePlatformId,
-          xboxAccountId: accountId
+          platformAccountId: accountId
         }
       },
       update: { hoursPlayed: hours },
-      create: { userGamePlatformId, xboxAccountId: accountId, hoursPlayed: hours }
+      create: {
+        userGamePlatformId,
+        platformAccountId: accountId,
+        hoursPlayed: hours
+      }
     })
     await this.syncRowHours(tx, userGamePlatformId)
   }
@@ -227,7 +234,7 @@ export class UserGamePlatformRepository {
     tx: Prisma.TransactionClient,
     userGamePlatformId: string
   ) {
-    const { _sum, _count } = await tx.xboxAccountHours.aggregate({
+    const { _sum, _count } = await tx.platformAccountHours.aggregate({
       where: { userGamePlatformId },
       _sum: { hoursPlayed: true },
       _count: true
@@ -238,26 +245,30 @@ export class UserGamePlatformRepository {
     })
   }
 
-  async removeXboxAccount(userId: string, accountId: string) {
+  async removeAccount(userId: string, accountId: string, platform: Platform) {
     return prisma.$transaction(async tx => {
-      const account = await tx.xboxAccount.findFirst({
-        where: { id: accountId, userId },
+      const account = await tx.platformAccount.findFirst({
+        where: { id: accountId, userId, platform },
         select: { id: true }
       })
       if (!account) return false
 
       const locked = await tx.$queryRaw<{ id: string }[]>`
-        SELECT id FROM xbox_accounts WHERE id = ${accountId} FOR UPDATE
+        SELECT id FROM platform_accounts
+        WHERE id = ${accountId}
+          AND user_id = ${userId}
+          AND platform = ${platform}::"Platform"
+        FOR UPDATE
       `
       if (locked.length === 0) return false
-      const affected = await tx.xboxAccountHours.findMany({
-        where: { xboxAccountId: accountId },
+      const affected = await tx.platformAccountHours.findMany({
+        where: { platformAccountId: accountId },
         select: {
           userGamePlatformId: true,
           userGamePlatform: { select: { userGameId: true } }
         }
       })
-      await tx.xboxAccount.delete({ where: { id: accountId } })
+      await tx.platformAccount.delete({ where: { id: accountId } })
 
       for (const { userGamePlatformId } of affected) {
         await this.syncRowHours(tx, userGamePlatformId)

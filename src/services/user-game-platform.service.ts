@@ -8,6 +8,10 @@ import {
 import { UserRepository } from '../repositories/users.repository'
 import { isConsoleAllowed } from '../utils/platform-consoles'
 import {
+  ACCOUNT_PLATFORM_LABEL,
+  AccountPlatform
+} from '../utils/platform-accounts'
+import {
   PLAYED_STATUS_ID,
   WISHLIST_STATUS_ID,
   BACKLOG_STATUS_ID,
@@ -122,7 +126,7 @@ export class UserGamePlatformService {
         completions: p.completions,
         completedAt: toDateString(p.completedAt),
         accountHours: p.accountHours.map(a => ({
-          gamertag: a.xboxAccount.gamertag,
+          gamertag: a.platformAccount.displayName,
           hoursPlayed: Number(a.hoursPlayed)
         }))
       })),
@@ -283,12 +287,22 @@ export class UserGamePlatformService {
     return this.getPlatforms(userId, igdbId)
   }
 
-  async removeXboxAccount(userId: string, accountId: string) {
-    const removed = await this.platformRepository.removeXboxAccount(
+  async removeAccount(
+    userId: string,
+    accountId: string,
+    platform: AccountPlatform
+  ) {
+    const removed = await this.platformRepository.removeAccount(
       userId,
-      accountId
+      accountId,
+      platform
     )
-    if (!removed) throw new ClientError('Conta do Xbox não encontrada.', 404)
+    if (!removed) {
+      throw new ClientError(
+        `Conta ${ACCOUNT_PLATFORM_LABEL[platform]} não encontrada.`,
+        404
+      )
+    }
   }
 
   async importPlatform(

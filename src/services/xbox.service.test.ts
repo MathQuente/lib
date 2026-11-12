@@ -13,7 +13,7 @@ import { XboxApiError, XboxApiService, XboxTitle } from './xbox-api.service'
 import { IGDBService } from './igdb.service'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
-import { ClientError, XboxAccountLimitError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBGame } from '../types/igdb'
 import {
@@ -28,12 +28,12 @@ function fakeUserRepository(
 ): UserRepository {
   return {
     findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
-    listXboxAccounts: vi
-      .fn()
-      .mockResolvedValue([{ id: 'acc-1', xuid: 'xuid-1', gamertag: 'Gamer' }]),
-    findXboxAccountByXuid: vi.fn().mockResolvedValue(null),
-    addXboxAccount: vi.fn().mockResolvedValue({ id: 'acc-2', gamertag: 'Player' }),
-    updateXboxGamertag: vi.fn().mockResolvedValue(null),
+    listAccounts: vi.fn().mockResolvedValue([
+      { id: 'acc-1', externalId: 'xuid-1', displayName: 'Gamer' }
+    ]),
+    findAccount: vi.fn().mockResolvedValue(null),
+    addAccount: vi.fn().mockResolvedValue({ id: 'acc-2', displayName: 'Player' }),
+    updateAccountName: vi.fn().mockResolvedValue(null),
     findUserGame: vi.fn().mockResolvedValue(null),
     addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 1 }),
     createUserGameStats: vi.fn().mockResolvedValue(null),
@@ -414,53 +414,58 @@ describe('XboxService.connectXbox', () => {
   }
 
   it('adds the verified xuid and gamertag as an account', async () => {
-    const addXboxAccount = vi.fn().mockResolvedValue({ id: 'acc-2' })
+    const addAccount = vi.fn().mockResolvedValue({ id: 'acc-2' })
 
-    const result = await serviceWith({ addXboxAccount }).connectXbox(
+    const result = await serviceWith({ addAccount }).connectXbox(
       'user-1',
       verifiedProfile
     )
 
-    expect(addXboxAccount).toHaveBeenCalledWith('user-1', verifiedProfile, 2)
+    expect(addAccount).toHaveBeenCalledWith(
+      'user-1',
+      'XBOX',
+      { externalId: '99', displayName: 'Player' },
+      2
+    )
     expect(result).toEqual({ xboxGamertag: 'Player' })
   })
 
   it('rejects with the limit error when the atomic insert reports the user is full', async () => {
-    const addXboxAccount = vi.fn().mockResolvedValue(null)
+    const addAccount = vi.fn().mockResolvedValue(null)
 
     await expect(
-      serviceWith({ addXboxAccount }).connectXbox('user-1', verifiedProfile)
-    ).rejects.toBeInstanceOf(XboxAccountLimitError)
+      serviceWith({ addAccount }).connectXbox('user-1', verifiedProfile)
+    ).rejects.toBeInstanceOf(AccountLimitError)
   })
 
   it('relinking the same account is idempotent and refreshes the gamertag', async () => {
-    const addXboxAccount = vi.fn()
-    const updateXboxGamertag = vi.fn().mockResolvedValue(null)
+    const addAccount = vi.fn()
+    const updateAccountName = vi.fn().mockResolvedValue(null)
 
     await serviceWith({
-      addXboxAccount,
-      updateXboxGamertag,
-      findXboxAccountByXuid: vi
+      addAccount,
+      updateAccountName,
+      findAccount: vi
         .fn()
-        .mockResolvedValue({ id: 'acc-1', userId: 'user-1', gamertag: 'Old' })
+        .mockResolvedValue({ id: 'acc-1', userId: 'user-1', displayName: 'Old' })
     }).connectXbox('user-1', verifiedProfile)
 
-    expect(addXboxAccount).not.toHaveBeenCalled()
-    expect(updateXboxGamertag).toHaveBeenCalledWith('acc-1', 'Player')
+    expect(addAccount).not.toHaveBeenCalled()
+    expect(updateAccountName).toHaveBeenCalledWith('acc-1', 'Player')
   })
 
   it('rejects with 409 when the profile belongs to another user', async () => {
     await expect(
       serviceWith({
-        findXboxAccountByXuid: vi
+        findAccount: vi
           .fn()
-          .mockResolvedValue({ id: 'acc-9', userId: 'user-2', gamertag: 'X' })
+          .mockResolvedValue({ id: 'acc-9', userId: 'user-2', displayName: 'X' })
       }).connectXbox('user-1', verifiedProfile)
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('rejects with 409 when a concurrent link wins the unique xuid', async () => {
-    const addXboxAccount = vi.fn().mockRejectedValue(
+    const addAccount = vi.fn().mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('dup', {
         code: 'P2002',
         clientVersion: 'test'
@@ -468,24 +473,24 @@ describe('XboxService.connectXbox', () => {
     )
 
     await expect(
-      serviceWith({ addXboxAccount }).connectXbox('user-1', verifiedProfile)
+      serviceWith({ addAccount }).connectXbox('user-1', verifiedProfile)
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('rejects a third account with the limit error', async () => {
     const accounts = [
-      { id: 'a1', xuid: '1', gamertag: 'A' },
-      { id: 'a2', xuid: '2', gamertag: 'B' }
+      { id: 'a1', externalId: '1', displayName: 'A' },
+      { id: 'a2', externalId: '2', displayName: 'B' }
     ]
-    const addXboxAccount = vi.fn()
+    const addAccount = vi.fn()
 
     await expect(
       serviceWith({
-        listXboxAccounts: vi.fn().mockResolvedValue(accounts),
-        addXboxAccount
+        listAccounts: vi.fn().mockResolvedValue(accounts),
+        addAccount
       }).connectXbox('user-1', verifiedProfile)
-    ).rejects.toBeInstanceOf(XboxAccountLimitError)
-    expect(addXboxAccount).not.toHaveBeenCalled()
+    ).rejects.toBeInstanceOf(AccountLimitError)
+    expect(addAccount).not.toHaveBeenCalled()
   })
 
   it('rejects with 404 when the user does not exist', async () => {
@@ -499,17 +504,17 @@ describe('XboxService.connectXbox', () => {
 
 describe('XboxService.disconnectXbox', () => {
   it('removes the account through the platform service', async () => {
-    const removeXboxAccount = vi.fn().mockResolvedValue(undefined)
+    const removeAccount = vi.fn().mockResolvedValue(undefined)
     const service = new XboxService(
       fakeUserRepository(),
       fakeGameCacheService(),
       fakeXboxApi(),
-      { removeXboxAccount } as never
+      { removeAccount } as never
     )
 
     await service.disconnectXbox('user-1', 'acc-1')
 
-    expect(removeXboxAccount).toHaveBeenCalledWith('user-1', 'acc-1')
+    expect(removeAccount).toHaveBeenCalledWith('user-1', 'acc-1', 'XBOX')
   })
 })
 
@@ -520,7 +525,7 @@ describe('XboxService.runImport', () => {
         findUserById: vi
           .fn()
           .mockResolvedValue({ id: 'user-1' }),
-      listXboxAccounts: vi.fn().mockResolvedValue([])
+      listAccounts: vi.fn().mockResolvedValue([])
       }),
       fakeXboxApi()
     )
@@ -1634,8 +1639,8 @@ describe('XboxService.runImport', () => {
 
 describe('XboxService.runImport with two accounts', () => {
   const accounts = [
-    { id: 'acc-1', xuid: 'xuid-1', gamertag: 'Main' },
-    { id: 'acc-2', xuid: 'xuid-2', gamertag: 'Alt' }
+    { id: 'acc-1', externalId: 'xuid-1', displayName: 'Main' },
+    { id: 'acc-2', externalId: 'xuid-2', displayName: 'Alt' }
   ]
 
   function twoAccountService(
@@ -1643,7 +1648,7 @@ describe('XboxService.runImport with two accounts', () => {
     importPlatform = vi.fn().mockResolvedValue('imported')
   ) {
     const userRepository = fakeUserRepository({
-      listXboxAccounts: vi.fn().mockResolvedValue(accounts)
+      listAccounts: vi.fn().mockResolvedValue(accounts)
     })
     const service = new XboxService(
       userRepository,

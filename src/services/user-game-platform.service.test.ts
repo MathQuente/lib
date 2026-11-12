@@ -16,7 +16,7 @@ type Row = {
   completedAt: Date | null
   accountHours: {
     hoursPlayed: Prisma.Decimal
-    xboxAccount: { gamertag: string }
+    platformAccount: { displayName: string }
   }[]
 }
 
@@ -93,11 +93,11 @@ describe('UserGamePlatformService.getPlatforms', () => {
             accountHours: [
               {
                 hoursPlayed: new Prisma.Decimal(31.83),
-                xboxAccount: { gamertag: 'MathQuente' }
+                platformAccount: { displayName: 'MathQuente' }
               },
               {
                 hoursPlayed: new Prisma.Decimal(62.5),
-                xboxAccount: { gamertag: 'Other' }
+                platformAccount: { displayName: 'Other' }
               }
             ]
           })
@@ -1392,14 +1392,14 @@ describe('UserGamePlatformService.importPlatform with an Xbox account', () => {
   })
 })
 
-describe('UserGamePlatformService.removeXboxAccount', () => {
+describe('UserGamePlatformService.removeAccount', () => {
   it('rejects with 404 when the account is not the user\'s', async () => {
     const { service, platformRepository } = setup(null)
-    const removeXboxAccount = vi.fn().mockResolvedValue(false)
-    Object.assign(platformRepository, { removeXboxAccount })
+    const removeAccount = vi.fn().mockResolvedValue(false)
+    Object.assign(platformRepository, { removeAccount })
 
     await expect(
-      service.removeXboxAccount('user-1', 'acc-9')
+      service.removeAccount('user-1', 'acc-9', 'XBOX')
     ).rejects.toMatchObject({ statusCode: 404 })
   })
 })

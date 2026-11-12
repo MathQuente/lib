@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify'
 import { XboxService } from '../services/xbox.service'
 import { XboxAuthError, XboxAuthService } from '../services/xbox-auth.service'
 import { CacheRepository } from '../repositories/cache.repository'
-import { ClientError, XboxAccountLimitError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 
 const XBOX_LINK_STATE_TTL_SECONDS = 600
 const xboxLinkStateKey = (state: string) => `xbox-link-state:${state}`
@@ -72,7 +72,7 @@ export class XboxController {
       await this.xboxService.connectXbox(request.user.userId, profile)
       return this.redirectToLibrary(reply, 'connected')
     } catch (err) {
-      if (err instanceof XboxAccountLimitError) {
+      if (err instanceof AccountLimitError) {
         return this.redirectToLibrary(reply, 'limit')
       }
       if (err instanceof ClientError && err.statusCode === 409) {

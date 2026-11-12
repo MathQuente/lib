@@ -857,6 +857,10 @@ describe('UserService.findMe', () => {
         userBanner: 'banner.png',
         steamId: options.steamId === undefined ? '12345' : options.steamId,
         psnOnlineId: 'psn-user',
+        accounts: [
+          { id: 'acc-1', platform: 'XBOX', displayName: 'Gamer' },
+          { id: 'acc-2', platform: 'STEAM', displayName: 'Other' }
+        ],
         _count: { userGames: 3 }
       }),
       sumUserHoursPlayed: vi.fn().mockResolvedValue(12.5)
@@ -898,6 +902,7 @@ describe('UserService.findMe', () => {
       steamId: '12345',
       steamPersonaName: 'Matheus',
       psnOnlineId: 'psn-user',
+      xboxAccounts: [{ id: 'acc-1', gamertag: 'Gamer' }],
       followersCount: 2,
       followingCount: 5
     })

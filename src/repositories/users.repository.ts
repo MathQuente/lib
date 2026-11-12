@@ -1,4 +1,4 @@
-import { Prisma, Status } from '@prisma/client'
+import { Platform, Prisma, Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 import {
@@ -194,8 +194,8 @@ export class UserRepository {
         steamId: true,
         psnAccountId: true,
         psnOnlineId: true,
-        xboxAccounts: {
-          select: { id: true, gamertag: true },
+        accounts: {
+          select: { id: true, platform: true, displayName: true },
           orderBy: { createdAt: 'asc' }
         },
         _count: { select: { userGames: { where: NOT_WISHLIST } } }
@@ -225,44 +225,47 @@ export class UserRepository {
     })
   }
 
-  async listXboxAccounts(userId: string) {
-    return prisma.xboxAccount.findMany({
-      where: { userId },
-      select: { id: true, xuid: true, gamertag: true },
+  async listAccounts(userId: string, platform: Platform) {
+    return prisma.platformAccount.findMany({
+      where: { userId, platform },
+      select: { id: true, externalId: true, displayName: true },
       orderBy: { createdAt: 'asc' }
     })
   }
 
-  async findXboxAccountByXuid(xuid: string) {
-    return prisma.xboxAccount.findUnique({
-      where: { xuid },
-      select: { id: true, userId: true, gamertag: true }
+  async findAccount(platform: Platform, externalId: string) {
+    return prisma.platformAccount.findUnique({
+      where: { platform_externalId: { platform, externalId } },
+      select: { id: true, userId: true, displayName: true }
     })
   }
 
-  async addXboxAccount(
+  async addAccount(
     userId: string,
-    account: { xuid: string; gamertag: string },
+    platform: Platform,
+    account: { externalId: string; displayName: string },
     maxAccounts?: number
   ) {
-    const data = { userId, xuid: account.xuid, gamertag: account.gamertag }
-    const select = { id: true, gamertag: true }
+    const data = { userId, platform, ...account }
+    const select = { id: true, displayName: true }
     if (maxAccounts === undefined) {
-      return prisma.xboxAccount.create({ data, select })
+      return prisma.platformAccount.create({ data, select })
     }
     return prisma.$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`xbox-accounts:${userId}`}))`
-      const count = await tx.xboxAccount.count({ where: { userId } })
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${platform.toLowerCase()}-accounts:${userId}`}))`
+      const count = await tx.platformAccount.count({
+        where: { userId, platform }
+      })
       if (count >= maxAccounts) return null
-      return tx.xboxAccount.create({ data, select })
+      return tx.platformAccount.create({ data, select })
     })
   }
 
-  async updateXboxGamertag(accountId: string, gamertag: string) {
-    return prisma.xboxAccount.update({
+  async updateAccountName(accountId: string, displayName: string) {
+    return prisma.platformAccount.update({
       where: { id: accountId },
-      data: { gamertag },
-      select: { id: true, gamertag: true }
+      data: { displayName },
+      select: { id: true, displayName: true }
     })
   }
 

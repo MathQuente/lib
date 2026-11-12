@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { ClientError, XboxAccountLimitError } from '../errors/client-error'
+import { AccountLimitError, ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
@@ -35,13 +35,13 @@ import type { CompletionSuggestionRecorder } from './completion-suggestion.servi
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromXboxDevices } from '../utils/console-inference'
+import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
 import {
   PLAYED_STATUS_ID,
   PLAYING_STATUS_ID,
   BACKLOG_STATUS_ID
 } from '../utils/library-status'
 
-export const MAX_XBOX_ACCOUNTS = 2
 const HOURS_INCOMPLETE_WARNING =
   'Não foi possível trazer as horas de alguns jogos. Importe de novo mais tarde.'
 
@@ -301,10 +301,20 @@ export class XboxService {
     return user
   }
 
+  private async listXboxAccounts(userId: string) {
+    const accounts = await this.userRepository.listAccounts(userId, 'XBOX')
+    return accounts.map(account => ({
+      id: account.id,
+      xuid: account.externalId,
+      gamertag: account.displayName
+    }))
+  }
+
   async connectXbox(userId: string, verifiedProfile: XboxProfile) {
     await this.requireUser(userId)
 
-    const existing = await this.userRepository.findXboxAccountByXuid(
+    const existing = await this.userRepository.findAccount(
+      'XBOX',
       verifiedProfile.xuid
     )
     if (existing) {
@@ -314,25 +324,29 @@ export class XboxService {
           409
         )
       }
-      await this.userRepository.updateXboxGamertag(
+      await this.userRepository.updateAccountName(
         existing.id,
         verifiedProfile.gamertag
       )
       return { xboxGamertag: verifiedProfile.gamertag }
     }
 
-    const accounts = await this.userRepository.listXboxAccounts(userId)
-    if (accounts.length >= MAX_XBOX_ACCOUNTS) {
-      throw new XboxAccountLimitError(MAX_XBOX_ACCOUNTS)
+    const accounts = await this.listXboxAccounts(userId)
+    if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
+      throw new AccountLimitError('XBOX')
     }
 
     try {
-      const created = await this.userRepository.addXboxAccount(
+      const created = await this.userRepository.addAccount(
         userId,
-        verifiedProfile,
-        MAX_XBOX_ACCOUNTS
+        'XBOX',
+        {
+          externalId: verifiedProfile.xuid,
+          displayName: verifiedProfile.gamertag
+        },
+        MAX_ACCOUNTS_PER_PLATFORM
       )
-      if (!created) throw new XboxAccountLimitError(MAX_XBOX_ACCOUNTS)
+      if (!created) throw new AccountLimitError('XBOX')
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -351,12 +365,12 @@ export class XboxService {
 
   async disconnectXbox(userId: string, accountId: string) {
     await this.requireUser(userId)
-    await this.userGamePlatformService.removeXboxAccount(userId, accountId)
+    await this.userGamePlatformService.removeAccount(userId, accountId, 'XBOX')
   }
 
   async enqueueImport(userId: string) {
     await this.requireUser(userId)
-    const accounts = await this.userRepository.listXboxAccounts(userId)
+    const accounts = await this.listXboxAccounts(userId)
     if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil do Xbox primeiro.', 400)
     }
@@ -381,7 +395,7 @@ export class XboxService {
     onProgress?: (percent: number) => void
   ): Promise<XboxImportJobResult> {
     await this.requireUser(userId)
-    const accounts = await this.userRepository.listXboxAccounts(userId)
+    const accounts = await this.listXboxAccounts(userId)
     if (accounts.length === 0) {
       throw new ClientError('Conecte seu perfil do Xbox primeiro.', 400)
     }

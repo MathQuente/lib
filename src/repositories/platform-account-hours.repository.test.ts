@@ -7,12 +7,12 @@ const tx = {
     update: vi.fn(),
     findMany: vi.fn()
   },
-  xboxAccountHours: {
+  platformAccountHours: {
     upsert: vi.fn(),
     aggregate: vi.fn(),
     findMany: vi.fn()
   },
-  xboxAccount: { findFirst: vi.fn(), delete: vi.fn() },
+  platformAccount: { findFirst: vi.fn(), delete: vi.fn() },
   userGameStats: { upsert: vi.fn() },
   userGame: { update: vi.fn(), updateMany: vi.fn() }
 }
@@ -41,24 +41,24 @@ describe('UserGamePlatformRepository account hours', () => {
     )
 
   it('stores the account contribution and sets the row to the sum of all accounts', async () => {
-    tx.xboxAccountHours.aggregate.mockResolvedValue({
+    tx.platformAccountHours.aggregate.mockResolvedValue({
       _sum: { hoursPlayed: 3 },
       _count: 2
     })
 
     await save({ accountId: 'acc-2', hours: 1 })
 
-    expect(tx.xboxAccountHours.upsert).toHaveBeenCalledWith({
+    expect(tx.platformAccountHours.upsert).toHaveBeenCalledWith({
       where: {
-        userGamePlatformId_xboxAccountId: {
+        userGamePlatformId_platformAccountId: {
           userGamePlatformId: 'row-1',
-          xboxAccountId: 'acc-2'
+          platformAccountId: 'acc-2'
         }
       },
       update: { hoursPlayed: 1 },
       create: {
         userGamePlatformId: 'row-1',
-        xboxAccountId: 'acc-2',
+        platformAccountId: 'acc-2',
         hoursPlayed: 1
       }
     })
@@ -69,7 +69,7 @@ describe('UserGamePlatformRepository account hours', () => {
   })
 
   it('reimporting the same hours overwrites the contribution instead of adding to it', async () => {
-    tx.xboxAccountHours.aggregate.mockResolvedValue({
+    tx.platformAccountHours.aggregate.mockResolvedValue({
       _sum: { hoursPlayed: 2 },
       _count: 1
     })
@@ -77,8 +77,8 @@ describe('UserGamePlatformRepository account hours', () => {
     await save({ accountId: 'acc-1', hours: 2 })
     await save({ accountId: 'acc-1', hours: 2 })
 
-    expect(tx.xboxAccountHours.upsert).toHaveBeenCalledTimes(2)
-    for (const [call] of tx.xboxAccountHours.upsert.mock.calls) {
+    expect(tx.platformAccountHours.upsert).toHaveBeenCalledTimes(2)
+    for (const [call] of tx.platformAccountHours.upsert.mock.calls) {
       expect(call.update).toEqual({ hoursPlayed: 2 })
     }
     expect(tx.userGamePlatform.update).toHaveBeenLastCalledWith({
@@ -89,14 +89,14 @@ describe('UserGamePlatformRepository account hours', () => {
 
   it('skips the contribution and recomputes the row when the account was disconnected meanwhile', async () => {
     tx.$queryRaw.mockResolvedValue([])
-    tx.xboxAccountHours.aggregate.mockResolvedValue({
+    tx.platformAccountHours.aggregate.mockResolvedValue({
       _sum: { hoursPlayed: null },
       _count: 0
     })
 
     await save({ accountId: 'acc-gone', hours: 5 })
 
-    expect(tx.xboxAccountHours.upsert).not.toHaveBeenCalled()
+    expect(tx.platformAccountHours.upsert).not.toHaveBeenCalled()
     expect(tx.userGamePlatform.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
       data: { hoursPlayed: null }
@@ -104,7 +104,7 @@ describe('UserGamePlatformRepository account hours', () => {
   })
 
   it('locks the account before touching the platform row, matching the disconnect order', async () => {
-    tx.xboxAccountHours.aggregate.mockResolvedValue({
+    tx.platformAccountHours.aggregate.mockResolvedValue({
       _sum: { hoursPlayed: 1 },
       _count: 1
     })
@@ -116,16 +116,28 @@ describe('UserGamePlatformRepository account hours', () => {
     )
   })
 
+  it('locks the account only when it belongs to the platform of the row', async () => {
+    tx.platformAccountHours.aggregate.mockResolvedValue({
+      _sum: { hoursPlayed: 1 },
+      _count: 1
+    })
+
+    await save({ accountId: 'acc-1', hours: 1 })
+
+    const [, ...values] = tx.$queryRaw.mock.calls[0]
+    expect(values).toEqual(['acc-1', 'XBOX'])
+  })
+
   it('does not touch contributions or the row hours when the account has no minutes', async () => {
     await save()
 
-    expect(tx.xboxAccountHours.upsert).not.toHaveBeenCalled()
-    expect(tx.xboxAccountHours.aggregate).not.toHaveBeenCalled()
+    expect(tx.platformAccountHours.upsert).not.toHaveBeenCalled()
+    expect(tx.platformAccountHours.aggregate).not.toHaveBeenCalled()
     expect(tx.userGamePlatform.update).not.toHaveBeenCalled()
   })
 })
 
-describe('UserGamePlatformRepository.removeXboxAccount', () => {
+describe('UserGamePlatformRepository.removeAccount', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tx.userGamePlatform.findMany.mockResolvedValue([])
@@ -133,35 +145,55 @@ describe('UserGamePlatformRepository.removeXboxAccount', () => {
   })
 
   it('returns false and changes nothing when the account is not the user\'s', async () => {
-    tx.xboxAccount.findFirst.mockResolvedValue(null)
+    tx.platformAccount.findFirst.mockResolvedValue(null)
 
-    const removed = await new UserGamePlatformRepository().removeXboxAccount(
+    const removed = await new UserGamePlatformRepository().removeAccount(
       'user-1',
-      'acc-9'
+      'acc-9',
+      'XBOX'
     )
 
     expect(removed).toBe(false)
-    expect(tx.xboxAccount.delete).not.toHaveBeenCalled()
+    expect(tx.platformAccount.delete).not.toHaveBeenCalled()
+  })
+
+  it('only removes an account of the platform that was asked for', async () => {
+    tx.platformAccount.findFirst.mockResolvedValue(null)
+
+    const removed = await new UserGamePlatformRepository().removeAccount(
+      'user-1',
+      'acc-2',
+      'STEAM'
+    )
+
+    expect(removed).toBe(false)
+    expect(tx.platformAccount.findFirst).toHaveBeenCalledWith({
+      where: { id: 'acc-2', userId: 'user-1', platform: 'STEAM' },
+      select: { id: true }
+    })
   })
 
   it('recomputes the affected rows from the remaining accounts', async () => {
-    tx.xboxAccount.findFirst.mockResolvedValue({ id: 'acc-2' })
-    tx.xboxAccountHours.findMany.mockResolvedValue([
+    tx.platformAccount.findFirst.mockResolvedValue({ id: 'acc-2' })
+    tx.platformAccountHours.findMany.mockResolvedValue([
       { userGamePlatformId: 'row-1', userGamePlatform: { userGameId: 'ug-1' } },
       { userGamePlatformId: 'row-2', userGamePlatform: { userGameId: 'ug-2' } }
     ])
-    tx.xboxAccountHours.aggregate
+    tx.platformAccountHours.aggregate
       .mockResolvedValueOnce({ _sum: { hoursPlayed: 2 }, _count: 1 })
       .mockResolvedValueOnce({ _sum: { hoursPlayed: null }, _count: 0 })
 
-    const removed = await new UserGamePlatformRepository().removeXboxAccount(
+    const removed = await new UserGamePlatformRepository().removeAccount(
       'user-1',
-      'acc-2'
+      'acc-2',
+      'XBOX'
     )
 
     expect(removed).toBe(true)
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
-    expect(tx.xboxAccount.delete).toHaveBeenCalledWith({
+    const [, ...lockValues] = tx.$queryRaw.mock.calls[0]
+    expect(lockValues).toEqual(['acc-2', 'user-1', 'XBOX'])
+    expect(tx.platformAccount.delete).toHaveBeenCalledWith({
       where: { id: 'acc-2' }
     })
     expect(tx.userGamePlatform.update).toHaveBeenCalledWith({

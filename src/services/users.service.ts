@@ -190,7 +190,9 @@ export class UserService {
         steamId: user.steamId,
         steamPersonaName: await this.getSteamPersonaName(user.steamId),
         psnOnlineId: user.psnOnlineId,
-        xboxAccounts: user.xboxAccounts,
+        xboxAccounts: user.accounts
+          .filter(account => account.platform === 'XBOX')
+          .map(account => ({ id: account.id, gamertag: account.displayName })),
         followersCount,
         followingCount
       }
