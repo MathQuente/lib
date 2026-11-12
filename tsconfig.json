@@ -13,5 +13,5 @@
     "moduleResolution": "node16"
   },
 
-  "include": ["src", "fastify.d.ts"]
+  "include": ["src"]
 }

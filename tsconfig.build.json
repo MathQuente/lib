@@ -4,6 +4,6 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src", "fastify.d.ts"],
+  "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/test-utils", "src/scripts"]
 }
