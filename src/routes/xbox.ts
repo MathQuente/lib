@@ -45,6 +45,24 @@ export async function xboxRoutes(app: FastifyInstance) {
     async (request, reply) => xboxController.linkCallback(request, reply)
   )
 
+  app.withTypeProvider<ZodTypeProvider>().patch(
+    '/:accountId',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: XboxSchema.DisconnectParamsSchema,
+        body: XboxSchema.SetPreferredConsoleBodySchema,
+        response: {
+          200: XboxSchema.SetPreferredConsoleResponseSchema,
+          400: ErrorSchemas.BadRequest,
+          404: ErrorSchemas.NotFound,
+          500: ErrorSchemas.InternalServerError
+        }
+      }
+    },
+    async (request, reply) => xboxController.setPreferredConsole(request, reply)
+  )
+
   app.withTypeProvider<ZodTypeProvider>().delete(
     '/:accountId',
     {

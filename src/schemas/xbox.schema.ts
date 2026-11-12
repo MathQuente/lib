@@ -10,6 +10,15 @@ export {
   StartImportResponseSchema
 } from './import.schema'
 
+export const SetPreferredConsoleBodySchema = z.object({
+  preferredConsole: z.enum(['XBOX_ONE', 'XBOX_SERIES']).nullable()
+})
+
+export const SetPreferredConsoleResponseSchema = z.object({
+  id: z.string().uuid(),
+  preferredConsole: z.enum(['XBOX_ONE', 'XBOX_SERIES']).nullable()
+})
+
 export const StartXboxLinkResponseSchema = z.object({
   url: z.string().url()
 })

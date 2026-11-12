@@ -12,6 +12,7 @@ import {
 import { XboxApiError, XboxApiService, XboxTitle } from './xbox-api.service'
 import { IGDBService } from './igdb.service'
 import { UserRepository } from '../repositories/users.repository'
+import { xboxImportQueue } from '../queues/xbox-import.queue'
 import { GameCacheService } from './game-cache.service'
 import { AccountLimitError, ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
@@ -1756,5 +1757,216 @@ describe('XboxService.runImport with two accounts', () => {
     await expect(service.runImport('user-1')).rejects.toMatchObject({
       statusCode: 503
     })
+  })
+})
+
+describe('XboxService.runImport with the console the account is played on', () => {
+  async function importTitle(
+    devices: string[],
+    preferredConsole: string | null,
+    existingRows: { console: string }[] = []
+  ) {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({ titleId: '1', name: 'Some Game', pfn: null, devices })
+      ])
+    })
+    mockExternal([])
+    vi.spyOn(IGDBService, 'searchGamesByName').mockResolvedValue([
+      igdb(11071, { name: 'Some Game' })
+    ] as IGDBGame[])
+    const userRepository = fakeUserRepository({
+      listAccounts: vi.fn().mockResolvedValue([
+        {
+          id: 'acc-1',
+          externalId: 'xuid-1',
+          displayName: 'Gamer',
+          preferredConsole
+        }
+      ]),
+      findUserGame: vi
+        .fn()
+        .mockResolvedValue(
+          existingRows.length > 0
+            ? { igdbId: 11071, UserGamesStatus: { id: 4 } }
+            : null
+        )
+    })
+    const service = makeService(userRepository, xboxApi)
+    if (existingRows.length > 0) {
+      lastPlatformRepository.findUserGameWithPlatforms.mockResolvedValue({
+        id: 'ug-11071',
+        userGamesStatusId: 4,
+        completedAt: null,
+        UserGameStats: null,
+        platforms: existingRows.map(row => ({
+          platform: 'XBOX',
+          console: row.console,
+          hoursPlayed: null,
+          completions: 0,
+          completedAt: null,
+          accountHours: []
+        }))
+      })
+    }
+
+    await service.runImport('user-1')
+    return lastPlatformRepository.savePlatform.mock.calls
+  }
+
+  it.each([
+    ['XBOX_SERIES', 'XBOX_SERIES'],
+    ['XBOX_ONE', 'XBOX_ONE'],
+    [null, 'UNKNOWN']
+  ])('stores a One and Series title with the preference %s as %s', async (preferred, expected) => {
+    const calls = await importTitle(['XboxOne', 'XboxSeries'], preferred)
+
+    expect(calls[0][2]).toBe(expected)
+  })
+
+  it('leaves a title that also runs on the Xbox 360 as UNKNOWN', async () => {
+    const calls = await importTitle(
+      ['Xbox360', 'XboxOne', 'XboxSeries'],
+      'XBOX_SERIES'
+    )
+
+    expect(calls[0][2]).toBe('UNKNOWN')
+  })
+
+  it('fills the UNKNOWN row of a game that was already in the library, without a second row', async () => {
+    const calls = await importTitle(['XboxOne', 'XboxSeries'], 'XBOX_SERIES', [
+      { console: 'UNKNOWN' }
+    ])
+
+    expect(calls).toHaveLength(0)
+    expect(lastPlatformRepository.adoptConsole).toHaveBeenCalledWith(
+      'ug-11071',
+      'XBOX',
+      'UNKNOWN',
+      'XBOX_SERIES',
+      expect.anything()
+    )
+  })
+
+  it('keeps the console a game already has when the preference changes later', async () => {
+    const calls = await importTitle(['XboxOne', 'XboxSeries'], 'XBOX_ONE', [
+      { console: 'XBOX_SERIES' }
+    ])
+
+    expect(calls[0][2]).toBe('XBOX_SERIES')
+    expect(lastPlatformRepository.adoptConsole).not.toHaveBeenCalled()
+  })
+
+  it('applies the preference of the account being imported', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi.fn().mockResolvedValue([
+        title({
+          titleId: '1',
+          name: 'Some Game',
+          pfn: null,
+          devices: ['XboxOne', 'XboxSeries']
+        })
+      ])
+    })
+    mockExternal([])
+    vi.spyOn(IGDBService, 'searchGamesByName').mockResolvedValue([
+      igdb(11071, { name: 'Some Game' })
+    ] as IGDBGame[])
+    const userRepository = fakeUserRepository({
+      listAccounts: vi.fn().mockResolvedValue([
+        {
+          id: 'acc-1',
+          externalId: 'xuid-1',
+          displayName: 'Main',
+          preferredConsole: 'XBOX_SERIES'
+        },
+        {
+          id: 'acc-2',
+          externalId: 'xuid-2',
+          displayName: 'Alt',
+          preferredConsole: 'XBOX_ONE'
+        }
+      ])
+    })
+    const service = makeService(userRepository, xboxApi)
+
+    await service.runImport('user-1')
+
+    const consoles = lastPlatformRepository.savePlatform.mock.calls.map(
+      call => call[2]
+    )
+    expect(consoles).toEqual(['XBOX_SERIES', 'XBOX_ONE'])
+  })
+})
+
+describe('XboxService.setPreferredConsole', () => {
+  function build(overrides: Partial<UserRepository> = {}) {
+    const userRepository = fakeUserRepository({
+      setAccountConsole: vi.fn().mockResolvedValue(true),
+      ...overrides
+    })
+    return {
+      service: makeService(userRepository, fakeXboxApi()),
+      userRepository
+    }
+  }
+
+  it('saves the console of the account, scoped to the user and to Xbox', async () => {
+    const { service, userRepository } = build()
+
+    const result = await service.setPreferredConsole(
+      'user-1',
+      'acc-1',
+      'XBOX_SERIES'
+    )
+
+    expect(userRepository.setAccountConsole).toHaveBeenCalledWith(
+      'user-1',
+      'acc-1',
+      'XBOX',
+      'XBOX_SERIES'
+    )
+    expect(result).toEqual({ id: 'acc-1', preferredConsole: 'XBOX_SERIES' })
+  })
+
+  it('clears the preference with null', async () => {
+    const { service, userRepository } = build()
+
+    await service.setPreferredConsole('user-1', 'acc-1', null)
+
+    expect(userRepository.setAccountConsole).toHaveBeenCalledWith(
+      'user-1',
+      'acc-1',
+      'XBOX',
+      null
+    )
+  })
+
+  it('answers 404 when the account is not the user\'s or is not an Xbox account', async () => {
+    const { service } = build({
+      setAccountConsole: vi.fn().mockResolvedValue(false)
+    })
+
+    await expect(
+      service.setPreferredConsole('user-1', 'acc-9', 'XBOX_ONE')
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('refuses a console that is not an Xbox generation', async () => {
+    const { service, userRepository } = build()
+
+    await expect(
+      service.setPreferredConsole('user-1', 'acc-1', 'PS5' as never)
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(userRepository.setAccountConsole).not.toHaveBeenCalled()
+  })
+
+  it('does not touch the import queue, so the cooldown of the shared OpenXBL key stays', async () => {
+    const getJob = vi.spyOn(xboxImportQueue, 'getJob')
+    const { service } = build()
+
+    await service.setPreferredConsole('user-1', 'acc-1', 'XBOX_ONE')
+
+    expect(getJob).not.toHaveBeenCalled()
   })
 })

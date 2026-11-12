@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { XboxService } from '../services/xbox.service'
+import * as XboxSchema from '../schemas/xbox.schema'
 import { XboxAuthError, XboxAuthService } from '../services/xbox-auth.service'
 import { CacheRepository } from '../repositories/cache.repository'
 import { AccountLimitError, ClientError } from '../errors/client-error'
@@ -86,6 +87,23 @@ export class XboxController {
       })
       return this.redirectToLibrary(reply, 'failed')
     }
+  }
+
+  async setPreferredConsole(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user.userId
+
+    const { accountId } = request.params as { accountId: string }
+    const { preferredConsole } = XboxSchema.SetPreferredConsoleBodySchema.parse(
+      request.body
+    )
+
+    const result = await this.xboxService.setPreferredConsole(
+      userId,
+      accountId,
+      preferredConsole
+    )
+
+    return reply.status(200).send(result)
   }
 
   async disconnect(request: FastifyRequest, reply: FastifyReply) {

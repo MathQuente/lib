@@ -1,3 +1,4 @@
+import { Console } from '@prisma/client'
 import { ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { UserRepository } from '../repositories/users.repository'
@@ -33,7 +34,10 @@ import {
 import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
-import { consoleFromXboxDevices } from '../utils/console-inference'
+import {
+  consoleFromXboxDevices,
+  isXboxPreferredConsole
+} from '../utils/console-inference'
 import { linkPlatformAccount } from './platform-account-link'
 import {
   PLAYED_STATUS_ID,
@@ -306,7 +310,8 @@ export class XboxService {
     return accounts.map(account => ({
       id: account.id,
       xuid: account.externalId,
-      gamertag: account.displayName
+      gamertag: account.displayName,
+      preferredConsole: account.preferredConsole
     }))
   }
 
@@ -322,6 +327,27 @@ export class XboxService {
     })
 
     return { xboxGamertag: verifiedProfile.gamertag }
+  }
+
+  async setPreferredConsole(
+    userId: string,
+    accountId: string,
+    preferredConsole: Console | null
+  ) {
+    await this.requireUser(userId)
+    if (preferredConsole !== null && !isXboxPreferredConsole(preferredConsole)) {
+      throw new ClientError('Console inválido para uma conta do Xbox.', 400)
+    }
+
+    const updated = await this.userRepository.setAccountConsole(
+      userId,
+      accountId,
+      'XBOX',
+      preferredConsole
+    )
+    if (!updated) throw new ClientError('Conta do Xbox não encontrada.', 404)
+
+    return { id: accountId, preferredConsole }
   }
 
   async disconnectXbox(userId: string, accountId: string) {
@@ -417,7 +443,7 @@ export class XboxService {
 
   private async importAccount(
     userId: string,
-    account: { id: string; xuid: string },
+    account: { id: string; xuid: string; preferredConsole: Console | null },
     onProgress: (percent: number) => void,
     onHoursIncomplete: () => void
   ): Promise<ImportSectionResult> {
@@ -567,7 +593,7 @@ export class XboxService {
             : undefined,
           endless: IGDBService.suggestsEndlessForGame(igdbGame)
         },
-        consoleFromXboxDevices(devices),
+        consoleFromXboxDevices(devices, account.preferredConsole),
         account.id
       )
 

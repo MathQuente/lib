@@ -169,12 +169,13 @@ model UserGamePlatform {
 }
 
 model PlatformAccount {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  platform    Platform
-  externalId  String   @map("external_id")
-  displayName String   @map("display_name")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  platform         Platform
+  externalId       String   @map("external_id")
+  displayName      String   @map("display_name")
+  preferredConsole Console? @map("preferred_console")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   user  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   hours PlatformAccountHours[]

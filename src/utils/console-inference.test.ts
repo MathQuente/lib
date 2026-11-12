@@ -30,6 +30,55 @@ describe('consoleFromXboxDevices', () => {
     expect(consoleFromXboxDevices(devices)).toBe('UNKNOWN')
   })
 
+  describe('with the console the account is played on', () => {
+    it.each([
+      [['XboxOne', 'XboxSeries'], 'XBOX_ONE', 'XBOX_ONE'],
+      [['XboxOne', 'XboxSeries'], 'XBOX_SERIES', 'XBOX_SERIES'],
+      [['PC', 'XboxOne', 'XboxSeries'], 'XBOX_SERIES', 'XBOX_SERIES'],
+      [['PC', 'XboxOne', 'XboxSeries'], 'XBOX_ONE', 'XBOX_ONE']
+    ])('%j with preference %s gives %s', (devices, preferred, expected) => {
+      expect(consoleFromXboxDevices(devices, preferred as never)).toBe(expected)
+    })
+
+    it('leaves a title that also runs on the Xbox 360 as UNKNOWN', () => {
+      expect(
+        consoleFromXboxDevices(
+          ['Xbox360', 'XboxOne', 'XboxSeries'],
+          'XBOX_SERIES'
+        )
+      ).toBe('UNKNOWN')
+    })
+
+    it('never overrides a console the title already determines', () => {
+      expect(consoleFromXboxDevices(['XboxSeries'], 'XBOX_ONE')).toBe(
+        'XBOX_SERIES'
+      )
+      expect(consoleFromXboxDevices(['XboxOne'], 'XBOX_SERIES')).toBe(
+        'XBOX_ONE'
+      )
+      expect(consoleFromXboxDevices(['PC', 'XboxOne'], 'XBOX_SERIES')).toBe(
+        'XBOX_ONE'
+      )
+      expect(consoleFromXboxDevices(['Xbox360'], 'XBOX_SERIES')).toBe(
+        'XBOX_360'
+      )
+      expect(consoleFromXboxDevices(['PC'], 'XBOX_SERIES')).toBe('PC')
+    })
+
+    it('behaves as before without a preference or with one that is not an Xbox generation', () => {
+      expect(consoleFromXboxDevices(['XboxOne', 'XboxSeries'])).toBe('UNKNOWN')
+      expect(consoleFromXboxDevices(['XboxOne', 'XboxSeries'], null)).toBe(
+        'UNKNOWN'
+      )
+      expect(consoleFromXboxDevices(['XboxOne', 'XboxSeries'], 'PS5')).toBe(
+        'UNKNOWN'
+      )
+      expect(
+        consoleFromXboxDevices(['XboxOne', 'XboxSeries'], 'XBOX_360')
+      ).toBe('UNKNOWN')
+    })
+  })
+
   it('gives UNKNOWN for the union of an Xbox 360 title and an Xbox One title', () => {
     expect(consoleFromXboxDevices(['Xbox360', 'XboxOne'])).toBe('UNKNOWN')
   })

@@ -1,4 +1,4 @@
-import { Platform, Prisma, Status } from '@prisma/client'
+import { Console, Platform, Prisma, Status } from '@prisma/client'
 import { prisma } from '../database/db'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 import {
@@ -196,7 +196,8 @@ export class UserRepository {
             id: true,
             platform: true,
             externalId: true,
-            displayName: true
+            displayName: true,
+            preferredConsole: true
           },
           orderBy: { createdAt: 'asc' }
         },
@@ -208,9 +209,27 @@ export class UserRepository {
   async listAccounts(userId: string, platform: Platform) {
     return prisma.platformAccount.findMany({
       where: { userId, platform },
-      select: { id: true, externalId: true, displayName: true },
+      select: {
+        id: true,
+        externalId: true,
+        displayName: true,
+        preferredConsole: true
+      },
       orderBy: { createdAt: 'asc' }
     })
+  }
+
+  async setAccountConsole(
+    userId: string,
+    accountId: string,
+    platform: Platform,
+    preferredConsole: Console | null
+  ) {
+    const { count } = await prisma.platformAccount.updateMany({
+      where: { id: accountId, userId, platform },
+      data: { preferredConsole }
+    })
+    return count > 0
   }
 
   async findAccount(platform: Platform, externalId: string) {

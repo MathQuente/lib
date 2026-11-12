@@ -1020,7 +1020,8 @@ describe('UserService.findMe', () => {
         id: 'x-1',
         platform: 'XBOX',
         externalId: 'xuid-1',
-        displayName: 'Gamer'
+        displayName: 'Gamer',
+        preferredConsole: 'XBOX_SERIES'
       },
       {
         id: 's-1',
@@ -1058,7 +1059,9 @@ describe('UserService.findMe', () => {
         { id: 's-2', steamId: '76561197960287931', personaName: 'Alt' }
       ],
       psnAccounts: [{ id: 'p-1', onlineId: 'Player_1' }],
-      xboxAccounts: [{ id: 'x-1', gamertag: 'Gamer' }],
+      xboxAccounts: [
+        { id: 'x-1', gamertag: 'Gamer', preferredConsole: 'XBOX_SERIES' }
+      ],
       followersCount: 2,
       followingCount: 5
     })

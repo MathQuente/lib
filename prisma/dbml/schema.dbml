@@ -107,6 +107,7 @@ Table platform_accounts {
   platform Platform [not null]
   externalId String [not null]
   displayName String [not null]
+  preferredConsole Console
   createdAt DateTime [default: `now()`, not null]
   user users [not null]
   hours platform_account_hours [not null]

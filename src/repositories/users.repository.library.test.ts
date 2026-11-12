@@ -113,3 +113,35 @@ describe('UserRepository.findLibraryIgdbIds', () => {
     expect(ids).toEqual([1, 5])
   })
 })
+
+describe('UserRepository.setAccountConsole', () => {
+  it('only updates an account of that user and platform, and reports whether one was found', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 })
+    ;(prismaMock as unknown as { platformAccount: unknown }).platformAccount = {
+      updateMany
+    }
+
+    const found = await new UserRepository().setAccountConsole(
+      'user-1',
+      'acc-1',
+      'XBOX',
+      'XBOX_SERIES'
+    )
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'acc-1', userId: 'user-1', platform: 'XBOX' },
+      data: { preferredConsole: 'XBOX_SERIES' }
+    })
+    expect(found).toBe(true)
+  })
+
+  it('reports false when no account matches', async () => {
+    ;(prismaMock as unknown as { platformAccount: unknown }).platformAccount = {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 })
+    }
+
+    expect(
+      await new UserRepository().setAccountConsole('user-1', 'x', 'XBOX', null)
+    ).toBe(false)
+  })
+})

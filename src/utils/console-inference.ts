@@ -14,13 +14,30 @@ const PSN_CONSOLE_BY_CATEGORY: Record<string, Console> = {
   ps5_native_game: 'PS5'
 }
 
-export function consoleFromXboxDevices(devices: string[]): Console {
+const XBOX_PREFERRED_CONSOLES: readonly Console[] = ['XBOX_ONE', 'XBOX_SERIES']
+
+export function isXboxPreferredConsole(value: unknown): value is Console {
+  return XBOX_PREFERRED_CONSOLES.includes(value as Console)
+}
+
+export function consoleFromXboxDevices(
+  devices: string[],
+  preferred?: Console | null
+): Console {
   const consoles = new Set<Console>()
   for (const device of devices) {
     const found = XBOX_CONSOLE_BY_DEVICE[device]
     if (found) consoles.add(found)
   }
   if (consoles.size === 1) return [...consoles][0]
+  if (
+    consoles.size === 2 &&
+    consoles.has('XBOX_ONE') &&
+    consoles.has('XBOX_SERIES') &&
+    isXboxPreferredConsole(preferred)
+  ) {
+    return preferred
+  }
   if (consoles.size === 0 && devices.includes('PC')) return 'PC'
   return 'UNKNOWN'
 }

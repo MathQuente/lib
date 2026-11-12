@@ -164,7 +164,11 @@ export class UserService {
           .map(account => ({ id: account.id, onlineId: account.displayName })),
         xboxAccounts: user.accounts
           .filter(account => account.platform === 'XBOX')
-          .map(account => ({ id: account.id, gamertag: account.displayName })),
+          .map(account => ({
+            id: account.id,
+            gamertag: account.displayName,
+            preferredConsole: account.preferredConsole
+          })),
         followersCount,
         followingCount
       }

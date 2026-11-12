@@ -6,6 +6,7 @@ import { UserGamePlatformService } from '../services/user-game-platform.service'
 export interface FakePlatformRepository {
   findUserGameWithPlatforms: ReturnType<typeof vi.fn>
   savePlatform: ReturnType<typeof vi.fn>
+  adoptConsole: ReturnType<typeof vi.fn>
 }
 
 export function fakePlatformService(userRepository: UserRepository) {
@@ -34,7 +35,8 @@ export function fakePlatformService(userRepository: UserRepository) {
         platforms: []
       }
     }),
-    savePlatform: vi.fn().mockResolvedValue(undefined)
+    savePlatform: vi.fn().mockResolvedValue(undefined),
+    adoptConsole: vi.fn().mockResolvedValue(undefined)
   }
 
   const service = new UserGamePlatformService(
