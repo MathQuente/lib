@@ -443,12 +443,15 @@ export class UserService {
     const currentStatus = userGame.UserGamesStatus.id
     const hasPlatforms = (userGame._count?.platforms ?? 0) > 0
 
-    if (statusId === WISHLIST_STATUS_ID) {
-      const rating = await this.ratingRepository.findUniqueByUserGame(
-        igdbId,
-        userId
-      )
-      if (rating) await this.ratingRepository.delete(igdbId, userId)
+    if (statusId === WISHLIST_STATUS_ID && currentStatus !== WISHLIST_STATUS_ID) {
+      const { igdbId: updatedId, UserGamesStatus } =
+        await this.userRepository.moveToWishlist(igdbId, userId, statusId)
+
+      return {
+        igdbId: updatedId,
+        userGameStatus: UserGamesStatus,
+        playedCountUpdated: 0
+      }
     }
 
     if (hasPlatforms && statusId !== currentStatus) {

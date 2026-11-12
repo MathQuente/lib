@@ -1,5 +1,6 @@
 import { Console, Platform, Prisma, Status } from '@prisma/client'
 import { prisma } from '../database/db'
+import { ClientError } from '../errors/client-error'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'
 import {
   PaginatedUserGameRow,
@@ -520,6 +521,41 @@ export class UserRepository {
         igdbId: true,
         UserGamesStatus: { select: { id: true, status: true } }
       }
+    })
+  }
+
+  async moveToWishlist(igdbId: number, userId: string, statusId: number) {
+    return prisma.$transaction(async tx => {
+      const userGame = await tx.userGame.findUnique({
+        where: { userId_igdbId: { igdbId, userId } },
+        select: { id: true }
+      })
+      if (!userGame) {
+        throw new ClientError('Jogo não encontrado na sua biblioteca.', 404)
+      }
+      const userGameId = userGame.id
+
+      await tx.rating.deleteMany({ where: { userId, igdbId } })
+      await tx.completionSuggestion.deleteMany({ where: { userGameId } })
+      await tx.userGamePlatform.deleteMany({ where: { userGameId } })
+      await tx.userGameStats.upsert({
+        where: { userGameId },
+        update: { completions: 0, hoursPlayed: null },
+        create: { userGameId, completions: 0, hoursPlayed: null }
+      })
+
+      return tx.userGame.update({
+        where: { id: userGameId },
+        data: {
+          userGamesStatusId: statusId,
+          completedAt: null,
+          updatedAt: new Date()
+        },
+        select: {
+          igdbId: true,
+          UserGamesStatus: { select: { id: true, status: true } }
+        }
+      })
     })
   }
 

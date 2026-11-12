@@ -868,56 +868,63 @@ describe('UserService.findGamesToDisplay', () => {
 })
 
 describe('UserService.updateGame', () => {
-  it('deletes an existing rating when moving to WISHLIST', async () => {
-    const deleteRating = vi.fn()
+  it('moves to WISHLIST through moveToWishlist, not a plain status update', async () => {
+    const moveToWishlist = vi.fn().mockResolvedValue({
+      igdbId: 11133,
+      UserGamesStatus: { id: 5, status: 'WISHLIST' }
+    })
+    const updateGameStatus = vi.fn()
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
-      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 3 } }),
-      updateGameStatus: vi.fn().mockResolvedValue({
-        igdbId: 11133,
-        UserGamesStatus: { id: 5, status: 'WISHLIST' }
-      })
-    })
-    const ratingRepository = fakeRatingRepository({
-      findUniqueByUserGame: vi.fn().mockResolvedValue({ value: 4 }),
-      delete: deleteRating
+      findUserGame: vi.fn().mockResolvedValue({
+        id: 'ug-1',
+        UserGamesStatus: { id: 3 },
+        _count: { platforms: 2 }
+      }),
+      moveToWishlist,
+      updateGameStatus
     })
     const service = new UserService(
       userRepository,
-      ratingRepository,
+      fakeRatingRepository(),
       fakeGameCacheService(),
       fakeFollowRepository()
     )
 
-    await service.updateGame(11133, 'user-1', 5)
+    const result = await service.updateGame(11133, 'user-1', 5)
 
-    expect(deleteRating).toHaveBeenCalledWith(11133, 'user-1')
+    expect(moveToWishlist).toHaveBeenCalledWith(11133, 'user-1', 5)
+    expect(updateGameStatus).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      igdbId: 11133,
+      userGameStatus: { id: 5, status: 'WISHLIST' },
+      playedCountUpdated: 0
+    })
   })
 
-  it('does not try to delete when there is no rating', async () => {
-    const deleteRating = vi.fn()
+  it('keeps the plain status update when the game is already on the WISHLIST', async () => {
+    const moveToWishlist = vi.fn()
+    const updateGameStatus = vi.fn().mockResolvedValue({
+      igdbId: 11133,
+      UserGamesStatus: { id: 5, status: 'WISHLIST' }
+    })
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
-      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 3 } }),
-      updateGameStatus: vi.fn().mockResolvedValue({
-        igdbId: 11133,
-        UserGamesStatus: { id: 5, status: 'WISHLIST' }
-      })
-    })
-    const ratingRepository = fakeRatingRepository({
-      findUniqueByUserGame: vi.fn().mockResolvedValue(null),
-      delete: deleteRating
+      findUserGame: vi.fn().mockResolvedValue({ UserGamesStatus: { id: 5 } }),
+      moveToWishlist,
+      updateGameStatus
     })
     const service = new UserService(
       userRepository,
-      ratingRepository,
+      fakeRatingRepository(),
       fakeGameCacheService(),
       fakeFollowRepository()
     )
 
     await service.updateGame(11133, 'user-1', 5)
 
-    expect(deleteRating).not.toHaveBeenCalled()
+    expect(moveToWishlist).not.toHaveBeenCalled()
+    expect(updateGameStatus).toHaveBeenCalled()
   })
 
   it('does not touch the rating when moving to a non-WISHLIST status', async () => {
