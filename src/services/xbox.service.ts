@@ -1,5 +1,4 @@
-import { Prisma } from '@prisma/client'
-import { AccountLimitError, ClientError } from '../errors/client-error'
+import { ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
@@ -35,13 +34,14 @@ import type { CompletionSuggestionRecorder } from './completion-suggestion.servi
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromXboxDevices } from '../utils/console-inference'
-import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
+import { linkPlatformAccount } from './platform-account-link'
 import {
   PLAYED_STATUS_ID,
   PLAYING_STATUS_ID,
   BACKLOG_STATUS_ID
 } from '../utils/library-status'
 
+const TAKEN_MESSAGE = 'Este perfil do Xbox já está vinculado a outra conta.'
 const HOURS_INCOMPLETE_WARNING =
   'Não foi possível trazer as horas de alguns jogos. Importe de novo mais tarde.'
 
@@ -313,52 +313,13 @@ export class XboxService {
   async connectXbox(userId: string, verifiedProfile: XboxProfile) {
     await this.requireUser(userId)
 
-    const existing = await this.userRepository.findAccount(
-      'XBOX',
-      verifiedProfile.xuid
-    )
-    if (existing) {
-      if (existing.userId !== userId) {
-        throw new ClientError(
-          'Este perfil do Xbox já está vinculado a outra conta.',
-          409
-        )
-      }
-      await this.userRepository.updateAccountName(
-        existing.id,
-        verifiedProfile.gamertag
-      )
-      return { xboxGamertag: verifiedProfile.gamertag }
-    }
-
-    const accounts = await this.listXboxAccounts(userId)
-    if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
-      throw new AccountLimitError('XBOX')
-    }
-
-    try {
-      const created = await this.userRepository.addAccount(
-        userId,
-        'XBOX',
-        {
-          externalId: verifiedProfile.xuid,
-          displayName: verifiedProfile.gamertag
-        },
-        MAX_ACCOUNTS_PER_PLATFORM
-      )
-      if (!created) throw new AccountLimitError('XBOX')
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
-        throw new ClientError(
-          'Este perfil do Xbox já está vinculado a outra conta.',
-          409
-        )
-      }
-      throw err
-    }
+    await linkPlatformAccount(this.userRepository, {
+      userId,
+      platform: 'XBOX',
+      externalId: verifiedProfile.xuid,
+      takenMessage: TAKEN_MESSAGE,
+      resolveName: async () => verifiedProfile.gamertag
+    })
 
     return { xboxGamertag: verifiedProfile.gamertag }
   }

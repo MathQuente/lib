@@ -1,5 +1,4 @@
-import { Prisma } from '@prisma/client'
-import { AccountLimitError, ClientError } from '../errors/client-error'
+import { ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
 import { GameCacheService } from './game-cache.service'
 import { IGDBService } from './igdb.service'
@@ -34,7 +33,7 @@ import { enqueueUniqueImport, getImportJobStatus } from '../queues/import-job'
 import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
-import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
+import { linkPlatformAccount } from './platform-account-link'
 import type { CompletionSuggestionRecorder } from './completion-suggestion.service'
 import { STEAM_CONSOLE } from '../utils/console-inference'
 import {
@@ -196,50 +195,13 @@ export class SteamService {
   async connectSteam(userId: string, verifiedSteamId: string) {
     await this.requireUser(userId)
 
-    const existing = await this.userRepository.findAccount(
-      'STEAM',
-      verifiedSteamId
-    )
-    if (existing) {
-      if (existing.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
-      const personaName = await this.lookupPersonaName(verifiedSteamId)
-      if (personaName && personaName !== existing.displayName) {
-        await this.userRepository.updateAccountName(existing.id, personaName)
-      }
-      return { steamId: verifiedSteamId }
-    }
-
-    const accounts = await this.listSteamAccounts(userId)
-    if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
-      throw new AccountLimitError('STEAM')
-    }
-
-    const personaName = await this.lookupPersonaName(verifiedSteamId)
-    try {
-      const created = await this.userRepository.addAccount(
-        userId,
-        'STEAM',
-        {
-          externalId: verifiedSteamId,
-          displayName: personaName ?? verifiedSteamId
-        },
-        MAX_ACCOUNTS_PER_PLATFORM
-      )
-      if (!created) throw new AccountLimitError('STEAM')
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
-        const winner = await this.userRepository.findAccount(
-          'STEAM',
-          verifiedSteamId
-        )
-        if (winner?.userId === userId) return { steamId: verifiedSteamId }
-        throw new ClientError(TAKEN_MESSAGE, 409)
-      }
-      throw err
-    }
+    await linkPlatformAccount(this.userRepository, {
+      userId,
+      platform: 'STEAM',
+      externalId: verifiedSteamId,
+      takenMessage: TAKEN_MESSAGE,
+      resolveName: () => this.lookupPersonaName(verifiedSteamId)
+    })
 
     return { steamId: verifiedSteamId }
   }

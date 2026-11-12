@@ -1,5 +1,4 @@
 import crypto from 'node:crypto'
-import { Prisma } from '@prisma/client'
 import { CacheRepository } from '../repositories/cache.repository'
 import { AccountLimitError, ClientError } from '../errors/client-error'
 import { UserRepository } from '../repositories/users.repository'
@@ -37,6 +36,7 @@ import { UserGamePlatformService } from './user-game-platform.service'
 import { UserGamePlatformRepository } from '../repositories/user-game-platform.repository'
 import { consoleFromPsnCategories } from '../utils/console-inference'
 import { MAX_ACCOUNTS_PER_PLATFORM } from '../utils/platform-accounts'
+import { linkPlatformAccount } from './platform-account-link'
 import {
   PLAYED_STATUS_ID,
   PLAYING_STATUS_ID,
@@ -271,43 +271,13 @@ export class PsnService {
       )
     }
 
-    const existing = await this.userRepository.findAccount(
-      'PLAYSTATION',
-      profile.accountId
-    )
-    if (existing) {
-      if (existing.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
-      await this.userRepository.updateAccountName(existing.id, profile.onlineId)
-    } else {
-      const accounts = await this.listPsnAccounts(userId)
-      if (accounts.length >= MAX_ACCOUNTS_PER_PLATFORM) {
-        throw new AccountLimitError('PLAYSTATION')
-      }
-
-      try {
-        const created = await this.userRepository.addAccount(
-          userId,
-          'PLAYSTATION',
-          { externalId: profile.accountId, displayName: profile.onlineId },
-          MAX_ACCOUNTS_PER_PLATFORM
-        )
-        if (!created) throw new AccountLimitError('PLAYSTATION')
-      } catch (err) {
-        if (
-          !(
-            err instanceof Prisma.PrismaClientKnownRequestError &&
-            err.code === 'P2002'
-          )
-        ) {
-          throw err
-        }
-        const winner = await this.userRepository.findAccount(
-          'PLAYSTATION',
-          profile.accountId
-        )
-        if (winner?.userId !== userId) throw new ClientError(TAKEN_MESSAGE, 409)
-      }
-    }
+    await linkPlatformAccount(this.userRepository, {
+      userId,
+      platform: 'PLAYSTATION',
+      externalId: profile.accountId,
+      takenMessage: TAKEN_MESSAGE,
+      resolveName: async () => profile.onlineId
+    })
 
     await this.cacheRepository.del(psnVerificationKey(userId))
 
