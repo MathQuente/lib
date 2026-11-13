@@ -236,6 +236,61 @@ describe('UserGamePlatformService.addPlatform', () => {
   })
 })
 
+describe('UserGamePlatformService.addPlatform on an endless played game', () => {
+  it('gives the first platform one completion', async () => {
+    const { service, platformRepository } = setup(
+      userGame({ statusId: 1, endless: true, completions: 1 })
+    )
+
+    await service.addPlatform('user-1', 10, 'STEAM', 'PC')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'STEAM',
+      'PC',
+      expect.objectContaining({ completions: 1 })
+    )
+  })
+
+  it('adds a second platform without a second completion', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        endless: true,
+        platforms: [row({ platform: 'STEAM', console: 'PC', completions: 1 })]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'XBOX', 'XBOX_SERIES')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_SERIES',
+      {}
+    )
+  })
+
+  it('still gives a normal game one completion per new platform', async () => {
+    const { service, platformRepository } = setup(
+      userGame({
+        statusId: 1,
+        endless: false,
+        platforms: [row({ platform: 'STEAM', console: 'PC', completions: 1 })]
+      })
+    )
+
+    await service.addPlatform('user-1', 10, 'XBOX', 'XBOX_SERIES')
+
+    expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-1',
+      'XBOX',
+      'XBOX_SERIES',
+      { completions: 1 }
+    )
+  })
+})
+
 describe('UserGamePlatformService.updatePlatform', () => {
   it('rejects a completion date when the game is not played', async () => {
     const { service } = setup(
@@ -269,6 +324,86 @@ describe('UserGamePlatformService.updatePlatform', () => {
         hoursPlayed: 3
       })
     ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  describe('on an endless game', () => {
+    const steam = (completions: number) =>
+      row({ platform: 'STEAM', console: 'UNKNOWN', completions })
+
+    it('lets a platform go from 0 to 1', async () => {
+      const { service, platformRepository } = setup(
+        userGame({ endless: true, platforms: [steam(0)] })
+      )
+
+      await service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+        completions: 1
+      })
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'UNKNOWN',
+        { completions: 1 }
+      )
+    })
+
+    it('rejects going from 1 to 2', async () => {
+      const { service, platformRepository } = setup(
+        userGame({ endless: true, platforms: [steam(1)] })
+      )
+
+      await expect(
+        service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+          completions: 2
+        })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: 'Jogo infinito não conta vezes zerado.'
+      })
+      expect(platformRepository.savePlatform).not.toHaveBeenCalled()
+    })
+
+    it('rejects 0 to 1 when another platform already has the completion', async () => {
+      const { service } = setup(
+        userGame({
+          endless: true,
+          platforms: [
+            steam(0),
+            row({ platform: 'XBOX', console: 'UNKNOWN', completions: 1 })
+          ]
+        })
+      )
+
+      await expect(
+        service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+          completions: 1
+        })
+      ).rejects.toMatchObject({ statusCode: 400 })
+    })
+
+    it('lets the count go down', async () => {
+      const { service, platformRepository } = setup(
+        userGame({ endless: true, platforms: [steam(1)] })
+      )
+
+      await service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+        completions: 0
+      })
+
+      expect(platformRepository.savePlatform).toHaveBeenCalled()
+    })
+
+    it('does not block a normal game from reaching 2', async () => {
+      const { service, platformRepository } = setup(
+        userGame({ endless: false, platforms: [steam(1)] })
+      )
+
+      await service.updatePlatform('user-1', 10, 'STEAM', 'UNKNOWN', {
+        completions: 2
+      })
+
+      expect(platformRepository.savePlatform).toHaveBeenCalled()
+    })
   })
 
   it('saves only the fields that were sent', async () => {
@@ -561,6 +696,52 @@ describe('UserGamePlatformService.importPlatform', () => {
         'STEAM',
         'UNKNOWN',
         { hoursPlayed: 3000, completions: 0, completedAt: null }
+      )
+    })
+
+    it('keeps an existing completion at 1 when the same platform is imported again', async () => {
+      const { service, platformRepository } = setup(
+        userGame({
+          statusId: 1,
+          endless: true,
+          completions: 1,
+          platforms: [row({ platform: 'STEAM', completions: 1 })]
+        })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', finishedSignals)
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'UNKNOWN',
+        expect.objectContaining({ completions: 1 })
+      )
+    })
+
+    it('imports a second platform into an endless played game with no completion', async () => {
+      const { service, platformRepository } = setup(
+        userGame({
+          statusId: 1,
+          endless: true,
+          completions: 1,
+          platforms: [row({ platform: 'STEAM', completions: 1 })]
+        })
+      )
+
+      await service.importPlatform(
+        'user-1',
+        10,
+        'XBOX',
+        finishedSignals,
+        'XBOX_SERIES'
+      )
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'XBOX',
+        'XBOX_SERIES',
+        expect.objectContaining({ completions: 0 })
       )
     })
 

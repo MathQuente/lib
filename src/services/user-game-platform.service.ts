@@ -12,6 +12,7 @@ import {
   AccountPlatform
 } from '../utils/platform-accounts'
 import {
+  ENDLESS_COMPLETIONS_MESSAGE,
   PLAYED_STATUS_ID,
   WISHLIST_STATUS_ID,
   BACKLOG_STATUS_ID,
@@ -190,12 +191,16 @@ export class UserGamePlatformService {
       const isPlayed = userGame.userGamesStatusId === PLAYED_STATUS_ID
       const inherited: PlatformValues =
         userGame.platforms.length === 0 ? legacyValues(userGame) : {}
-      const values: PlatformValues = isPlayed
-        ? {
-            ...inherited,
-            completions: Math.max(inherited.completions ?? 0, 1)
-          }
-        : inherited
+      const alreadyCounted =
+        userGame.endless &&
+        userGame.platforms.some(p => (p.completions ?? 0) > 0)
+      const values: PlatformValues =
+        isPlayed && !alreadyCounted
+          ? {
+              ...inherited,
+              completions: Math.max(inherited.completions ?? 0, 1)
+            }
+          : inherited
       await this.platformRepository.savePlatform(
         userGame.id,
         platform,
@@ -217,12 +222,26 @@ export class UserGamePlatformService {
     this.assertConsole(platform, gameConsole)
     const userGame = await this.requireUserGame(igdbId, userId)
 
-    if (
-      !userGame.platforms.some(
-        p => p.platform === platform && p.console === gameConsole
-      )
-    ) {
+    const current = userGame.platforms.find(
+      p => p.platform === platform && p.console === gameConsole
+    )
+    if (!current) {
       throw new ClientError('Plataforma não encontrada neste jogo.', 404)
+    }
+
+    const requested = patch.completions
+    if (
+      userGame.endless &&
+      requested !== undefined &&
+      requested > current.completions
+    ) {
+      const nextTotal = userGame.platforms.reduce(
+        (sum, p) => sum + (p === current ? requested : p.completions),
+        0
+      )
+      if (nextTotal > 1) {
+        throw new ClientError(ENDLESS_COMPLETIONS_MESSAGE, 400)
+      }
     }
 
     const values: PlatformValues = {}

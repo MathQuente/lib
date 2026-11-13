@@ -13,7 +13,11 @@ import { UserGamePlatformRepository } from '../repositories/user-game-platform.r
 import { CacheRepository } from '../repositories/cache.repository'
 import { markSessionsRevoked } from '../utils/session-revocation'
 import { randomInt } from 'crypto'
-import { PLAYED_STATUS_ID, WISHLIST_STATUS_ID } from '../utils/library-status'
+import {
+  ENDLESS_COMPLETIONS_MESSAGE,
+  PLAYED_STATUS_ID,
+  WISHLIST_STATUS_ID
+} from '../utils/library-status'
 
 const EDIT_BY_PLATFORM_MESSAGE =
   'Este jogo tem plataformas cadastradas. Edite os valores por plataforma.'
@@ -563,6 +567,9 @@ export class UserService {
     const userGame = await this.userRepository.findUserGame(igdbId, userId)
     if ((userGame?._count?.platforms ?? 0) > 0) {
       throw new ClientError(EDIT_BY_PLATFORM_MESSAGE, 400)
+    }
+    if (userGame?.endless && incrementValue > 0) {
+      throw new ClientError(ENDLESS_COMPLETIONS_MESSAGE, 400)
     }
 
     const { stats } = await this.userRepository.findUserGameStats(

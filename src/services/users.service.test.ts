@@ -351,6 +351,40 @@ describe('UserService.updateGame keeps the completion history', () => {
     expect(result.playedCountUpdated).toBe(2)
   })
 
+  it('sets one completion, without adding, when an endless game becomes played', async () => {
+    const updateUserGamePlayedCount = vi.fn()
+    const ensureAtLeastOneCompletion = vi
+      .fn()
+      .mockResolvedValue({ completions: 1 })
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue({
+        id: 'ug-1',
+        endless: true,
+        UserGamesStatus: { id: 3 },
+        _count: { platforms: 0 }
+      }),
+      updateGameStatus: vi.fn().mockResolvedValue({
+        igdbId: 1,
+        UserGamesStatus: { id: 1, status: 'PLAYED' }
+      }),
+      ensureAtLeastOneCompletion,
+      updateUserGamePlayedCount
+    })
+    const service = new UserService(
+      userRepository,
+      fakeRatingRepository(),
+      fakeGameCacheService(),
+      fakeFollowRepository()
+    )
+
+    const result = await service.updateGame(1, 'user-1', 1)
+
+    expect(result.playedCountUpdated).toBe(1)
+    expect(ensureAtLeastOneCompletion).toHaveBeenCalledWith('user-1', 1)
+    expect(updateUserGamePlayedCount).not.toHaveBeenCalled()
+  })
+
   it('counts one completion when a game with none becomes played', async () => {
     const { service } = serviceFor(3, 0)
 
@@ -1468,7 +1502,7 @@ describe('UserService.update image cleanup', () => {
 })
 
 describe('UserService.updateUserGamePlayedCount', () => {
-  function serviceFor(statusId: number, completions: number) {
+  function serviceFor(statusId: number, completions: number, endless = false) {
     const updateUserGamePlayedCount = vi
       .fn()
       .mockImplementation(async (_u, _g, inc) => ({
@@ -1477,6 +1511,7 @@ describe('UserService.updateUserGamePlayedCount', () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue({
+        endless,
         UserGamesStatus: { id: statusId },
         _count: { platforms: 0 }
       }),
@@ -1517,6 +1552,26 @@ describe('UserService.updateUserGamePlayedCount', () => {
     await expect(
       service.updateUserGamePlayedCount('user-1', 1, -1)
     ).rejects.toThrow(ClientError)
+  })
+
+  it('rejects adding a completion to an endless game', async () => {
+    const { service, updateUserGamePlayedCount } = serviceFor(3, 0, true)
+
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, 1)
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Jogo infinito não conta vezes zerado.'
+    })
+    expect(updateUserGamePlayedCount).not.toHaveBeenCalled()
+  })
+
+  it('still lets an endless game go down by one', async () => {
+    const { service } = serviceFor(3, 1, true)
+
+    await expect(
+      service.updateUserGamePlayedCount('user-1', 1, -1)
+    ).resolves.toEqual({ playedCount: 0 })
   })
 
   it('adds a completion to a game being replayed', async () => {
