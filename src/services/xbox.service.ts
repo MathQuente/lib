@@ -51,6 +51,14 @@ const HOURS_INCOMPLETE_WARNING =
 
 const GENERIC_ACCOUNT_ERROR =
   'Erro ao importar esta conta do Xbox. Tente novamente mais tarde.'
+
+const PROGRESS_AFTER_TITLES = 5
+const PROGRESS_AFTER_MATCH = 15
+const PROGRESS_AFTER_HOURS = 45
+const PROGRESS_AFTER_DATES = 55
+const PROGRESS_AFTER_STORY = 65
+const PROGRESS_LOOP_START = 70
+
 const RECENT_PLAY_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000
 const NAME_SEARCH_INTERVAL_MS = 275
 const CONSOLE_SUFFIX = /\s+(?:for\s+)?xbox\s+(?:series\s+x\|s|one|360)$/i
@@ -474,10 +482,12 @@ export class XboxService {
       }
       throw err
     }
+    onProgress(PROGRESS_AFTER_TITLES)
 
     const igdbByTitleId = collapsePortsIntoParent(
       await this.matchTitles(titles)
     )
+    onProgress(PROGRESS_AFTER_MATCH)
 
     const notFound: string[] = []
     let skipped = 0
@@ -524,6 +534,7 @@ export class XboxService {
       toImport.flatMap(game => game.titleIds),
       onHoursIncomplete
     )
+    onProgress(PROGRESS_AFTER_HOURS)
     const verdicts = new Map(
       toImport.map(game => [
         game.mostCompleted.titleId,
@@ -537,12 +548,14 @@ export class XboxService {
       account.xuid,
       finishedTitles
     )
+    onProgress(PROGRESS_AFTER_DATES)
     const finishedTitleIds = new Set(finishedTitles.map(t => t.titleId))
 
     const storyFinished = await this.findFinishedByStoryAchievement(
       account.xuid,
       toImport.filter(game => !finishedTitleIds.has(game.mostCompleted.titleId))
     )
+    onProgress(PROGRESS_AFTER_STORY)
     const strongTitleIds = new Set(storyFinished.keys())
     for (const [titleId, completedAt] of storyFinished) {
       finishedTitleIds.add(titleId)
@@ -555,6 +568,7 @@ export class XboxService {
     )) {
       finishedTitleIds.add(titleId)
     }
+    onProgress(PROGRESS_LOOP_START)
 
     const total = toImport.length
     let imported = 0
@@ -643,7 +657,10 @@ export class XboxService {
         }
       }
       processed++
-      onProgress(Math.round((processed / total) * 100))
+      onProgress(
+        PROGRESS_LOOP_START +
+          Math.round((processed / total) * (100 - PROGRESS_LOOP_START))
+      )
     }
 
     onProgress(100)
