@@ -56,7 +56,14 @@ export function startXboxImportWorker() {
       const { userId } = job.data as XboxImportJobData
       try {
         return await withTimeout(
-          xboxService.runImport(userId, percent => job.updateProgress(percent)),
+          xboxService.runImport(userId, percent => {
+            job.updateProgress(percent).catch(err => {
+              console.warn('[XboxImport] could not report progress', {
+                jobId: job.id,
+                error: err instanceof Error ? err.message : 'unknown error'
+              })
+            })
+          }),
           IMPORT_TIMEOUT_MS,
           'Xbox import timed out after 10 minutes.'
         )

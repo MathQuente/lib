@@ -1853,6 +1853,9 @@ describe('XboxService.runImport with two accounts', () => {
     await service.runImport('user-1', onProgress)
 
     const values = onProgress.mock.calls.map(([percent]) => percent)
+    expect(values).toEqual([
+      3, 8, 23, 28, 33, 35, 50, 50, 53, 57, 73, 78, 83, 85, 100, 100, 100
+    ])
     expect(values).toContain(50)
     expect(values.at(-1)).toBe(100)
     expect([...values].sort((a, b) => a - b)).toEqual(values)
