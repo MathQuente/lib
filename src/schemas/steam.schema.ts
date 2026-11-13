@@ -11,7 +11,7 @@ export {
 } from './import.schema'
 
 export const StartSteamLinkResponseSchema = z.object({
-  url: z.string().url()
+  url: z.url()
 })
 
 export const ImportStatusResponseSchema = importStatusResponseSchema(

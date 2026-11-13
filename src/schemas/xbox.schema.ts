@@ -15,12 +15,12 @@ export const SetPreferredConsoleBodySchema = z.object({
 })
 
 export const SetPreferredConsoleResponseSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   preferredConsole: z.enum(['XBOX_ONE', 'XBOX_SERIES']).nullable()
 })
 
 export const StartXboxLinkResponseSchema = z.object({
-  url: z.string().url()
+  url: z.url()
 })
 
 export const ImportStatusResponseSchema = importStatusResponseSchema(

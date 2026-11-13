@@ -46,9 +46,9 @@ export const GetRatingsResponseSchema = z.object({
   ratings: z.array(
     z.object({
       user: z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         userName: z.string().nullable(),
-        profilePicture: z.string().url().nullable()
+        profilePicture: z.url().nullable()
       }),
       value: z.number()
     })

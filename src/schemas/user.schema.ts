@@ -3,18 +3,18 @@ import { isConsoleAllowed } from '../utils/platform-consoles'
 
 export const DeleteUserResponseSchema = z.object({
   user: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     userName: z.string().nullable()
   })
 })
 
 export const UserParamsSchema = z.object({
-  userId: z.string().uuid()
+  userId: z.uuid()
 })
 
 export const GetUserResponseSchema = z.object({
   user: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     userName: z.string().nullable(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
@@ -27,7 +27,7 @@ export const GetUserResponseSchema = z.object({
 
 export const GetMeResponseSchema = z.object({
   user: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     profilePicture: z.string().nullable(),
     userBanner: z.string().nullable(),
     userName: z.string().nullable(),
@@ -74,10 +74,10 @@ export const QueryStringSchema = z.object({
 export const GetAllUsersResponseSchema = z.object({
   users: z.array(
     z.object({
-      id: z.string().uuid(),
+      id: z.uuid(),
       userBanner: z.string().nullable(),
       userName: z.string().nullable(),
-      profilePicture: z.string().url().nullable(),
+      profilePicture: z.url().nullable(),
       userGamesAmount: z.number()
     })
   )
@@ -109,7 +109,7 @@ export const UserGameHoursUpdateBodySchema = z.object({
 })
 
 export const UserGameCompletedAtUpdateBodySchema = z.object({
-  completedAt: z.string().date()
+  completedAt: z.iso.date()
 })
 
 export const GetUserGameCompletedAtResponse = z.object({
@@ -184,9 +184,8 @@ const ALLOWED_IMAGE_HOSTS = new Set([
 ])
 
 const ImageUrlSchema = z
-  .string()
-  .max(2048)
   .url()
+  .max(2048)
   .refine(value => {
     if (!URL.canParse(value)) return false
     const url = new URL(value)
@@ -297,7 +296,7 @@ export const UserGamePlatformUpdateBodySchema = z
   .object({
     hoursPlayed: z.number().min(0).max(9999.99).nullable().optional(),
     completions: z.number().int().min(0).max(999).optional(),
-    completedAt: z.string().date().nullable().optional()
+    completedAt: z.iso.date().nullable().optional()
   })
   .refine(body => Object.keys(body).length > 0, {
     message: 'Informe ao menos um campo para atualizar.'
