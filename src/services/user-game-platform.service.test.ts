@@ -614,24 +614,52 @@ describe('UserGamePlatformService.importPlatform', () => {
   })
 
   describe('endless games', () => {
-    const finishedSignals = {
+    const lastAchievement = new Date('2024-03-01T00:00:00Z')
+    const weakSignals = {
       statusId: 1,
       activityStatusId: 3,
       hoursPlayed: 3000,
       finished: true,
-      confirmedFinished: true,
+      confirmedFinished: false,
       strongFinished: true,
-      completedAt: new Date('2024-03-01T00:00:00Z')
+      completedAt: lastAchievement
     }
+    const finishedSignals = { ...weakSignals, confirmedFinished: true }
 
-    it('creates a new endless game with the activity status and no completion, ignoring finished signals', async () => {
+    it('creates a new endless game as PLAYED with one completion and the last achievement date when everything is confirmed', async () => {
+      const { service, platformRepository, userRepository } = setup(null)
+      platformRepository.findUserGameWithPlatforms
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(userGame({ statusId: 1 }))
+
+      await service.importPlatform('user-1', 10, 'STEAM', {
+        ...finishedSignals,
+        endless: true
+      })
+
+      expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
+        igdbId: 10,
+        userId: 'user-1',
+        statusIds: 1,
+        completedAt: lastAchievement,
+        endless: true
+      })
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'UNKNOWN',
+        { hoursPlayed: 3000, completions: 1, completedAt: lastAchievement }
+      )
+    })
+
+    it('creates a new endless game with the activity status and no completion on weak signals only', async () => {
       const { service, platformRepository, userRepository } = setup(null)
       platformRepository.findUserGameWithPlatforms
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(userGame({ statusId: 3 }))
 
       await service.importPlatform('user-1', 10, 'STEAM', {
-        ...finishedSignals,
+        ...weakSignals,
         endless: true
       })
 
@@ -655,7 +683,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       ['has no hours', 0, 4],
       ['was opened recently', 3000, 3]
     ])(
-      'gives a new endless game the activity status when it %s',
+      'gives a new endless game the activity status when it %s and is not confirmed',
       async (_label, hours, activityStatusId) => {
         const { service, platformRepository, userRepository } = setup(null)
         platformRepository.findUserGameWithPlatforms
@@ -663,7 +691,7 @@ describe('UserGamePlatformService.importPlatform', () => {
           .mockResolvedValueOnce(userGame({ statusId: activityStatusId }))
 
         await service.importPlatform('user-1', 10, 'STEAM', {
-          ...finishedSignals,
+          ...weakSignals,
           hoursPlayed: hours,
           activityStatusId,
           endless: true
@@ -674,6 +702,179 @@ describe('UserGamePlatformService.importPlatform', () => {
         )
       }
     )
+
+    it.each([
+      ['BACKLOG', 4],
+      ['WISHLIST', 5]
+    ])(
+      'promotes an existing endless game in %s to PLAYED with one completion when everything is confirmed',
+      async (_label, statusId) => {
+        const { service, platformRepository, userRepository } = setup(
+          userGame({
+            statusId,
+            endless: true,
+            platforms: [row({ platform: 'STEAM' })]
+          })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', finishedSignals)
+
+        expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+          10,
+          'user-1',
+          1
+        )
+        expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+          'ug-1',
+          'STEAM',
+          'UNKNOWN',
+          { hoursPlayed: 3000, completions: 1, completedAt: lastAchievement }
+        )
+      }
+    )
+
+    it.each([
+      ['PLAYING', 3],
+      ['PAUSED', 2],
+      ['DROPPED', 6]
+    ])(
+      'leaves an existing endless game the user already moved to %s alone, even when everything is confirmed',
+      async (_label, statusId) => {
+        const { service, platformRepository, userRepository } = setup(
+          userGame({
+            statusId,
+            endless: true,
+            platforms: [row({ platform: 'STEAM' })]
+          })
+        )
+
+        await service.importPlatform('user-1', 10, 'STEAM', finishedSignals)
+
+        expect(userRepository.updateGameStatus).not.toHaveBeenCalledWith(
+          10,
+          'user-1',
+          1
+        )
+        expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+          'ug-1',
+          'STEAM',
+          'UNKNOWN',
+          { hoursPlayed: 3000, completions: 0, completedAt: null }
+        )
+      }
+    )
+
+    it('does not promote an existing endless game in BACKLOG on weak signals only', async () => {
+      const { service, platformRepository, userRepository } = setup(
+        userGame({
+          statusId: 4,
+          endless: true,
+          platforms: [row({ platform: 'STEAM' })]
+        })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', weakSignals)
+
+      expect(userRepository.updateGameStatus).toHaveBeenCalledWith(
+        10,
+        'user-1',
+        3
+      )
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'UNKNOWN',
+        { hoursPlayed: 3000, completions: 0, completedAt: null }
+      )
+    })
+
+    it('never goes past one completion: a confirmed second platform on a PLAYED endless game gets none', async () => {
+      const { service, platformRepository } = setup(
+        userGame({
+          statusId: 1,
+          endless: true,
+          completions: 1,
+          platforms: [
+            row({
+              platform: 'STEAM',
+              completions: 1,
+              completedAt: lastAchievement
+            })
+          ]
+        })
+      )
+
+      await service.importPlatform(
+        'user-1',
+        10,
+        'XBOX',
+        finishedSignals,
+        'XBOX_SERIES'
+      )
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'XBOX',
+        'XBOX_SERIES',
+        expect.objectContaining({ completions: 0, completedAt: null })
+      )
+    })
+
+    it('never goes past one completion when a BACKLOG endless game already has a counted platform', async () => {
+      const { service, platformRepository } = setup(
+        userGame({
+          statusId: 4,
+          endless: true,
+          completions: 1,
+          platforms: [row({ platform: 'STEAM', completions: 1 })]
+        })
+      )
+
+      await service.importPlatform(
+        'user-1',
+        10,
+        'XBOX',
+        finishedSignals,
+        'XBOX_SERIES'
+      )
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'XBOX',
+        'XBOX_SERIES',
+        expect.objectContaining({ completions: 0, completedAt: null })
+      )
+    })
+
+    it('keeps the single completion when the same platform of a PLAYED endless game is imported again', async () => {
+      const { service, platformRepository } = setup(
+        userGame({
+          statusId: 1,
+          endless: true,
+          completions: 1,
+          platforms: [
+            row({
+              platform: 'STEAM',
+              completions: 1,
+              completedAt: lastAchievement
+            })
+          ]
+        })
+      )
+
+      await service.importPlatform('user-1', 10, 'STEAM', finishedSignals)
+
+      expect(platformRepository.savePlatform).toHaveBeenCalledWith(
+        'ug-1',
+        'STEAM',
+        'UNKNOWN',
+        {
+          hoursPlayed: 3000,
+          completions: 1,
+          completedAt: lastAchievement
+        }
+      )
+    })
 
     it('does not promote an existing endless game to PLAYED or count a completion', async () => {
       const { service, platformRepository, userRepository } = setup(
