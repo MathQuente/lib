@@ -113,7 +113,7 @@ Tests live next to the code as `*.test.ts` (Vitest, 18 files). Services are test
 
 ## Prisma Schema
 
-Generators: `prisma-client-js` + `prisma-dbml-generator`.
+Generators: `prisma-client-js` + `prisma-dbml-generator`. Prisma 7: the client talks to Postgres through the `@prisma/adapter-pg` driver adapter (`src/database/db.ts`; the pool matches the v6 defaults, `connectionTimeoutMillis` 5 s and `idleTimeoutMillis` 300 s, because `pg` has no connect timeout by default). The `url` is no longer allowed in the `datasource` block of the schema: the Prisma CLI reads `DATABASE_URL` from `prisma.config.ts`, which loads `.env` with `dotenv/config` (the CLI no longer loads it by itself), and the app reads it from the environment (`tsx --env-file` or `node --env-file`). `prisma generate` is no longer implied by an install, so `postinstall` runs it; a production image that skips dev dependencies has to copy the generated client from the build stage. Check migrations with `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` (the old `--from-schema-datasource` is gone). Error `meta` changed shape: a P2002 now carries `driverAdapterError` instead of `target`, and nothing in `src` reads `meta`; `isUniqueViolation` and `isRecordNotFound` still work. `prisma-client-js` is deprecated and the engine is gone, so `binaryTargets` in the schema no longer does anything useful; the replacement generator `prisma-client` needs an `output` folder and new import paths, and is left for later.
 
 | Model | Table | Key fields | Relations | Notes |
 |---|---|---|---|---|
