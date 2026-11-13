@@ -659,6 +659,65 @@ describe('IGDBService detail queries request game_type', () => {
   })
 })
 
+describe('IGDBService release dates for the cache', () => {
+  it.each([
+    [1793836800, 1793836800],
+    [-86400, -86400],
+    [0, null],
+    [undefined, null],
+    [null, null],
+    [IGDBService.INT4_MAX, IGDBService.INT4_MAX],
+    [IGDBService.INT4_MAX + 1, null],
+    [IGDBService.INT4_MIN, IGDBService.INT4_MIN],
+    [IGDBService.INT4_MIN - 1, null]
+  ])('toCacheReleaseDate(%s) is %s', (epoch, expected) => {
+    expect(IGDBService.toCacheReleaseDate(epoch)).toBe(expected)
+  })
+
+  it('keeps toGameCacheInput consistent with toCacheReleaseDate', () => {
+    expect(
+      IGDBService.toGameCacheInput({
+        id: 1,
+        name: 'A',
+        first_release_date: IGDBService.INT4_MAX + 1
+      } as IGDBGame).releaseDate
+    ).toBeUndefined()
+    expect(
+      IGDBService.toGameCacheInput({
+        id: 1,
+        name: 'A',
+        first_release_date: 1793836800
+      } as IGDBGame).releaseDate
+    ).toBe(1793836800)
+  })
+
+  it('getReleaseInfoByIds maps date and status, nulls the missing ones and skips absent ids', async () => {
+    const request = mockRequest([
+      { id: 1, first_release_date: 1793836800, game_status: 0 },
+      { id: 2 },
+      { id: 3, first_release_date: IGDBService.INT4_MAX + 1, game_status: 4 }
+    ])
+
+    const result = await IGDBService.getReleaseInfoByIds([1, 2, 3, 4, 1])
+
+    expect(result.get(1)).toEqual({ releaseDate: 1793836800, gameStatus: 0 })
+    expect(result.get(2)).toEqual({ releaseDate: null, gameStatus: null })
+    expect(result.get(3)).toEqual({ releaseDate: null, gameStatus: 4 })
+    expect(result.has(4)).toBe(false)
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields id,first_release_date,game_status;/)
+    )
+  })
+
+  it('getReleaseInfoByIds does not call IGDB without ids', async () => {
+    const request = mockRequest([])
+
+    expect((await IGDBService.getReleaseInfoByIds([])).size).toBe(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+})
+
 describe('IGDBService.getRelatedGames', () => {
   it('drops bundles, rumored games and cancelled games without a date', async () => {
     vi.spyOn(

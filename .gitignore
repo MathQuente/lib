@@ -12,5 +12,6 @@ test-igdb.mjs
 src/scripts/*-spike.ts
 
 backfill-console-*.json
+backfill-release-dates-*.csv
 
 src/generated

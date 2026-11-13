@@ -3,6 +3,19 @@ import { prisma } from '../database/db'
 import { CommunityReviewRow } from '../types/review'
 
 export class ReviewRepository {
+  async findIgdbIdsWithReviews(igdbIds: number[]): Promise<Set<number>> {
+    const found = new Set<number>()
+    for (let i = 0; i < igdbIds.length; i += 5000) {
+      const rows = await prisma.review.findMany({
+        where: { igdbId: { in: igdbIds.slice(i, i + 5000) } },
+        distinct: ['igdbId'],
+        select: { igdbId: true }
+      })
+      for (const row of rows) found.add(row.igdbId)
+    }
+    return found
+  }
+
   async findByUserGame(igdbId: number, userId: string) {
     return prisma.review.findUnique({
       where: { userId_igdbId: { userId, igdbId } }

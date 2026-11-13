@@ -165,3 +165,106 @@ describe('GameCacheRepository.updateCategories', () => {
     ])
   })
 })
+
+function sqlOf(execute: { mock: { calls: unknown[][] } }, call = 0) {
+  const [sql] = execute.mock.calls[call] as unknown as [
+    { strings: string[]; values: unknown[] }
+  ]
+  return sql
+}
+
+describe('GameCacheRepository.updateReleaseDates', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('does not write an empty batch', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    expect(await new GameCacheRepository().updateReleaseDates([])).toBe(0)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('throws, without writing anything, when a date is not an integer', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    await expect(
+      new GameCacheRepository().updateReleaseDates([
+        { igdbId: 1, releaseDate: 1793836800 },
+        { igdbId: 2, releaseDate: 1.5 }
+      ])
+    ).rejects.toThrow(/Invalid release date for 2/)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('writes dates and NULL in one statement that only sets release_date', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(2)
+
+    const written = await new GameCacheRepository().updateReleaseDates([
+      { igdbId: 1, releaseDate: 1793836800 },
+      { igdbId: 2, releaseDate: null }
+    ])
+
+    expect(written).toBe(2)
+    expect(execute).toHaveBeenCalledTimes(1)
+    const sql = sqlOf(execute)
+    const text = sql.strings.join('?')
+    expect(text.match(/\bSET\b/g)).toHaveLength(1)
+    expect(text).toContain('SET release_date = v.release_date')
+    expect(text).toContain('IS DISTINCT FROM')
+    expect(JSON.parse(String(sql.values[0]))).toEqual([
+      { id: 1, release_date: 1793836800 },
+      { id: 2, release_date: null }
+    ])
+  })
+})
+
+describe('GameCacheRepository.restoreReleaseDates', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const rows = [
+    { igdbId: 1, previous: 1798675200, next: 1793836800 },
+    { igdbId: 2, previous: 1798675200, next: null }
+  ]
+
+  it('does nothing for an empty file', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    expect(await new GameCacheRepository().restoreReleaseDates([], false)).toBe(
+      0
+    )
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('restores only rows whose current date is still the one the backfill wrote, NULL included', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(2)
+
+    const restored = await new GameCacheRepository().restoreReleaseDates(
+      rows,
+      false
+    )
+
+    expect(restored).toBe(2)
+    const text = sqlOf(execute).strings.join('?')
+    expect(text).toContain('SET release_date = v.previous')
+    expect(text).toContain('IS NOT DISTINCT FROM v.next')
+  })
+
+  it('counts what would be restored in a dry run without writing', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+    const query = vi
+      .spyOn(prisma, '$queryRaw')
+      .mockResolvedValue([{ count: BigInt(1) }] as never)
+
+    const count = await new GameCacheRepository().restoreReleaseDates(
+      rows,
+      true
+    )
+
+    expect(count).toBe(1)
+    expect(execute).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+})
