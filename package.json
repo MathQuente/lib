@@ -25,6 +25,7 @@
     "backfill:endless": "tsx --env-file .env src/scripts/backfill-endless.ts",
     "backfill:game-modes": "tsx --env-file .env src/scripts/backfill-game-modes.ts",
     "backfill:game-type": "tsx --env-file .env src/scripts/backfill-game-type.ts",
+    "backfill:release-dates": "tsx --env-file .env src/scripts/backfill-release-dates.ts",
     "backfill:game-status": "tsx --env-file .env src/scripts/backfill-game-status.ts",
     "backfill:category-parent": "tsx --env-file .env src/scripts/backfill-category-parent.ts",
     "backfill:console": "tsx --env-file .env src/scripts/backfill-console.ts",

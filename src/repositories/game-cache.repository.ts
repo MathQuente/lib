@@ -345,6 +345,95 @@ export class GameCacheRepository {
     `)
   }
 
+  async findReleaseDateCandidatesAfter(
+    afterId: number,
+    limit: number,
+    sinceEpoch: number,
+    includeUndated: boolean
+  ): Promise<
+    Array<{ igdbId: number; name: string; releaseDate: number | null }>
+  > {
+    return prisma.gameCache.findMany({
+      where: {
+        igdbId: { gt: afterId },
+        OR: [
+          { releaseDate: { gte: sinceEpoch } },
+          ...(includeUndated ? [{ releaseDate: null }] : [])
+        ]
+      },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true, name: true, releaseDate: true }
+    })
+  }
+
+  async updateReleaseDates(
+    updates: Array<{ igdbId: number; releaseDate: number | null }>
+  ): Promise<number> {
+    const valid = updates.filter(
+      u => u.releaseDate === null || Number.isInteger(u.releaseDate)
+    )
+    if (valid.length === 0) return 0
+    const rows = JSON.stringify(
+      valid.map(u => ({ id: u.igdbId, release_date: u.releaseDate }))
+    )
+    return prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET release_date = v.release_date
+      FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, release_date int)
+      WHERE gc.igdb_id = v.id
+        AND gc.release_date IS DISTINCT FROM v.release_date
+    `)
+  }
+
+  async restoreReleaseDates(
+    rows: Array<{
+      igdbId: number
+      previous: number | null
+      next: number | null
+    }>,
+    dryRun: boolean
+  ): Promise<number> {
+    if (rows.length === 0) return 0
+    const json = JSON.stringify(
+      rows.map(r => ({ id: r.igdbId, previous: r.previous, next: r.next }))
+    )
+    if (dryRun) {
+      const counted = await prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+        SELECT count(*) AS count
+        FROM games_cache gc
+        JOIN jsonb_to_recordset(${json}::jsonb) AS v(id int, previous int, next int)
+          ON gc.igdb_id = v.id
+        WHERE gc.release_date IS NOT DISTINCT FROM v.next
+      `)
+      return Number(counted[0]?.count ?? 0)
+    }
+    return prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET release_date = v.previous
+      FROM jsonb_to_recordset(${json}::jsonb) AS v(id int, previous int, next int)
+      WHERE gc.igdb_id = v.id
+        AND gc.release_date IS NOT DISTINCT FROM v.next
+    `)
+  }
+
+  async findIgdbIdsWithRatingOrReview(igdbIds: number[]): Promise<Set<number>> {
+    if (igdbIds.length === 0) return new Set()
+    const [ratings, reviews] = await Promise.all([
+      prisma.rating.findMany({
+        where: { igdbId: { in: igdbIds } },
+        distinct: ['igdbId'],
+        select: { igdbId: true }
+      }),
+      prisma.review.findMany({
+        where: { igdbId: { in: igdbIds } },
+        distinct: ['igdbId'],
+        select: { igdbId: true }
+      })
+    ])
+    return new Set([...ratings, ...reviews].map(r => r.igdbId))
+  }
+
   async updateGameModes(
     updates: Array<{ igdbId: number; gameModes: number[] }>
   ) {

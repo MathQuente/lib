@@ -117,6 +117,12 @@ export class IGDBService {
       : (g.parent_game ?? null)
   }
 
+  static toCacheReleaseDate(epoch: number | null | undefined): number | null {
+    return typeof epoch === 'number' && epoch !== 0 && epoch <= this.INT4_MAX
+      ? epoch
+      : null
+  }
+
   static getGameType(g: Pick<IGDBGame, 'game_type' | 'category'>): number {
     return g.game_type ?? g.category ?? -1
   }
@@ -129,10 +135,7 @@ export class IGDBService {
       summary: g.summary,
       genres: g.genres?.map(x => x.name) ?? [],
       platforms: g.platforms?.map(x => x.name) ?? [],
-      releaseDate:
-        g.first_release_date && g.first_release_date <= this.INT4_MAX
-          ? g.first_release_date
-          : undefined,
+      releaseDate: this.toCacheReleaseDate(g.first_release_date) ?? undefined,
       hypes: g.hypes ?? 0,
       totalRatingCount: g.total_rating_count ?? 0,
       category: this.getGameType(g),
@@ -413,6 +416,37 @@ export class IGDBService {
     }
 
     return typesByGame
+  }
+
+  static async getReleaseInfoByIds(
+    ids: number[]
+  ): Promise<
+    Map<number, { releaseDate: number | null; gameStatus: number | null }>
+  > {
+    const unique = [...new Set(ids)]
+    const info = new Map<
+      number,
+      { releaseDate: number | null; gameStatus: number | null }
+    >()
+
+    for (let i = 0; i < unique.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      const chunk = unique.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE)
+      const results = await this.request<
+        { id: number; first_release_date?: number; game_status?: number }[]
+      >(
+        'games',
+        `where id = (${chunk.join(',')}); fields id,first_release_date,game_status; limit ${chunk.length};`
+      )
+      for (const row of results) {
+        info.set(row.id, {
+          releaseDate: this.toCacheReleaseDate(row.first_release_date),
+          gameStatus:
+            typeof row.game_status === 'number' ? row.game_status : null
+        })
+      }
+    }
+
+    return info
   }
 
   static async getTotalRatingCountsByIds(
