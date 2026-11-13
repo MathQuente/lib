@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
-import { Platform, Prisma } from '@prisma/client'
+import { Platform, Prisma } from '../src/database/prisma-client'
 import { prisma } from '../src/database/db'
 import { IGDBService } from '../src/services/igdb.service'
 import { getSeedPassword } from '../src/utils/seed-password'

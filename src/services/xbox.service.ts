@@ -1,4 +1,4 @@
-import { Console } from '@prisma/client'
+import { Console } from '../database/prisma-client'
 import { ClientError } from '../errors/client-error'
 import { IGDBRequestError } from '../errors/igdb-request-error'
 import { UserRepository } from '../repositories/users.repository'

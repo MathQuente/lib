@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { SteamService } from './steam.service'
 import { SteamApiError, SteamApiService } from './steam-api.service'
 import { IGDBService } from './igdb.service'

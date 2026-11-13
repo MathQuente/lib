@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import fs from 'node:fs'
-import { Console, Platform, Prisma } from '@prisma/client'
+import { Console, Platform, Prisma } from '../database/prisma-client'
 import { prisma } from '../database/db'
 import { BackfillRow, BackfillUpdate } from '../utils/console-inference'
 import {

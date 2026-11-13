@@ -1,4 +1,4 @@
-import { Console, Platform } from '@prisma/client'
+import { Console, Platform } from '../database/prisma-client'
 import { ClientError } from '../errors/client-error'
 import {
   AccountHours,

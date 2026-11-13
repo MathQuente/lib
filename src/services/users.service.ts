@@ -1,4 +1,4 @@
-import { Status } from '@prisma/client'
+import { Status } from '../database/prisma-client'
 import { UpdateUserDTO } from '../dtos/user.dto'
 import { ClientError } from '../errors/client-error'
 import { isRecordNotFound, isUniqueViolation } from '../utils/prisma-errors'

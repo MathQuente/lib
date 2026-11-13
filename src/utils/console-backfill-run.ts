@@ -1,4 +1,4 @@
-import { Console, Platform } from '@prisma/client'
+import { Console, Platform } from '../database/prisma-client'
 import {
   BackfillRow,
   BackfillSkip,

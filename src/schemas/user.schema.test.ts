@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { Console } from '../database/prisma-client'
 import {
   DeleteUserResponseSchema,
   QueryStringSchema,
@@ -100,8 +101,7 @@ describe('UserGamePlatformParamsSchema', () => {
     expect(parse('XBOX', 'DREAMBOX').success).toBe(false)
   })
 
-  it('keeps the enum in sync with the Prisma enum', async () => {
-    const { Console } = await import('@prisma/client')
+  it('keeps the enum in sync with the Prisma enum', () => {
     expect([...ConsoleEnumSchema.options].sort()).toEqual(
       Object.values(Console).sort()
     )

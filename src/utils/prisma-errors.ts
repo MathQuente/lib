@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 
 export function isUniqueViolation(error: unknown): boolean {
   return (
