@@ -354,7 +354,7 @@ Single global handler (`app.setErrorHandler`), no per-route try/catch:
 |---|---|---|
 | `ClientError` (status set per throw site, default 400) | as specified | `{ message }` |
 | `IGDBRequestError` | 502 | `{ message: 'Upstream game data provider failed' }` (details only in the log) |
-| `ZodError` | 400 | `{ message: 'Invalid input', error: field errors }` |
+| `ZodError` | 400 | `{ message: 'Invalid input', error: field errors }`; issues at the root of the schema (a body-level `refine`) go under the `_form` key |
 | Fastify 4xx (rate limit, payload, unknown route...) | same status | generic `{ message }`, for example `Too many requests` |
 | anything else | 500 | `{ message: 'Internal server error' }` |
 
