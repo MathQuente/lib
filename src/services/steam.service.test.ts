@@ -1849,16 +1849,26 @@ describe('SteamService.runImport: endless games that cannot infer a completion',
     gameModes = MMO_MODES,
     genres = [{ name: 'Sport' }],
     achieved,
-    total
+    total,
+    existingStatusId
   }: {
     gameModes?: { id: number; name: string }[]
     genres?: { name: string }[]
     achieved: number
     total: number
+    existingStatusId?: number
   }) {
+    const updateGameStatus = vi.fn().mockResolvedValue(null)
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
-      findUserGame: vi.fn().mockResolvedValue(null),
+      findUserGame: vi
+        .fn()
+        .mockResolvedValue(
+          existingStatusId === undefined
+            ? null
+            : { UserGamesStatus: { id: existingStatusId } }
+        ),
+      updateGameStatus,
       addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 52826 }),
       createUserGameStats: vi.fn().mockResolvedValue({ completions: 0 }),
       upsertUserGameHours: vi.fn().mockResolvedValue({ hoursPlayed: 1 })
@@ -1910,6 +1920,7 @@ describe('SteamService.runImport: endless games that cannot infer a completion',
 
     return {
       addGame: userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>,
+      updateGameStatus,
       achievements,
       percentages,
       schema,
@@ -1963,6 +1974,34 @@ describe('SteamService.runImport: endless games that cannot infer a completion',
       expect.objectContaining({ completions: 0, completedAt: null }),
       expect.objectContaining({ accountId: 'steam-acc-1' })
     )
+  })
+
+  it('does not promote a BACKLOG row whose Endless mark is off from the ratio or playtime of a game that can not infer a completion', async () => {
+    const { updateGameStatus, addGame } = await importOne({
+      achieved: 20,
+      total: 21,
+      existingStatusId: 4
+    })
+
+    expect(addGame).not.toHaveBeenCalled()
+    expect(updateGameStatus).not.toHaveBeenCalledWith(52826, 'user-1', 1)
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-52826',
+      'STEAM',
+      'PC',
+      expect.objectContaining({ completions: 0, completedAt: null }),
+      expect.objectContaining({ accountId: 'steam-acc-1' })
+    )
+  })
+
+  it('still promotes a BACKLOG row to PLAYED when every achievement is unlocked, whatever the mark', async () => {
+    const { updateGameStatus } = await importOne({
+      achieved: 21,
+      total: 21,
+      existingStatusId: 4
+    })
+
+    expect(updateGameStatus).toHaveBeenCalledWith(52826, 'user-1', 1)
   })
 
   it('does not ask Steam for achievements of a game that can not infer a completion and is not endless', async () => {

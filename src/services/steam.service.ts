@@ -489,26 +489,30 @@ export class SteamService {
         owned.playtime_forever > 0 &&
         secondsSinceLastPlayed <= RECENT_PLAY_THRESHOLD_SECONDS
 
-      const matchedRareNames = achievements
-        ? hasRareAchievementSignal(achievements, globalPercentages)
+      const weakAchievements = canInferCompletion(igdbGame)
+        ? achievements
+        : null
+
+      const matchedRareNames = weakAchievements
+        ? hasRareAchievementSignal(weakAchievements, globalPercentages)
         : []
       const hasRareAchievement = matchedRareNames.length > 0
 
       const meetsRatioThreshold =
-        achievements != null &&
-        meetsCompletionRatio(achievements.achieved, achievements.total)
+        weakAchievements != null &&
+        meetsCompletionRatio(weakAchievements.achieved, weakAchievements.total)
 
       const chapterEnd =
-        achievements && schema
+        weakAchievements && schema
           ? completedChapterSequenceEnd([...schema.keys()], {
-              apiNames: achievements.achievedApiNames,
-              unlockTimes: achievements.unlockTimesByName
+              apiNames: weakAchievements.achievedApiNames,
+              unlockTimes: weakAchievements.unlockTimesByName
             })
           : null
       const matchedKeywordNames = [
-        ...(achievements
+        ...(weakAchievements
           ? matchingCompletionKeywordNames(
-              achievements.achievedApiNames,
+              weakAchievements.achievedApiNames,
               schema,
               communityTexts
             )
@@ -521,12 +525,12 @@ export class SteamService {
       const normallySeconds = timeToBeatByGame.get(igdbGame.id)
       const normallyHours = normallySeconds ? normallySeconds / 3600 : undefined
       const meetsPlaytime =
-        achievements != null &&
+        weakAchievements != null &&
         meetsPlaytimeSignal({
           hoursPlayed,
           normallyHours,
-          achieved: achievements.achieved,
-          total: achievements.total
+          achieved: weakAchievements.achieved,
+          total: weakAchievements.total
         })
 
       const confirmedFinished =
@@ -536,8 +540,11 @@ export class SteamService {
 
       const weakSignalsBlocked =
         !hasPracticalEnd(normallyHours) ||
-        (achievements != null &&
-          hasLockedPlainEndAchievement(schema, achievements.achievedApiNames))
+        (weakAchievements != null &&
+          hasLockedPlainEndAchievement(
+            schema,
+            weakAchievements.achievedApiNames
+          ))
       const hasWeakSignal =
         !weakSignalsBlocked && (meetsRatioThreshold || meetsPlaytime)
       const looksFinished =
