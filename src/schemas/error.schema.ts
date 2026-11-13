@@ -11,7 +11,7 @@ export const ErrorSchemas = {
   BadRequest: z.object({
     ...problemFields,
     message: z.string(),
-    error: z.record(z.array(z.string())).optional()
+    error: z.record(z.string(), z.array(z.string())).optional()
   }),
   NotFound: z.object({
     ...problemFields,
