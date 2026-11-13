@@ -283,17 +283,24 @@ describe('GameCacheRepository.updateCoverUrls', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it('throws, without writing anything, when a url is not https', async () => {
-    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+  it.each([
+    'http://images.igdb.com/igdb/image/upload/t_cover_big/a.jpg',
+    'https://cdn.example.com/a.jpg',
+    'https:https://images.igdb.com/igdb/image/upload/t_cover_big/a.jpg'
+  ])(
+    'throws, without writing anything, when a url is not an IGDB https image (%s)',
+    async coverUrl => {
+      const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
 
-    await expect(
-      new GameCacheRepository().updateCoverUrls([
-        { igdbId: 1, coverUrl: COVER },
-        { igdbId: 2, coverUrl: 'http://x/a.jpg' }
-      ])
-    ).rejects.toThrow(/Invalid cover url for 2/)
-    expect(execute).not.toHaveBeenCalled()
-  })
+      await expect(
+        new GameCacheRepository().updateCoverUrls([
+          { igdbId: 1, coverUrl: COVER },
+          { igdbId: 2, coverUrl }
+        ])
+      ).rejects.toThrow(/Invalid cover url for 2/)
+      expect(execute).not.toHaveBeenCalled()
+    }
+  )
 
   it('writes in one statement that only sets cover_url', async () => {
     const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(1)

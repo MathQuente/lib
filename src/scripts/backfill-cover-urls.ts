@@ -62,7 +62,7 @@ async function restore(
   const rows = parseCoverBackup(readFileSync(file, 'utf8'))
   const affected = await repo.restoreCoverUrls(rows, dryRun)
   console.log(
-    `${dryRun ? '[dry run] ' : ''}${rows.length} linhas no backup, ${affected} ${dryRun ? 'seriam restauradas' : 'restauradas'} (só onde a capa ainda é a gravada pelo backfill).`
+    `${dryRun ? '[dry run] ' : ''}${rows.length} linhas no backup, ${affected} ${dryRun ? 'seriam restauradas' : 'restauradas'} (só onde a capa ainda é a gravada pelo backfill). Com mais de um backup da mesma capa, restaure do mais novo para o mais antigo.`
   )
 }
 

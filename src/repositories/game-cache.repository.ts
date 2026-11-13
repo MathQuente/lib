@@ -1,4 +1,5 @@
 import { Prisma } from '../database/prisma-client'
+import { isValidCoverUrl } from '../utils/cover-url-change'
 import { prisma } from '../database/db'
 import { GameCacheSortBy, GameCacheSortOrder } from '../types/game-cache'
 import { GAME_STATUS } from '../utils/game-status'
@@ -447,7 +448,7 @@ export class GameCacheRepository {
     updates: Array<{ igdbId: number; coverUrl: string }>
   ): Promise<number> {
     if (updates.length === 0) return 0
-    const invalid = updates.find(u => !u.coverUrl.startsWith('https://'))
+    const invalid = updates.find(u => !isValidCoverUrl(u.coverUrl))
     if (invalid) {
       throw new Error(
         `Invalid cover url for ${invalid.igdbId}: ${invalid.coverUrl}`
