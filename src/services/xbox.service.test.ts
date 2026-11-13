@@ -589,6 +589,26 @@ describe('XboxService.runImport', () => {
     expect(onProgress).toHaveBeenLastCalledWith(100)
   })
 
+  it('reports progress by phase before the per-game loop, never going backwards', async () => {
+    const xboxApi = fakeXboxApi({
+      getTitleHistory: vi
+        .fn()
+        .mockResolvedValue([title({ titleId: '1', name: 'Halo 4' })]),
+      resolveProductIds: vi.fn().mockResolvedValue(new Map([['pfn-1', '9AAA']]))
+    })
+    mockExternal([['9AAA', 10]])
+    mockSearch()
+    const service = makeService(fakeUserRepository(), xboxApi)
+    const onProgress = vi.fn()
+
+    await service.runImport('user-1', onProgress)
+
+    const reported = onProgress.mock.calls.map(([percent]) => percent)
+    expect(reported.slice(0, 6)).toEqual([5, 15, 45, 55, 65, 70])
+    expect(reported.at(-1)).toBe(100)
+    expect(reported).toEqual([...reported].sort((a, b) => a - b))
+  })
+
   it('falls back to the IGDB name search for titles without a product match', async () => {
     const xboxApi = fakeXboxApi({
       getTitleHistory: vi
