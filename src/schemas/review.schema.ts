@@ -29,7 +29,7 @@ export const CommunityReviewsQueryStringSchema = z.object({
 })
 
 const CommunityReviewSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.uuid(),
   userName: z.string().nullable(),
   profilePicture: z.string().nullable(),
   rating: z.number().nullable(),

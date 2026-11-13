@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify'
 import { ClientError } from './errors/client-error'
-import { ZodError } from 'zod'
+import { z, ZodError } from 'zod'
 import { IGDBRequestError } from './errors/igdb-request-error'
 import { sendProblem } from './utils/problem'
 
@@ -19,9 +19,13 @@ const CLIENT_ERROR_MESSAGES: Record<number, string> = {
 
 export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
   if (error instanceof ZodError) {
+    const { fieldErrors, formErrors } = z.flattenError(error)
     return sendProblem(reply, 400, {
       message: 'Invalid input',
-      error: error.flatten().fieldErrors
+      error:
+        formErrors.length > 0
+          ? { ...fieldErrors, _form: formErrors }
+          : fieldErrors
     })
   }
 

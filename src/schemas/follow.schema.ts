@@ -1,11 +1,11 @@
 import z from 'zod'
 
 export const FollowParamsSchema = z.object({
-  userId: z.string().uuid()
+  userId: z.uuid()
 })
 
 const FollowSummarySchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   userName: z.string().nullable(),
   profilePicture: z.string().nullable()
 })

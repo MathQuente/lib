@@ -5,6 +5,7 @@ import {
   UpdateUserBodySchema,
   UserGameBodySchema,
   UserGamePlatformParamsSchema,
+  UserGameCompletedAtUpdateBodySchema,
   ConsoleEnumSchema,
   UserGamePlayedCountUpdateBodySchema
 } from './user.schema'
@@ -122,5 +123,19 @@ describe('DeleteUserResponseSchema', () => {
     expect(DeleteUserResponseSchema.safeParse(response('ana')).success).toBe(
       true
     )
+  })
+})
+
+describe('UserGameCompletedAtUpdateBodySchema', () => {
+  it.each([
+    ['2024-02-29', true],
+    ['2024-02-30', false],
+    ['2024-1-1', false],
+    ['2024-01-01T00:00:00Z', false],
+    ['', false]
+  ])('completedAt %j is accepted: %s', (completedAt, accepted) => {
+    expect(
+      UserGameCompletedAtUpdateBodySchema.safeParse({ completedAt }).success
+    ).toBe(accepted)
   })
 })

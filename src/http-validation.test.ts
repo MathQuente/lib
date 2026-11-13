@@ -12,6 +12,7 @@ import { GameQueryStringSchema } from './schemas/game.schema'
 import {
   DeleteUserResponseSchema,
   UpdateUserBodySchema,
+  UserGamePlatformUpdateBodySchema,
   UserParamsSchema
 } from './schemas/user.schema'
 
@@ -44,6 +45,9 @@ function buildApp(responseUserId: string = VALID_UUID) {
       email: request.body.email
     })
   )
+  app.patch('/platform-parse', async request => ({
+    patch: UserGamePlatformUpdateBodySchema.parse(request.body)
+  }))
   app.post('/register-parse', async request => ({
     email: RegisterBodySchema.parse(request.body).email
   }))
@@ -151,6 +155,42 @@ describe('HTTP validation with the real schemas', () => {
     })
     expect(ok.json()).toEqual({ email: 'ana@mail.com' })
   })
+
+  it('keeps the root-level refine message under _form when the controller parses the body', async () => {
+    const app = buildApp()
+    const patch = (payload: object) =>
+      app.inject({ method: 'PATCH', url: '/platform-parse', payload })
+
+    const empty = await patch({})
+    expect(empty.statusCode).toBe(400)
+    expect(empty.json().error).toEqual({
+      _form: ['Informe ao menos um campo para atualizar.']
+    })
+
+    const badField = await patch({ completions: -1 })
+    expect(badField.statusCode).toBe(400)
+    expect(Object.keys(badField.json().error)).toEqual(['completions'])
+
+    const ok = await patch({ completions: 1 })
+    expect(ok.statusCode).toBe(200)
+  })
+
+  it.each([
+    ['a valid date', '2024-02-29', 200],
+    ['an impossible date', '2024-02-30', 400],
+    ['a date without zero padding', '2024-1-1', 400]
+  ])(
+    'validates completedAt as an ISO date: %s',
+    async (_n, completedAt, status) => {
+      const response = await buildApp().inject({
+        method: 'PATCH',
+        url: '/platform-parse',
+        payload: { completedAt }
+      })
+
+      expect(response.statusCode).toBe(status)
+    }
+  )
 
   it('keeps the custom messages of the sign-up schema', () => {
     const messages = (body: object) => {

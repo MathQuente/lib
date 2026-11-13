@@ -5,7 +5,7 @@ export const StartImportResponseSchema = z.object({
 })
 
 export const DisconnectParamsSchema = z.object({
-  accountId: z.string().uuid()
+  accountId: z.uuid()
 })
 
 export const DisconnectResponseSchema = z.void()
@@ -18,7 +18,7 @@ export const ImportSectionResultSchema = z.object({
   suggestions: z.number().optional()
 })
 
-export function importStatusResponseSchema<TResult extends z.ZodTypeAny>(
+export function importStatusResponseSchema<TResult extends z.ZodType>(
   result: TResult
 ) {
   return z.object({
