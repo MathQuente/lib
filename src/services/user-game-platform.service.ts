@@ -359,15 +359,25 @@ export class UserGamePlatformService {
       hasNoCompletion
     const isEndless = isNew ? !!data.endless : !!userGame?.endless
     const trustsHeuristic = isNew || isUndecided || isPromotableInProgress
-    const countsAsCompletion =
-      !isEndless && (trustsHeuristic ? data.finished : data.confirmedFinished)
+    const endlessFinished =
+      isEndless && data.confirmedFinished && (isNew || isUndecided)
+    const countsAsCompletion = isEndless
+      ? endlessFinished
+      : trustsHeuristic
+        ? data.finished
+        : data.confirmedFinished
 
     if (!userGame) {
       await this.userRepository.addGameToUserLibrary({
         igdbId,
         userId,
-        statusIds: isEndless ? data.activityStatusId : data.statusId,
-        completedAt: isEndless ? undefined : data.completedAt,
+        statusIds: isEndless
+          ? endlessFinished
+            ? PLAYED_STATUS_ID
+            : data.activityStatusId
+          : data.statusId,
+        completedAt:
+          isEndless && !endlessFinished ? undefined : data.completedAt,
         endless: data.endless
       })
       await this.userRepository.createUserGameStats(userId, igdbId, 0)
@@ -375,12 +385,13 @@ export class UserGamePlatformService {
         accountHours: false
       })
     } else {
-      const targetStatusId =
-        !isEndless &&
-        (data.confirmedFinished ||
-          ((isUndecided || isPromotableInProgress) && data.finished))
-          ? PLAYED_STATUS_ID
-          : data.activityStatusId
+      const finishesTheGame = isEndless
+        ? endlessFinished
+        : data.confirmedFinished ||
+          ((isUndecided || isPromotableInProgress) && data.finished)
+      const targetStatusId = finishesTheGame
+        ? PLAYED_STATUS_ID
+        : data.activityStatusId
       if (
         (STATUS_RANK[targetStatusId] ?? 0) >
         (STATUS_RANK[userGame.userGamesStatusId] ?? 0)
@@ -409,14 +420,19 @@ export class UserGamePlatformService {
         ? legacyValues(userGame)
         : { completions: 0, completedAt: null }
 
+    const otherPlatformCounted =
+      isEndless &&
+      userGame.platforms.some(p => p !== existing && (p.completions ?? 0) > 0)
+    const countsHere = countsAsCompletion && !otherPlatformCounted
+
     const values: PlatformValues = {
       hoursPlayed: data.hoursPlayed,
-      completions: countsAsCompletion
+      completions: countsHere
         ? Math.max(base.completions ?? 0, 1)
         : (base.completions ?? 0),
       completedAt:
         base.completedAt ??
-        (countsAsCompletion ? (data.completedAt ?? new Date()) : null)
+        (countsHere ? (data.completedAt ?? new Date()) : null)
     }
 
     const accountHours: [AccountHours] | [] =
