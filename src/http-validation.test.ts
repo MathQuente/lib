@@ -11,6 +11,7 @@ import { RegisterBodySchema, LoginBodySchema } from './schemas/auth.schema'
 import { GameQueryStringSchema } from './schemas/game.schema'
 import {
   DeleteUserResponseSchema,
+  UpdateUserBodySchema,
   UserParamsSchema
 } from './schemas/user.schema'
 
@@ -46,6 +47,11 @@ function buildApp(responseUserId: string = VALID_UUID) {
   app.post('/register-parse', async request => ({
     email: RegisterBodySchema.parse(request.body).email
   }))
+  typed.patch(
+    '/profile',
+    { schema: { body: UpdateUserBodySchema } },
+    async request => request.body
+  )
   typed.get(
     '/games',
     { schema: { querystring: GameQueryStringSchema } },
@@ -161,6 +167,41 @@ describe('HTTP validation with the real schemas', () => {
     expect(messages({ ...validRegister, password: 'Password123' })).toContain(
       'Essa senha é muito comum. Escolha outra.'
     )
+  })
+
+  it.each([
+    ['not a URL', 'nao-e-url'],
+    ['a disallowed host', 'https://exemplo.com/a.png'],
+    ['plain http', 'http://res.cloudinary.com/a.png']
+  ])(
+    'rejects profilePicture with %s as 400, never a 500',
+    async (_n, profilePicture) => {
+      const response = await buildApp().inject({
+        method: 'PATCH',
+        url: '/profile',
+        payload: { profilePicture }
+      })
+
+      expect(response.statusCode).toBe(400)
+    }
+  )
+
+  it('accepts an allowed https image host and null', async () => {
+    const app = buildApp()
+
+    const ok = await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      payload: { profilePicture: 'https://res.cloudinary.com/x/a.png' }
+    })
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      payload: { profilePicture: null, userBanner: null }
+    })
+
+    expect(ok.statusCode).toBe(200)
+    expect(cleared.statusCode).toBe(200)
   })
 
   it('applies coerce, default and catch to the /games query', async () => {

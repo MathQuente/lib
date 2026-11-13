@@ -188,6 +188,7 @@ const ImageUrlSchema = z
   .max(2048)
   .url()
   .refine(value => {
+    if (!URL.canParse(value)) return false
     const url = new URL(value)
     return url.protocol === 'https:' && ALLOWED_IMAGE_HOSTS.has(url.hostname)
   }, 'URL de imagem não permitida.')
