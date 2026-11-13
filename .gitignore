@@ -13,5 +13,4 @@ src/scripts/*-spike.ts
 
 backfill-console-*.json
 
-# client do Prisma gerado por prisma generate (postinstall)
 src/generated

@@ -30,6 +30,13 @@ export default [
       'no-restricted-imports': [
         'error',
         {
+          patterns: [
+            {
+              group: ['@prisma/client/*'],
+              message:
+                'Import from src/database/prisma-client (the generated client lives in src/generated).'
+            }
+          ],
           paths: [
             {
               name: '@prisma/client',

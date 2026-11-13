@@ -1,2 +1,2 @@
 export { PrismaClient, Prisma } from '../generated/prisma/client'
-export { Console, Platform, Status } from '../generated/prisma/enums'
+export * from '../generated/prisma/enums'
