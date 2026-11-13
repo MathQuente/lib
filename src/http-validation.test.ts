@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import fastify from 'fastify'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import fastify, { FastifyInstance } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler,
@@ -16,8 +16,16 @@ import {
 
 const VALID_UUID = '7382946c-eee7-46bf-9788-b5613cf0d711'
 
+const apps: FastifyInstance[] = []
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await Promise.all(apps.splice(0).map(app => app.close()))
+})
+
 function buildApp(responseUserId: string = VALID_UUID) {
   const app = fastify()
+  apps.push(app)
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
   app.setErrorHandler(errorHandler)
@@ -71,8 +79,8 @@ const validRegister = {
   acceptedTerms: true
 }
 
-describe('validação HTTP com os schemas reais', () => {
-  it('normaliza o e-mail do cadastro (trim, minúsculas)', async () => {
+describe('HTTP validation with the real schemas', () => {
+  it('normalizes the sign-up email (trim, lowercase)', async () => {
     const response = await buildApp().inject({
       method: 'POST',
       url: '/register',
@@ -84,15 +92,15 @@ describe('validação HTTP com os schemas reais', () => {
   })
 
   it.each([
-    ['sem aceitar os termos', { ...validRegister, acceptedTerms: false }],
+    ['without accepting the terms', { ...validRegister, acceptedTerms: false }],
     [
-      'com acceptedTerms ausente',
+      'with acceptedTerms missing',
       { email: validRegister.email, password: validRegister.password }
     ],
-    ['com e-mail inválido', { ...validRegister, email: 'sem-arroba' }],
-    ['com senha comum', { ...validRegister, password: 'Password123' }]
+    ['with an invalid email', { ...validRegister, email: 'sem-arroba' }],
+    ['with a common password', { ...validRegister, password: 'Password123' }]
   ])(
-    'recusa o cadastro %s com 400 e sem detalhar o erro',
+    'rejects the sign-up %s with 400 and the generic message',
     async (_n, payload) => {
       const response = await buildApp().inject({
         method: 'POST',
@@ -108,7 +116,7 @@ describe('validação HTTP com os schemas reais', () => {
     }
   )
 
-  it('devolve as mensagens por campo quando o controller faz o parse (rotas de auth)', async () => {
+  it('returns per-field messages when the controller parses the body (auth routes)', async () => {
     const app = buildApp()
     const errorOf = async (payload: object) => {
       const response = await app.inject({
@@ -138,7 +146,7 @@ describe('validação HTTP com os schemas reais', () => {
     expect(ok.json()).toEqual({ email: 'ana@mail.com' })
   })
 
-  it('mantém as mensagens próprias do schema de cadastro', () => {
+  it('keeps the custom messages of the sign-up schema', () => {
     const messages = (body: object) => {
       const result = RegisterBodySchema.safeParse(body)
       return result.success ? [] : result.error.issues.map(i => i.message)
@@ -155,7 +163,7 @@ describe('validação HTTP com os schemas reais', () => {
     )
   })
 
-  it('aplica coerção, padrão e catch na query de /games', async () => {
+  it('applies coerce, default and catch to the /games query', async () => {
     const app = buildApp()
 
     const defaults = await app.inject({ url: '/games' })
@@ -186,7 +194,7 @@ describe('validação HTTP com os schemas reais', () => {
   })
 
   it.each([['limit=0'], ['limit=101'], ['pageIndex=-1'], ['limit=abc']])(
-    'recusa a query de /games com %s',
+    'rejects the /games query with %s',
     async query => {
       const response = await buildApp().inject({ url: `/games?${query}` })
       expect(response.statusCode).toBe(400)
@@ -194,7 +202,7 @@ describe('validação HTTP com os schemas reais', () => {
     }
   )
 
-  it('aceita um UUID v4 e recusa um id que não é UUID no parâmetro', async () => {
+  it('accepts a UUID v4 and rejects a non-UUID id in the param', async () => {
     const app = buildApp()
 
     const ok = await app.inject({ url: `/users/${VALID_UUID}` })
@@ -204,14 +212,22 @@ describe('validação HTTP com os schemas reais', () => {
     expect(bad.statusCode).toBe(400)
   })
 
-  it('a resposta passa pelo schema: remove campo extra e valida o uuid', async () => {
+  it('rejects a UUID with a non-RFC variant (stricter in zod 4)', async () => {
+    const response = await buildApp().inject({
+      url: '/users/7382946c-eee7-46bf-c788-b5613cf0d711'
+    })
+
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('runs the response through the schema: strips extra fields and validates the uuid', async () => {
     const ok = await buildApp().inject({ url: '/me' })
     expect(ok.statusCode).toBe(200)
     expect(ok.json()).toEqual({ user: { id: VALID_UUID, userName: 'ana' } })
     expect(ok.body).not.toContain('segredo')
   })
 
-  it('uma resposta com id inválido vira 500 sem vazar o conteúdo', async () => {
+  it('turns a response with an invalid id into a 500 without leaking the content', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await buildApp('id-invalido').inject({ url: '/me' })
