@@ -316,6 +316,33 @@ export class GameCacheRepository {
     return rows.map(r => r.igdbId)
   }
 
+  async findIdsWithUnknownCategoryAfter(
+    afterId: number,
+    limit: number
+  ): Promise<number[]> {
+    const rows = await prisma.gameCache.findMany({
+      where: { igdbId: { gt: afterId }, category: -1 },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true }
+    })
+    return rows.map(r => r.igdbId)
+  }
+
+  async updateCategories(updates: Array<{ igdbId: number; category: number }>) {
+    const known = updates.filter(u => u.category >= 0)
+    if (known.length === 0) return
+    const rows = JSON.stringify(
+      known.map(u => ({ id: u.igdbId, category: u.category }))
+    )
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET category = v.category
+      FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, category int)
+      WHERE gc.igdb_id = v.id
+    `)
+  }
+
   async updateGameModes(
     updates: Array<{ igdbId: number; gameModes: number[] }>
   ) {
