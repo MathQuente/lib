@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch --env-file .env src/index.ts",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate --generator client",
+    "db:generate": "prisma generate",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -32,6 +33,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24"
+  },
   "devDependencies": {
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.3",
@@ -71,11 +75,8 @@
     "zod": "^4.6.7"
   },
   "allowScripts": {
-    "@prisma/client@5.12.1": true,
-    "@prisma/engines@5.12.1": true,
     "@prisma/engines@5.0.0": true,
     "bcrypt@5.1.1": true,
-    "esbuild@0.28.2": true,
-    "prisma@5.12.1": true
+    "esbuild@0.28.2": true
   }
 }
