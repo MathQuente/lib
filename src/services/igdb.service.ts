@@ -453,6 +453,28 @@ export class IGDBService {
     return info
   }
 
+  static async getCoverUrlsByIds(
+    ids: number[]
+  ): Promise<Map<number, string | null>> {
+    const unique = [...new Set(ids)]
+    const covers = new Map<number, string | null>()
+
+    for (let i = 0; i < unique.length; i += this.EXTERNAL_GAMES_BATCH_SIZE) {
+      const chunk = unique.slice(i, i + this.EXTERNAL_GAMES_BATCH_SIZE)
+      const results = await this.request<
+        { id: number; cover?: { url?: string } }[]
+      >(
+        'games',
+        `where id = (${chunk.join(',')}); fields id,cover.url; limit ${chunk.length};`
+      )
+      for (const row of results) {
+        covers.set(row.id, this.formatCoverUrl(row.cover?.url))
+      }
+    }
+
+    return covers
+  }
+
   static async getTotalRatingCountsByIds(
     ids: number[]
   ): Promise<Map<number, number>> {

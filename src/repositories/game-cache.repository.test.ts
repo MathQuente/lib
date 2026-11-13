@@ -268,3 +268,86 @@ describe('GameCacheRepository.restoreReleaseDates', () => {
     expect(query).toHaveBeenCalledTimes(1)
   })
 })
+
+const COVER = 'https://images.igdb.com/igdb/image/upload/t_cover_big/cocv5r.jpg'
+
+describe('GameCacheRepository.updateCoverUrls', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('does not write an empty batch', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    expect(await new GameCacheRepository().updateCoverUrls([])).toBe(0)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'http://images.igdb.com/igdb/image/upload/t_cover_big/a.jpg',
+    'https://cdn.example.com/a.jpg',
+    'https:https://images.igdb.com/igdb/image/upload/t_cover_big/a.jpg'
+  ])(
+    'throws, without writing anything, when a url is not an IGDB https image (%s)',
+    async coverUrl => {
+      const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+      await expect(
+        new GameCacheRepository().updateCoverUrls([
+          { igdbId: 1, coverUrl: COVER },
+          { igdbId: 2, coverUrl }
+        ])
+      ).rejects.toThrow(/Invalid cover url for 2/)
+      expect(execute).not.toHaveBeenCalled()
+    }
+  )
+
+  it('writes in one statement that only sets cover_url', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(1)
+
+    const written = await new GameCacheRepository().updateCoverUrls([
+      { igdbId: 1, coverUrl: COVER }
+    ])
+
+    expect(written).toBe(1)
+    const text = sqlOf(execute).strings.join('?')
+    expect(text.match(/\bSET\b/g)).toHaveLength(1)
+    expect(text).toContain('SET cover_url = v.cover_url')
+    expect(text).toContain('IS DISTINCT FROM')
+    expect(JSON.parse(String(sqlOf(execute).values[0]))).toEqual([
+      { id: 1, cover_url: COVER }
+    ])
+  })
+})
+
+describe('GameCacheRepository.restoreCoverUrls', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const rows = [
+    { igdbId: 1, previous: 'https://images.igdb.com/a/old.jpg', next: COVER },
+    { igdbId: 2, previous: null, next: COVER }
+  ]
+
+  it('restores only rows still holding the cover the backfill wrote', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(2)
+
+    expect(await new GameCacheRepository().restoreCoverUrls(rows, false)).toBe(
+      2
+    )
+    const text = sqlOf(execute).strings.join('?')
+    expect(text).toContain('SET cover_url = v.previous')
+    expect(text).toContain('IS NOT DISTINCT FROM v.next')
+  })
+
+  it('counts without writing in a dry run', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+    vi.spyOn(prisma, '$queryRaw').mockResolvedValue([
+      { count: BigInt(1) }
+    ] as never)
+
+    expect(await new GameCacheRepository().restoreCoverUrls(rows, true)).toBe(1)
+    expect(execute).not.toHaveBeenCalled()
+  })
+})

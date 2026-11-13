@@ -13,5 +13,6 @@ src/scripts/*-spike.ts
 
 backfill-console-*.json
 backfill-release-dates-*.csv
+backfill-cover-urls-*.jsonl
 
 src/generated

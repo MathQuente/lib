@@ -1,11 +1,5 @@
 import 'dotenv/config'
-import {
-  closeSync,
-  fsyncSync,
-  openSync,
-  readFileSync,
-  writeSync
-} from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { prisma } from '../database/db'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
@@ -28,7 +22,8 @@ import {
   parseIntArg,
   parseStringArg,
   sleep,
-  withRetry
+  withRetry,
+  writeBackupFile
 } from './utils'
 
 const CONCURRENCY = 4
@@ -257,10 +252,7 @@ async function main() {
     previous: c.previous,
     next: c.next
   }))
-  const fd = openSync(backupFile, 'wx')
-  writeSync(fd, formatReleaseDateBackup(backupRows) + '\n')
-  fsyncSync(fd)
-  closeSync(fd)
+  writeBackupFile(backupFile, formatReleaseDateBackup(backupRows) + '\n')
   console.log(`\nBackup gravado: ${backupFile} (${backupRows.length} linhas).`)
 
   let written = 0

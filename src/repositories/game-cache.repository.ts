@@ -1,4 +1,5 @@
 import { Prisma } from '../database/prisma-client'
+import { isValidCoverUrl } from '../utils/cover-url-change'
 import { prisma } from '../database/db'
 import { GameCacheSortBy, GameCacheSortOrder } from '../types/game-cache'
 import { GAME_STATUS } from '../utils/game-status'
@@ -424,6 +425,71 @@ export class GameCacheRepository {
       FROM jsonb_to_recordset(${json}::jsonb) AS v(id int, previous int, next int)
       WHERE gc.igdb_id = v.id
         AND gc.release_date IS NOT DISTINCT FROM v.next
+    `)
+  }
+
+  async findCoverCandidatesAfter(
+    afterId: number,
+    limit: number,
+    sinceEpoch: number | null
+  ): Promise<Array<{ igdbId: number; name: string; coverUrl: string | null }>> {
+    return prisma.gameCache.findMany({
+      where: {
+        igdbId: { gt: afterId },
+        ...(sinceEpoch === null ? {} : { releaseDate: { gte: sinceEpoch } })
+      },
+      orderBy: { igdbId: 'asc' },
+      take: limit,
+      select: { igdbId: true, name: true, coverUrl: true }
+    })
+  }
+
+  async updateCoverUrls(
+    updates: Array<{ igdbId: number; coverUrl: string }>
+  ): Promise<number> {
+    if (updates.length === 0) return 0
+    const invalid = updates.find(u => !isValidCoverUrl(u.coverUrl))
+    if (invalid) {
+      throw new Error(
+        `Invalid cover url for ${invalid.igdbId}: ${invalid.coverUrl}`
+      )
+    }
+    const rows = JSON.stringify(
+      updates.map(u => ({ id: u.igdbId, cover_url: u.coverUrl }))
+    )
+    return prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET cover_url = v.cover_url
+      FROM jsonb_to_recordset(${rows}::jsonb) AS v(id int, cover_url text)
+      WHERE gc.igdb_id = v.id
+        AND gc.cover_url IS DISTINCT FROM v.cover_url
+    `)
+  }
+
+  async restoreCoverUrls(
+    rows: Array<{ igdbId: number; previous: string | null; next: string }>,
+    dryRun: boolean
+  ): Promise<number> {
+    if (rows.length === 0) return 0
+    const json = JSON.stringify(
+      rows.map(r => ({ id: r.igdbId, previous: r.previous, next: r.next }))
+    )
+    if (dryRun) {
+      const counted = await prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+        SELECT count(*) AS count
+        FROM games_cache gc
+        JOIN jsonb_to_recordset(${json}::jsonb) AS v(id int, previous text, next text)
+          ON gc.igdb_id = v.id
+        WHERE gc.cover_url IS NOT DISTINCT FROM v.next
+      `)
+      return Number(counted[0]?.count ?? 0)
+    }
+    return prisma.$executeRaw(Prisma.sql`
+      UPDATE games_cache gc
+      SET cover_url = v.previous
+      FROM jsonb_to_recordset(${json}::jsonb) AS v(id int, previous text, next text)
+      WHERE gc.igdb_id = v.id
+        AND gc.cover_url IS NOT DISTINCT FROM v.next
     `)
   }
 
