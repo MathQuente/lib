@@ -70,7 +70,7 @@ export class GameService {
       rating,
       developers: developers && developers.length > 0 ? developers : undefined,
       publishers: publishers && publishers.length > 0 ? publishers : undefined,
-      category: game.game_type ?? game.category ?? -1,
+      category: IGDBService.getGameType(game),
       parentGameId,
       parentGame,
       releaseDates:

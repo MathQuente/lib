@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { prisma } from '../database/db'
 import {
+  GameCacheRepository,
   catalogVisibilitySql,
   catalogVisibilityWhere,
   escapeLike,
@@ -120,5 +122,46 @@ describe('relevanceOrderSql', () => {
     const fragment = relevanceOrderSql('a_b')
 
     expect(fragment.values).toEqual(['a_b', 'a\\_b%', '% a\\_b%'])
+  })
+})
+
+describe('GameCacheRepository.updateCategories', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['an empty batch', []],
+    ['only unknown categories', [{ igdbId: 1, category: -1 }]],
+    [
+      'a null or non-integer category',
+      [
+        { igdbId: 1, category: null as unknown as number },
+        { igdbId: 2, category: 1.5 }
+      ]
+    ]
+  ])('does not write for %s', async (_label, updates) => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    await new GameCacheRepository().updateCategories(updates)
+
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('writes only the known categories, including 0, in one statement', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(2)
+
+    await new GameCacheRepository().updateCategories([
+      { igdbId: 1, category: 8 },
+      { igdbId: 2, category: -1 },
+      { igdbId: 3, category: 0 }
+    ])
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    const [sql] = execute.mock.calls[0] as unknown as [{ values: unknown[] }]
+    expect(JSON.parse(String(sql.values[0]))).toEqual([
+      { id: 1, category: 8 },
+      { id: 3, category: 0 }
+    ])
   })
 })

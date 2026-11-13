@@ -545,6 +545,120 @@ describe('IGDBService lookups that feed games_cache', () => {
   })
 })
 
+describe('IGDBService game type (replaces the retired category)', () => {
+  it.each([
+    ['game_type 8', { game_type: 8 }, 8],
+    ['game_type 8 over a stale category 3', { game_type: 8, category: 3 }, 8],
+    ['only the old category 3', { category: 3 }, 3],
+    ['game_type 0 (main game), not treated as missing', { game_type: 0 }, 0],
+    ['neither field', {}, -1]
+  ])('caches %s as category %i', (_label, fields, expected) => {
+    const input = IGDBService.toGameCacheInput({
+      id: 1,
+      name: 'A',
+      ...fields
+    } as IGDBGame)
+
+    expect(input.category).toBe(expected)
+    expect(IGDBService.getGameType(fields)).toBe(expected)
+  })
+
+  it('maps game_type, category and parent in getCategoryAndParentByIds', async () => {
+    const request = mockRequest([
+      { id: 1, game_type: 8, parent_game: 5 },
+      { id: 2, category: 3 },
+      { id: 3 },
+      { id: 4, game_type: 0 }
+    ])
+
+    const result = await IGDBService.getCategoryAndParentByIds([1, 2, 3, 4])
+
+    expect(result.get(1)).toEqual({ category: 8, parentGameId: 5 })
+    expect(result.get(2)).toEqual({ category: 3, parentGameId: null })
+    expect(result.get(3)).toEqual({ category: -1, parentGameId: null })
+    expect(result.get(4)).toEqual({ category: 0, parentGameId: null })
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringContaining('game_type')
+    )
+  })
+
+  it.each([
+    ['getGamesByIds', () => IGDBService.getGamesByIds([1])],
+    ['searchGamesByName', () => IGDBService.searchGamesByName('zelda', [6])],
+    ['fetchForSync', () => IGDBService.fetchForSync(0, 500)],
+    [
+      'fetchMissingReleasedContent',
+      () => IGDBService.fetchMissingReleasedContent(0, 1000, 500)
+    ],
+    ['getRecentlyReleasedGames', () => IGDBService.getRecentlyReleasedGames()],
+    ['getComingSoonGames', () => IGDBService.getComingSoonGames(20, 0)]
+  ])('%s requests game_type in the fields', async (_name, call) => {
+    const request = mockRequest([])
+
+    await call()
+
+    const bodies = request.mock.calls.map(([, body]) => String(body))
+    expect(bodies.some(body => /fields [^;]*game_type/.test(body))).toBe(true)
+  })
+
+  it('getSimilarGames requests game_type for the similar games', async () => {
+    const request = vi
+      .spyOn(IGDBService as unknown as { request: RequestFn }, 'request')
+      .mockResolvedValueOnce([{ similar_games: [1, 2] }])
+      .mockResolvedValueOnce([])
+
+    await IGDBService.getSimilarGames(5)
+
+    expect(request).toHaveBeenLastCalledWith(
+      'games',
+      expect.stringMatching(/fields [^;]*game_type/)
+    )
+  })
+})
+
+describe('IGDBService.getGameTypesByIds with unusable values', () => {
+  it('ignores a null or missing game_type instead of reporting it', async () => {
+    mockRequest([
+      { id: 1, game_type: 8 },
+      { id: 2, game_type: null },
+      { id: 3 },
+      { id: 4, game_type: 0 }
+    ])
+
+    const result = await IGDBService.getGameTypesByIds([1, 2, 3, 4])
+
+    expect([...result.entries()]).toEqual([
+      [1, 8],
+      [4, 0]
+    ])
+  })
+})
+
+describe('IGDBService detail queries request game_type', () => {
+  it('getGameById asks for game_type', async () => {
+    const request = mockRequest([])
+
+    await IGDBService.getGameById(1)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields [^;]*game_type/)
+    )
+  })
+
+  it('getRelatedGames asks for game_type', async () => {
+    const request = mockRequest([])
+
+    await IGDBService.getRelatedGames(1)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields [^;]*game_type/)
+    )
+  })
+})
+
 describe('IGDBService.getRelatedGames', () => {
   it('drops bundles, rumored games and cancelled games without a date', async () => {
     vi.spyOn(

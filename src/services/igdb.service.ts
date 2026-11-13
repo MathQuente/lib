@@ -117,6 +117,10 @@ export class IGDBService {
       : (g.parent_game ?? null)
   }
 
+  static getGameType(g: Pick<IGDBGame, 'game_type' | 'category'>): number {
+    return g.game_type ?? g.category ?? -1
+  }
+
   static toGameCacheInput(g: IGDBGame) {
     return {
       igdbId: g.id,
@@ -131,7 +135,7 @@ export class IGDBService {
           : undefined,
       hypes: g.hypes ?? 0,
       totalRatingCount: g.total_rating_count ?? 0,
-      category: g.category ?? -1,
+      category: this.getGameType(g),
       parentGameId: this.getParentGameId(g),
       gameModes: this.getGameModeIds(g),
       gameStatus: g.game_status ?? null
@@ -226,7 +230,7 @@ export class IGDBService {
     if (ids.length === 0) return []
     return this.request(
       'games',
-      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,themes.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,game_status; limit ${Math.min(ids.length, 500)};`
+      `where id = (${ids.join(',')}); fields id,name,summary,cover.url,genres.name,themes.name,platforms.name,game_modes.name,first_release_date,category,game_type,parent_game,rating,follows,game_status; limit ${Math.min(ids.length, 500)};`
     )
   }
 
@@ -302,7 +306,7 @@ export class IGDBService {
     if (!term) return []
     return this.request(
       'games',
-      `search "${term}"; fields id,name,alternative_names.name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,parent_game,rating,follows,total_rating_count,game_status; where platforms = (${platformIds.join(',')}); limit 10;`
+      `search "${term}"; fields id,name,alternative_names.name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,category,game_type,parent_game,rating,follows,total_rating_count,game_status; where platforms = (${platformIds.join(',')}); limit 10;`
     )
   }
 
@@ -320,7 +324,7 @@ export class IGDBService {
     const cutoff = this.getReleaseCutoffEpoch()
     return this.request<IGDBGame[]>(
       'games',
-      `fields id,name,cover.url,rating,platforms.name,first_release_date,category,parent_game; where first_release_date < ${cutoff} & first_release_date != null & cover != null & ${EXCLUDE_EROTIC} & total_rating_count >= ${this.MIN_TOTAL_RATING_COUNT}; sort first_release_date desc; limit ${limit};`
+      `fields id,name,cover.url,rating,platforms.name,first_release_date,category,game_type,parent_game; where first_release_date < ${cutoff} & first_release_date != null & cover != null & ${EXCLUDE_EROTIC} & total_rating_count >= ${this.MIN_TOTAL_RATING_COUNT}; sort first_release_date desc; limit ${limit};`
     )
   }
 
@@ -330,7 +334,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & cover != null & ${EXCLUDE_EROTIC}; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,game_type,parent_game,game_status; where id > ${lastId} & cover != null & ${EXCLUDE_EROTIC}; sort id asc; limit ${limit};`
     )
   }
 
@@ -341,7 +345,7 @@ export class IGDBService {
   ): Promise<IGDBGame[]> {
     return this.request(
       'games',
-      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,parent_game,game_status; where id > ${lastId} & id <= ${maxId} & cover != null & ${EXCLUDE_EROTIC} & parent_game != null; sort id asc; limit ${limit};`
+      `fields id,name,summary,cover.url,genres.name,platforms.name,game_modes.name,first_release_date,hypes,total_rating_count,category,game_type,parent_game,game_status; where id > ${lastId} & id <= ${maxId} & cover != null & ${EXCLUDE_EROTIC} & parent_game != null; sort id asc; limit ${limit};`
     )
   }
 
@@ -402,7 +406,9 @@ export class IGDBService {
         `where id = (${chunk.join(',')}); fields id,game_type; limit ${chunk.length};`
       )
       for (const row of results) {
-        if (row.game_type !== undefined) typesByGame.set(row.id, row.game_type)
+        if (typeof row.game_type === 'number') {
+          typesByGame.set(row.id, row.game_type)
+        }
       }
     }
 
@@ -449,15 +455,20 @@ export class IGDBService {
   ): Promise<Map<number, { category: number; parentGameId: number | null }>> {
     if (ids.length === 0) return new Map()
     const results = await this.request<
-      { id: number; category?: number; parent_game?: number }[]
+      {
+        id: number
+        category?: number
+        game_type?: number
+        parent_game?: number
+      }[]
     >(
       'games',
-      `where id = (${ids.join(',')}); fields id,category,parent_game; limit ${Math.min(ids.length, 500)};`
+      `where id = (${ids.join(',')}); fields id,category,game_type,parent_game; limit ${Math.min(ids.length, 500)};`
     )
     return new Map(
       results.map(r => [
         r.id,
-        { category: r.category ?? -1, parentGameId: r.parent_game ?? null }
+        { category: this.getGameType(r), parentGameId: r.parent_game ?? null }
       ])
     )
   }
@@ -471,7 +482,7 @@ export class IGDBService {
     const [games, rawTotal] = await Promise.all([
       this.request<IGDBGame[]>(
         'games',
-        `fields id,name,cover.url,platforms.name,first_release_date,category,parent_game; ${where}; sort first_release_date asc; limit ${limit}; offset ${pageIndex * limit};`
+        `fields id,name,cover.url,platforms.name,first_release_date,category,game_type,parent_game; ${where}; sort first_release_date asc; limit ${limit}; offset ${pageIndex * limit};`
       ),
       this.countRequest('games', `${where};`)
     ])
@@ -489,7 +500,7 @@ export class IGDBService {
 
     return this.request(
       'games',
-      `where id = (${similarIds.slice(0, 12).join(',')}); fields id,name,cover.url,rating,platforms.name,category,parent_game,first_release_date,game_status; limit 12;`
+      `where id = (${similarIds.slice(0, 12).join(',')}); fields id,name,cover.url,rating,platforms.name,category,game_type,parent_game,first_release_date,game_status; limit 12;`
     )
   }
 }
