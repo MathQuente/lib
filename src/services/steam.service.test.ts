@@ -1065,7 +1065,7 @@ describe('SteamService.runImport', () => {
     })
   })
 
-  it('never trusts achievements for a game with no single-player mode at all', async () => {
+  it('only checks for a full set of achievements, never the weak signals, on an endless game with no single-player mode', async () => {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
       findUserGame: vi.fn().mockResolvedValue(null),
@@ -1092,10 +1092,14 @@ describe('SteamService.runImport', () => {
         }
       }
     ] as never)
-    const getPlayerAchievements = vi.spyOn(
-      SteamApiService,
-      'getPlayerAchievements'
-    )
+    const getPlayerAchievements = vi
+      .spyOn(SteamApiService, 'getPlayerAchievements')
+      .mockResolvedValue({
+        achieved: 40,
+        total: 50,
+        achievedApiNames: ['ACH_1'],
+        unlockTimesByName: new Map()
+      })
     const getGlobalAchievementPercentages = vi.spyOn(
       SteamApiService,
       'getGlobalAchievementPercentages'
@@ -1109,7 +1113,7 @@ describe('SteamService.runImport', () => {
 
     await service.runImport('user-1')
 
-    expect(getPlayerAchievements).not.toHaveBeenCalled()
+    expect(getPlayerAchievements).toHaveBeenCalledTimes(1)
     expect(getGlobalAchievementPercentages).not.toHaveBeenCalled()
 
     expect(userRepository.addGameToUserLibrary).toHaveBeenCalledWith({
@@ -1829,5 +1833,152 @@ describe('SteamService.runImport with several accounts', () => {
     expect(wishes).toHaveLength(1)
     expect(wishes[0][0]).toMatchObject({ igdbId: 20 })
     expect(result.wishlist).toMatchObject({ imported: 1, skipped: 1 })
+  })
+})
+
+describe('SteamService.runImport: endless games that cannot infer a completion', () => {
+  const LAST_UNLOCK = 1_762_628_157
+  const MMO_MODES = [
+    { id: 1, name: 'Single player' },
+    { id: 2, name: 'Multiplayer' },
+    { id: 3, name: 'Co-operative' },
+    { id: 5, name: 'Massively Multiplayer Online (MMO)' }
+  ]
+
+  async function importOne({
+    gameModes = MMO_MODES,
+    genres = [{ name: 'Sport' }],
+    achieved,
+    total
+  }: {
+    gameModes?: { id: number; name: string }[]
+    genres?: { name: string }[]
+    achieved: number
+    total: number
+  }) {
+    const userRepository = fakeUserRepository({
+      findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      findUserGame: vi.fn().mockResolvedValue(null),
+      addGameToUserLibrary: vi.fn().mockResolvedValue({ igdbId: 52826 }),
+      createUserGameStats: vi.fn().mockResolvedValue({ completions: 0 }),
+      upsertUserGameHours: vi.fn().mockResolvedValue({ hoursPlayed: 1 })
+    })
+    vi.spyOn(SteamApiService, 'getOwnedGames').mockResolvedValue([
+      {
+        appid: 3354750,
+        name: 'skate.',
+        playtime_forever: 7369,
+        rtime_last_played: 0
+      }
+    ])
+    vi.spyOn(IGDBService, 'getGamesBySteamAppIds').mockResolvedValue([
+      {
+        appId: 3354750,
+        game: { id: 52826, name: 'skate.', genres, game_modes: gameModes }
+      }
+    ] as never)
+    const names = Array.from({ length: total }, (_, i) => `ACH_${i}`)
+    const achievements = vi
+      .spyOn(SteamApiService, 'getPlayerAchievements')
+      .mockResolvedValue({
+        achieved,
+        total,
+        achievedApiNames: names.slice(0, achieved),
+        unlockTimesByName: new Map(
+          names
+            .slice(0, achieved)
+            .map((n, i) => [n, LAST_UNLOCK - (achieved - 1 - i) * 3600])
+        )
+      })
+    const percentages = vi
+      .spyOn(SteamApiService, 'getGlobalAchievementPercentages')
+      .mockResolvedValue(null)
+    const schema = vi
+      .spyOn(SteamApiService, 'getAchievementSchema')
+      .mockResolvedValue(null)
+    const communityTexts = vi
+      .spyOn(SteamApiService, 'getUnlockedAchievementTexts')
+      .mockResolvedValue(null)
+    vi.spyOn(IGDBService, 'getTimeToBeatByGameIds').mockResolvedValue(new Map())
+
+    const service = new SteamService(
+      userRepository,
+      fakeGameCacheService(),
+      platformServiceFor(userRepository)
+    )
+    await service.runImport('user-1')
+
+    return {
+      addGame: userRepository.addGameToUserLibrary as ReturnType<typeof vi.fn>,
+      achievements,
+      percentages,
+      schema,
+      communityTexts
+    }
+  }
+
+  it('imports an MMO with every achievement unlocked as PLAYED with one completion and the last unlock date', async () => {
+    const { addGame } = await importOne({ achieved: 21, total: 21 })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({
+        igdbId: 52826,
+        statusIds: 1,
+        endless: true,
+        completedAt: new Date(LAST_UNLOCK * 1000)
+      })
+    )
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-52826',
+      'STEAM',
+      'PC',
+      expect.objectContaining({
+        completions: 1,
+        completedAt: new Date(LAST_UNLOCK * 1000)
+      }),
+      expect.objectContaining({ accountId: 'steam-acc-1' })
+    )
+  })
+
+  it('fetches only the player achievements for it, not the schema, the global percentages or the community texts', async () => {
+    const { achievements, percentages, schema, communityTexts } =
+      await importOne({ achieved: 21, total: 21 })
+
+    expect(achievements).toHaveBeenCalledTimes(1)
+    expect(percentages).not.toHaveBeenCalled()
+    expect(schema).not.toHaveBeenCalled()
+    expect(communityTexts).not.toHaveBeenCalled()
+  })
+
+  it('keeps an MMO with achievements still locked out of PLAYED, with no completion', async () => {
+    const { addGame } = await importOne({ achieved: 20, total: 21 })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 52826, statusIds: 4, endless: true })
+    )
+    expect(lastPlatformRepository.savePlatform).toHaveBeenCalledWith(
+      'ug-52826',
+      'STEAM',
+      'PC',
+      expect.objectContaining({ completions: 0, completedAt: null }),
+      expect.objectContaining({ accountId: 'steam-acc-1' })
+    )
+  })
+
+  it('does not ask Steam for achievements of a game that can not infer a completion and is not endless', async () => {
+    const { achievements, addGame } = await importOne({
+      gameModes: [
+        { id: 2, name: 'Multiplayer' },
+        { id: 3, name: 'Co-operative' }
+      ],
+      genres: [{ name: 'Shooter' }],
+      achieved: 21,
+      total: 21
+    })
+
+    expect(achievements).not.toHaveBeenCalled()
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 52826, statusIds: 4 })
+    )
   })
 })

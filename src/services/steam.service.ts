@@ -430,7 +430,19 @@ export class SteamService {
       ACHIEVEMENT_CHECK_CONCURRENCY,
       async ({ item, igdbGame }) => {
         if (item.playtime_forever <= 0) return null
-        if (!canInferCompletion(igdbGame)) return null
+        if (!canInferCompletion(igdbGame)) {
+          if (!IGDBService.suggestsEndlessForGame(igdbGame)) return null
+          const achievements = await SteamApiService.getPlayerAchievements(
+            steamId,
+            item.appid
+          )
+          return {
+            achievements,
+            globalPercentages: null,
+            schema: null,
+            communityTexts: null
+          }
+        }
 
         const [achievements, globalPercentages, schema] = await Promise.all([
           SteamApiService.getPlayerAchievements(steamId, item.appid),
