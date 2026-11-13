@@ -764,7 +764,7 @@ describe('UserGamePlatformService.importPlatform', () => {
       }
     )
 
-    it('does not promote an existing endless game in BACKLOG on weak signals only', async () => {
+    it('moves an existing endless game in BACKLOG to the activity status, never to PLAYED, on weak signals only', async () => {
       const { service, platformRepository, userRepository } = setup(
         userGame({
           statusId: 4,
