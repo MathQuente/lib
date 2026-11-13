@@ -118,7 +118,7 @@ export class SteamApiService {
   static async getOwnedGames(
     steamId: string
   ): Promise<SteamOwnedGame[] | null> {
-    const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${this.getApiKey()}&steamid=${steamId}&include_appinfo=1&format=json`
+    const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${this.getApiKey()}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1&format=json`
     let response: Response
     try {
       response = await fetchWithTimeout(url)

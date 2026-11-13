@@ -303,6 +303,35 @@ describe('SteamApiService.getOwnedGames', () => {
     expect(await SteamApiService.getOwnedGames('1')).toEqual(games)
   })
 
+  it('asks Steam to include the free-to-play games the account has played', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(answer(200, { response: { games: [] } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await SteamApiService.getOwnedGames('76561198000000000')
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.searchParams.get('include_played_free_games')).toBe('1')
+    expect(url.searchParams.get('include_appinfo')).toBe('1')
+    expect(url.searchParams.get('steamid')).toBe('76561198000000000')
+  })
+
+  it('returns free-to-play games along with the paid ones', async () => {
+    vi.stubEnv('STEAM_API_KEY', 'key')
+    const games = [
+      { appid: 1, name: 'Paid', playtime_forever: 10 },
+      { appid: 230410, name: 'Warframe', playtime_forever: 4200 }
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(answer(200, { response: { games } }))
+    )
+
+    expect(await SteamApiService.getOwnedGames('1')).toEqual(games)
+  })
+
   it('returns null when the profile is private (200 without games)', async () => {
     vi.stubEnv('STEAM_API_KEY', 'key')
     vi.stubGlobal(
