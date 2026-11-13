@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Console } from '@prisma/client'
+import { Console } from '../database/prisma-client'
 import { BackfillRow, BackfillUpdate } from './console-inference'
 import { runConsoleBackfill } from './console-backfill-run'
 

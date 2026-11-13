@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { AccountLimitError } from '../errors/client-error'
 import { linkPlatformAccount } from './platform-account-link'
 

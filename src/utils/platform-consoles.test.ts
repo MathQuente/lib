@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Console, Platform } from '@prisma/client'
+import { Console, Platform } from '../database/prisma-client'
 import { CONSOLES_BY_PLATFORM, isConsoleAllowed } from './platform-consoles'
 
 describe('CONSOLES_BY_PLATFORM', () => {

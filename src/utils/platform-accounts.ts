@@ -1,4 +1,4 @@
-import { Platform } from '@prisma/client'
+import { Platform } from '../database/prisma-client'
 
 export const MAX_ACCOUNTS_PER_PLATFORM = 2
 

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { UserService } from './users.service'
 import { IGDBService } from './igdb.service'

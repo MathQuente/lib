@@ -1,4 +1,4 @@
-import { Console, Platform, Prisma, Status } from '@prisma/client'
+import { Console, Platform, Prisma, Status } from '../database/prisma-client'
 import { prisma } from '../database/db'
 import { ClientError } from '../errors/client-error'
 import { AddGameDTO, UpdateUserDTO } from '../dtos/user.dto'

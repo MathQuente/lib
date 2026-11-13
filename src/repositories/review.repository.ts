@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { prisma } from '../database/db'
 import { CommunityReviewRow } from '../types/review'
 

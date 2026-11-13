@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { PsnService } from './psn.service'
 import {
   PsnApiError,

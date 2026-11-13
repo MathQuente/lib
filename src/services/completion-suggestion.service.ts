@@ -1,4 +1,4 @@
-import { Platform } from '@prisma/client'
+import { Platform } from '../database/prisma-client'
 import { ClientError } from '../errors/client-error'
 import {
   CompletionSuggestionRepository,

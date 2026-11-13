@@ -1,4 +1,4 @@
-import { Status } from '@prisma/client'
+import { Status } from '../database/prisma-client'
 
 export type UserGameSortBy =
   | 'gameName'

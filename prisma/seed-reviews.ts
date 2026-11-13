@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
-import { Console, Platform } from '@prisma/client'
+import { Console, Platform } from '../src/database/prisma-client'
 import { prisma } from '../src/database/db'
 import { IGDBService } from '../src/services/igdb.service'
 import { getSeedPassword } from '../src/utils/seed-password'

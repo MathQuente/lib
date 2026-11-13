@@ -1,4 +1,4 @@
-import { Platform, Prisma } from '@prisma/client'
+import { Platform, Prisma } from '../database/prisma-client'
 import { prisma } from '../database/db'
 import { isUniqueViolation } from '../utils/prisma-errors'
 

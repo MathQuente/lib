@@ -1,4 +1,4 @@
-import { Console, Platform, Prisma } from '@prisma/client'
+import { Console, Platform, Prisma } from '../database/prisma-client'
 import { prisma } from '../database/db'
 
 export interface PlatformValues {

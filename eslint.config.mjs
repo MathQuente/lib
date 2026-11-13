@@ -4,7 +4,13 @@ import eslintConfigPrettier from 'eslint-config-prettier'
 
 export default [
   {
-    ignores: ['node_modules', 'dist', 'coverage', 'prisma/dbml']
+    ignores: [
+      'node_modules',
+      'dist',
+      'coverage',
+      'prisma/dbml',
+      'src/generated'
+    ]
   },
   {
     files: ['**/*.ts'],
@@ -20,7 +26,26 @@ export default [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'error'
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@prisma/client/*'],
+              message:
+                'Import from src/database/prisma-client (the generated client lives in src/generated).'
+            }
+          ],
+          paths: [
+            {
+              name: '@prisma/client',
+              message:
+                'Import from src/database/prisma-client (the generated client lives in src/generated).'
+            }
+          ]
+        }
+      ]
     }
   },
   eslintConfigPrettier

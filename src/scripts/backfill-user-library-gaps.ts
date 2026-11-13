@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '../database/prisma-client'
 import { prisma } from '../database/db'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
