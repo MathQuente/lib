@@ -14,3 +14,17 @@ export function parseIntArg(flag: string): number | undefined {
   }
   return value
 }
+
+const RETRY_ATTEMPTS = 5
+const RETRY_DELAY_MS = 2000
+
+export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      if (attempt >= RETRY_ATTEMPTS) throw err
+      await sleep(RETRY_DELAY_MS * attempt)
+    }
+  }
+}

@@ -1,28 +1,12 @@
 import 'dotenv/config'
 import { prisma } from '../database/db'
-import { IGDBRequestError } from '../errors/igdb-request-error'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
-import { BATCH_SIZE, parseIntArg, sleep } from './utils'
+import { BATCH_SIZE, parseIntArg, sleep, withRetry } from './utils'
 
 const CONCURRENCY = 4
 const MIN_ROUND_MS = 1000
-const MAX_ATTEMPTS = 5
-const RETRY_DELAY_MS = 2000
-
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await fn()
-    } catch (err) {
-      if (!(err instanceof IGDBRequestError) || attempt >= MAX_ATTEMPTS) {
-        throw err
-      }
-      await sleep(RETRY_DELAY_MS * attempt)
-    }
-  }
-}
 
 async function main() {
   const repo = new GameCacheRepository()

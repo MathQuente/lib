@@ -330,7 +330,9 @@ export class GameCacheRepository {
   }
 
   async updateCategories(updates: Array<{ igdbId: number; category: number }>) {
-    const known = updates.filter(u => u.category >= 0)
+    const known = updates.filter(
+      u => Number.isInteger(u.category) && u.category >= 0
+    )
     if (known.length === 0) return
     const rows = JSON.stringify(
       known.map(u => ({ id: u.igdbId, category: u.category }))

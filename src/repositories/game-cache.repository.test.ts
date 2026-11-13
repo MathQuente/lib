@@ -132,7 +132,14 @@ describe('GameCacheRepository.updateCategories', () => {
 
   it.each([
     ['an empty batch', []],
-    ['only unknown categories', [{ igdbId: 1, category: -1 }]]
+    ['only unknown categories', [{ igdbId: 1, category: -1 }]],
+    [
+      'a null or non-integer category',
+      [
+        { igdbId: 1, category: null as unknown as number },
+        { igdbId: 2, category: 1.5 }
+      ]
+    ]
   ])('does not write for %s', async (_label, updates) => {
     const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
 

@@ -617,6 +617,48 @@ describe('IGDBService game type (replaces the retired category)', () => {
   })
 })
 
+describe('IGDBService.getGameTypesByIds with unusable values', () => {
+  it('ignores a null or missing game_type instead of reporting it', async () => {
+    mockRequest([
+      { id: 1, game_type: 8 },
+      { id: 2, game_type: null },
+      { id: 3 },
+      { id: 4, game_type: 0 }
+    ])
+
+    const result = await IGDBService.getGameTypesByIds([1, 2, 3, 4])
+
+    expect([...result.entries()]).toEqual([
+      [1, 8],
+      [4, 0]
+    ])
+  })
+})
+
+describe('IGDBService detail queries request game_type', () => {
+  it('getGameById asks for game_type', async () => {
+    const request = mockRequest([])
+
+    await IGDBService.getGameById(1)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields [^;]*game_type/)
+    )
+  })
+
+  it('getRelatedGames asks for game_type', async () => {
+    const request = mockRequest([])
+
+    await IGDBService.getRelatedGames(1)
+
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields [^;]*game_type/)
+    )
+  })
+})
+
 describe('IGDBService.getRelatedGames', () => {
   it('drops bundles, rumored games and cancelled games without a date', async () => {
     vi.spyOn(

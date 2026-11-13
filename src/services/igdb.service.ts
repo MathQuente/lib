@@ -406,7 +406,9 @@ export class IGDBService {
         `where id = (${chunk.join(',')}); fields id,game_type; limit ${chunk.length};`
       )
       for (const row of results) {
-        if (row.game_type !== undefined) typesByGame.set(row.id, row.game_type)
+        if (typeof row.game_type === 'number') {
+          typesByGame.set(row.id, row.game_type)
+        }
       }
     }
 
