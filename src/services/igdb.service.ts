@@ -110,6 +110,7 @@ export class IGDBService {
   }
 
   static readonly INT4_MAX = 2_147_483_647
+  static readonly INT4_MIN = -2_147_483_648
 
   static getParentGameId(g: IGDBGame): number | null {
     return typeof g.parent_game === 'object'
@@ -118,7 +119,10 @@ export class IGDBService {
   }
 
   static toCacheReleaseDate(epoch: number | null | undefined): number | null {
-    return typeof epoch === 'number' && epoch !== 0 && epoch <= this.INT4_MAX
+    return typeof epoch === 'number' &&
+      epoch !== 0 &&
+      epoch <= this.INT4_MAX &&
+      epoch >= this.INT4_MIN
       ? epoch
       : null
   }

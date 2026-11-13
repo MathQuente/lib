@@ -75,6 +75,19 @@ export class RatingRepository {
     }))
   }
 
+  async findIgdbIdsWithRatings(igdbIds: number[]): Promise<Set<number>> {
+    const found = new Set<number>()
+    for (let i = 0; i < igdbIds.length; i += 5000) {
+      const rows = await prisma.rating.findMany({
+        where: { igdbId: { in: igdbIds.slice(i, i + 5000) } },
+        distinct: ['igdbId'],
+        select: { igdbId: true }
+      })
+      for (const row of rows) found.add(row.igdbId)
+    }
+    return found
+  }
+
   async getAverageRatingsForGames(
     igdbIds: number[]
   ): Promise<Map<number, number | null>> {

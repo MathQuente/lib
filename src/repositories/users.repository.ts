@@ -7,13 +7,36 @@ import {
   UserGameSortBy,
   UserGameSortOrder
 } from '../types/user'
-import { PLAYED_STATUS_ID } from '../utils/library-status'
+import { PLAYED_STATUS_ID, WISHLIST_STATUS_ID } from '../utils/library-status'
 
 const NOT_WISHLIST = {
   UserGamesStatus: { status: { not: Status.WISHLIST } }
 } satisfies Prisma.UserGameWhereInput
 
 export class UserRepository {
+  async findLibraryStatusesOutsideWishlist(
+    igdbIds: number[]
+  ): Promise<Map<number, { users: number; statusIds: number[] }>> {
+    const found = new Map<number, { users: number; statusIds: number[] }>()
+    for (let i = 0; i < igdbIds.length; i += 5000) {
+      const rows = await prisma.userGame.groupBy({
+        by: ['igdbId', 'userGamesStatusId'],
+        where: {
+          igdbId: { in: igdbIds.slice(i, i + 5000) },
+          userGamesStatusId: { not: WISHLIST_STATUS_ID }
+        },
+        _count: { _all: true }
+      })
+      for (const row of rows) {
+        const entry = found.get(row.igdbId) ?? { users: 0, statusIds: [] }
+        entry.users += row._count._all
+        entry.statusIds.push(row.userGamesStatusId)
+        found.set(row.igdbId, entry)
+      }
+    }
+    return found
+  }
+
   async addGameToUserLibrary(data: AddGameDTO) {
     const completedAt =
       data.statusIds === PLAYED_STATUS_ID

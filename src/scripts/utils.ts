@@ -28,3 +28,23 @@ export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 }
+
+export function parseStringArg(flag: string): string | undefined {
+  const index = process.argv.indexOf(flag)
+  if (index === -1) return undefined
+  const value = process.argv[index + 1]
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`${flag} needs a value`)
+  }
+  return value
+}
+
+export function parseIdsArg(flag: string): number[] {
+  const raw = parseStringArg(flag)
+  if (raw === undefined) return []
+  const ids = raw.split(',').map(Number)
+  if (ids.some(id => !Number.isInteger(id) || id <= 0)) {
+    throw new Error(`${flag} must be a comma-separated list of positive ids`)
+  }
+  return ids
+}

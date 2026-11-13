@@ -74,6 +74,22 @@ describe('classifyReleaseDateChange', () => {
     }
   )
 
+  it('does not write NULL over a row the cache itself marks as cancelled', () => {
+    expect(
+      classifyReleaseDateChange({
+        cacheReleaseDate: FUTURE,
+        igdbReleaseDate: null,
+        igdbGameStatus: 0,
+        cacheGameStatus: 6,
+        nowEpoch: NOW
+      })
+    ).toEqual({
+      kind: 'data_removida_ignorada',
+      writes: false,
+      newReleaseDate: FUTURE
+    })
+  })
+
   it('adds a date to a row that had none', () => {
     expect(classify(null, PAST)).toEqual({
       kind: 'data_adicionada',

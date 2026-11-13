@@ -178,13 +178,22 @@ describe('GameCacheRepository.updateReleaseDates', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    ['an empty batch', []],
-    ['a non-integer date', [{ igdbId: 1, releaseDate: 1.5 }]]
-  ])('does not write for %s', async (_label, updates) => {
+  it('does not write an empty batch', async () => {
     const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
 
-    expect(await new GameCacheRepository().updateReleaseDates(updates)).toBe(0)
+    expect(await new GameCacheRepository().updateReleaseDates([])).toBe(0)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('throws, without writing anything, when a date is not an integer', async () => {
+    const execute = vi.spyOn(prisma, '$executeRaw').mockResolvedValue(0)
+
+    await expect(
+      new GameCacheRepository().updateReleaseDates([
+        { igdbId: 1, releaseDate: 1793836800 },
+        { igdbId: 2, releaseDate: 1.5 }
+      ])
+    ).rejects.toThrow(/Invalid release date for 2/)
     expect(execute).not.toHaveBeenCalled()
   })
 

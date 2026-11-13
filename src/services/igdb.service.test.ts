@@ -667,7 +667,9 @@ describe('IGDBService release dates for the cache', () => {
     [undefined, null],
     [null, null],
     [IGDBService.INT4_MAX, IGDBService.INT4_MAX],
-    [IGDBService.INT4_MAX + 1, null]
+    [IGDBService.INT4_MAX + 1, null],
+    [IGDBService.INT4_MIN, IGDBService.INT4_MIN],
+    [IGDBService.INT4_MIN - 1, null]
   ])('toCacheReleaseDate(%s) is %s', (epoch, expected) => {
     expect(IGDBService.toCacheReleaseDate(epoch)).toBe(expected)
   })

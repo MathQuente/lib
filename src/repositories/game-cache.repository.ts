@@ -351,7 +351,12 @@ export class GameCacheRepository {
     sinceEpoch: number,
     includeUndated: boolean
   ): Promise<
-    Array<{ igdbId: number; name: string; releaseDate: number | null }>
+    Array<{
+      igdbId: number
+      name: string
+      releaseDate: number | null
+      gameStatus: number | null
+    }>
   > {
     return prisma.gameCache.findMany({
       where: {
@@ -363,19 +368,24 @@ export class GameCacheRepository {
       },
       orderBy: { igdbId: 'asc' },
       take: limit,
-      select: { igdbId: true, name: true, releaseDate: true }
+      select: { igdbId: true, name: true, releaseDate: true, gameStatus: true }
     })
   }
 
   async updateReleaseDates(
     updates: Array<{ igdbId: number; releaseDate: number | null }>
   ): Promise<number> {
-    const valid = updates.filter(
-      u => u.releaseDate === null || Number.isInteger(u.releaseDate)
+    if (updates.length === 0) return 0
+    const invalid = updates.find(
+      u => u.releaseDate !== null && !Number.isInteger(u.releaseDate)
     )
-    if (valid.length === 0) return 0
+    if (invalid) {
+      throw new Error(
+        `Invalid release date for ${invalid.igdbId}: ${invalid.releaseDate}`
+      )
+    }
     const rows = JSON.stringify(
-      valid.map(u => ({ id: u.igdbId, release_date: u.releaseDate }))
+      updates.map(u => ({ id: u.igdbId, release_date: u.releaseDate }))
     )
     return prisma.$executeRaw(Prisma.sql`
       UPDATE games_cache gc
@@ -415,23 +425,6 @@ export class GameCacheRepository {
       WHERE gc.igdb_id = v.id
         AND gc.release_date IS NOT DISTINCT FROM v.next
     `)
-  }
-
-  async findIgdbIdsWithRatingOrReview(igdbIds: number[]): Promise<Set<number>> {
-    if (igdbIds.length === 0) return new Set()
-    const [ratings, reviews] = await Promise.all([
-      prisma.rating.findMany({
-        where: { igdbId: { in: igdbIds } },
-        distinct: ['igdbId'],
-        select: { igdbId: true }
-      }),
-      prisma.review.findMany({
-        where: { igdbId: { in: igdbIds } },
-        distinct: ['igdbId'],
-        select: { igdbId: true }
-      })
-    ])
-    return new Set([...ratings, ...reviews].map(r => r.igdbId))
   }
 
   async updateGameModes(

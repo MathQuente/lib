@@ -20,16 +20,24 @@ export function classifyReleaseDateChange(input: {
   cacheReleaseDate: number | null
   igdbReleaseDate: number | null
   igdbGameStatus: number | null
+  cacheGameStatus?: number | null
   nowEpoch: number
 }): ReleaseDateClassification {
-  const { cacheReleaseDate, igdbReleaseDate, igdbGameStatus, nowEpoch } = input
+  const {
+    cacheReleaseDate,
+    igdbReleaseDate,
+    igdbGameStatus,
+    cacheGameStatus,
+    nowEpoch
+  } = input
 
   if (cacheReleaseDate === igdbReleaseDate) {
     return { kind: 'igual', writes: false, newReleaseDate: cacheReleaseDate }
   }
 
   if (igdbReleaseDate === null) {
-    return igdbGameStatus === GAME_STATUS.RELEASED
+    return igdbGameStatus === GAME_STATUS.RELEASED &&
+      cacheGameStatus !== GAME_STATUS.CANCELLED
       ? { kind: 'data_removida', writes: true, newReleaseDate: null }
       : {
           kind: 'data_removida_ignorada',

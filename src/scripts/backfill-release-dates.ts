@@ -9,6 +9,9 @@ import {
 import { prisma } from '../database/db'
 import { IGDBService } from '../services/igdb.service'
 import { GameCacheRepository } from '../repositories/game-cache.repository'
+import { RatingRepository } from '../repositories/rating.repository'
+import { UserRepository } from '../repositories/users.repository'
+import { ReviewRepository } from '../repositories/review.repository'
 import { mapWithConcurrency } from '../utils/map-with-concurrency'
 import {
   ReleaseDateChangeKind,
@@ -19,7 +22,14 @@ import {
   formatReleaseDateBackup,
   parseReleaseDateBackup
 } from '../utils/release-date-backup'
-import { BATCH_SIZE, parseIntArg, sleep, withRetry } from './utils'
+import {
+  BATCH_SIZE,
+  parseIdsArg,
+  parseIntArg,
+  parseStringArg,
+  sleep,
+  withRetry
+} from './utils'
 
 const CONCURRENCY = 4
 const MIN_ROUND_MS = 1000
@@ -50,20 +60,6 @@ function day(epoch: number | null) {
   return epoch === null
     ? 'sem data'
     : new Date(epoch * 1000).toISOString().slice(0, 10)
-}
-
-function parseIdsArg(flag: string): number[] {
-  const index = process.argv.indexOf(flag)
-  if (index === -1) return []
-  return (process.argv[index + 1] ?? '')
-    .split(',')
-    .map(Number)
-    .filter(n => Number.isInteger(n) && n > 0)
-}
-
-function parseStringArg(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag)
-  return index === -1 ? undefined : process.argv[index + 1]
 }
 
 function describe(change: Change) {
@@ -139,7 +135,7 @@ async function main() {
         IGDBService.getReleaseInfoByIds(chunk.map(c => c.igdbId))
       )
       for (const candidate of chunk) {
-        seen.add(candidate.igdbId)
+        if (show.size > 0) seen.add(candidate.igdbId)
         const igdb = info.get(candidate.igdbId)
         if (!igdb) {
           notReturned++
@@ -151,6 +147,7 @@ async function main() {
           ),
           igdbReleaseDate: igdb.releaseDate,
           igdbGameStatus: igdb.gameStatus,
+          cacheGameStatus: candidate.gameStatus,
           nowEpoch
         })
         counts.set(result.kind, (counts.get(result.kind) ?? 0) + 1)
@@ -190,7 +187,29 @@ async function main() {
       `  ${String(counts.get(kind as ReleaseDateChangeKind) ?? 0).padStart(6)}  ${label}`
     )
   }
-  console.log(`\nLinhas que mudam: ${changes.length}`)
+
+  const delayed = changes.filter(c => c.kind === 'adiado_para_o_futuro')
+  const inLibrary =
+    await new UserRepository().findLibraryStatusesOutsideWishlist(
+      delayed.map(c => c.igdbId)
+    )
+  const heldBack = delayed.filter(c => inLibrary.has(c.igdbId))
+  const heldBackIds = new Set(heldBack.map(c => c.igdbId))
+  const writable = changes.filter(c => !heldBackIds.has(c.igdbId))
+  console.log(
+    `\nLinhas que mudam: ${changes.length} (${writable.length} a gravar, ${heldBack.length} adiados deixados de fora por estarem na biblioteca de algum usuário fora de Desejos)`
+  )
+  if (heldBack.length > 0) {
+    console.log(
+      '\nAdiados que algum usuário tem em Jogado, Jogando, Pausado, Larguei ou Na fila (não serão gravados):'
+    )
+    for (const change of heldBack) {
+      const entry = inLibrary.get(change.igdbId)!
+      console.log(
+        `  ${describe(change)} | usuários ${entry.users}, status ${entry.statusIds.join(',')}`
+      )
+    }
+  }
 
   for (const [kind, bucket] of samples) {
     console.log(`\nAmostra (${LABELS[kind]}):`)
@@ -202,10 +221,14 @@ async function main() {
     )
   }
 
-  const flipsReleased = changes
+  const flipsReleased = writable
     .filter(c => c.kind === 'adiado_para_o_futuro' || c.kind === 'ja_lancado')
     .map(c => c.igdbId)
-  const withUserData = await repo.findIgdbIdsWithRatingOrReview(flipsReleased)
+  const [rated, reviewed] = await Promise.all([
+    new RatingRepository().findIgdbIdsWithRatings(flipsReleased),
+    new ReviewRepository().findIgdbIdsWithReviews(flipsReleased)
+  ])
+  const withUserData = new Set([...rated, ...reviewed])
   console.log(
     `\nJogos que trocam de "lançado" para "não lançado" (ou o contrário) e já têm nota ou avaliação: ${withUserData.size} de ${flipsReleased.length}`
   )
@@ -217,7 +240,7 @@ async function main() {
   }
 
   const toApply =
-    maxChanges === undefined ? changes : changes.slice(0, maxChanges)
+    maxChanges === undefined ? writable : writable.slice(0, maxChanges)
   if (toApply.length === 0) {
     console.log('\nNada a gravar.')
     await prisma.$disconnect()
