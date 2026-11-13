@@ -4,7 +4,7 @@ import eslintConfigPrettier from 'eslint-config-prettier'
 
 export default [
   {
-    ignores: ['node_modules', 'dist', 'prisma/dbml']
+    ignores: ['node_modules', 'dist', 'coverage', 'prisma/dbml']
   },
   {
     files: ['**/*.ts'],
