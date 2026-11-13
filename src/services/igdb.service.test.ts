@@ -718,6 +718,39 @@ describe('IGDBService release dates for the cache', () => {
   })
 })
 
+describe('IGDBService.getCoverUrlsByIds', () => {
+  it('formats the cover url, nulls a game without cover and leaves out absent ids', async () => {
+    const request = mockRequest([
+      {
+        id: 1,
+        cover: { url: '//images.igdb.com/igdb/image/upload/t_thumb/coc7pg.jpg' }
+      },
+      { id: 2 },
+      { id: 3, cover: {} }
+    ])
+
+    const result = await IGDBService.getCoverUrlsByIds([1, 2, 3, 4, 1])
+
+    expect(result.get(1)).toBe(
+      'https://images.igdb.com/igdb/image/upload/t_cover_big/coc7pg.jpg'
+    )
+    expect(result.get(2)).toBeNull()
+    expect(result.get(3)).toBeNull()
+    expect(result.has(4)).toBe(false)
+    expect(request).toHaveBeenCalledWith(
+      'games',
+      expect.stringMatching(/fields id,cover\.url;/)
+    )
+  })
+
+  it('does not call IGDB without ids', async () => {
+    const request = mockRequest([])
+
+    expect((await IGDBService.getCoverUrlsByIds([])).size).toBe(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+})
+
 describe('IGDBService.getRelatedGames', () => {
   it('drops bundles, rumored games and cancelled games without a date', async () => {
     vi.spyOn(

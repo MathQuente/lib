@@ -1,3 +1,5 @@
+import { closeSync, fsyncSync, openSync, writeSync } from 'node:fs'
+
 export const BATCH_SIZE = 500
 export const DELAY_MS = 300
 
@@ -47,4 +49,14 @@ export function parseIdsArg(flag: string): number[] {
     throw new Error(`${flag} must be a comma-separated list of positive ids`)
   }
   return ids
+}
+
+export function writeBackupFile(name: string, text: string): void {
+  const fd = openSync(name, 'wx')
+  try {
+    writeSync(fd, text)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
 }
