@@ -14,7 +14,7 @@ import {
 import {
   COMPLETION_KEYWORD_PATTERN,
   canInferCompletion,
-  MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
+  allowsRaritySignal,
   meetsCompletionRatio,
   RARE_ACHIEVEMENT_PERCENT
 } from '../utils/completion-heuristics'
@@ -80,12 +80,11 @@ function finishedByTrophies(
   const story = earnedTrophies.filter(t =>
     COMPLETION_KEYWORD_PATTERN.test(t.detail)
   )
-  const rare =
-    summary.total <= MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL
-      ? earnedTrophies.filter(
-          t => t.earnedRate !== null && t.earnedRate <= RARE_ACHIEVEMENT_PERCENT
-        )
-      : []
+  const rare = allowsRaritySignal(summary.total, earnedTrophies.length)
+    ? earnedTrophies.filter(
+        t => t.earnedRate !== null && t.earnedRate <= RARE_ACHIEVEMENT_PERCENT
+      )
+    : []
 
   if (story.length === 0 && rare.length === 0) return { finished: false }
   return {

@@ -16,7 +16,7 @@ import {
   evaluateFinishSuggestion,
   hasLockedPlainEndAchievement,
   hasPracticalEnd,
-  MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL,
+  allowsRaritySignal,
   meetsCompletionRatio,
   meetsPlaytimeSignal,
   MIN_ACHIEVEMENTS_FOR_SIGNAL,
@@ -76,8 +76,7 @@ function hasRareAchievementSignal(
   globalPercentages: Map<string, number> | null
 ): string[] {
   if (
-    achievements.total > MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL ||
-    achievements.achieved < MIN_ACHIEVEMENTS_FOR_SIGNAL ||
+    !allowsRaritySignal(achievements.total, achievements.achieved) ||
     globalPercentages == null
   ) {
     return []

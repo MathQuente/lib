@@ -921,6 +921,61 @@ describe('PsnService.runImport completion detection', () => {
     )
   })
 
+  it('regression: one rare trophy among very few earned does not read as completion (CROWZ-shaped)', async () => {
+    const { service, addGameToUserLibrary } = importWith(
+      summary({ progress: 14, earned: 2, total: 14 }),
+      {
+        getEarnedTrophies: vi.fn().mockResolvedValue([
+          {
+            detail: 'Reach the top 10 in 25 zones',
+            earnedAt: new Date(),
+            earnedRate: 0.4
+          },
+          {
+            detail: 'Play your first match',
+            earnedAt: new Date(),
+            earnedRate: 90
+          }
+        ])
+      }
+    )
+
+    await service.runImport('user-1')
+
+    expect(addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 10, statusIds: 4 })
+    )
+  })
+
+  it('still reads a rare trophy as completion once enough trophies are earned', async () => {
+    const { service, addGameToUserLibrary } = importWith(
+      summary({ progress: 36, earned: 5, total: 14 }),
+      {
+        getEarnedTrophies: vi.fn().mockResolvedValue(
+          [60, 70, 80, 90]
+            .map(rate => ({
+              detail: 'Do a thing',
+              earnedAt: new Date('2024-01-01T00:00:00Z'),
+              earnedRate: rate
+            }))
+            .concat([
+              {
+                detail: 'Do a rare thing',
+                earnedAt: new Date('2024-02-02T00:00:00Z'),
+                earnedRate: 0.4
+              }
+            ])
+        )
+      }
+    )
+
+    await service.runImport('user-1')
+
+    expect(addGameToUserLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 10, statusIds: 1 })
+    )
+  })
+
   it('keeps a game unfinished when the trophies give no completion signal', async () => {
     const { service, addGameToUserLibrary } = importWith(
       summary({ progress: 20, earned: 10, total: 50 }),
