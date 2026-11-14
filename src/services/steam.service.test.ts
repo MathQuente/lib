@@ -271,7 +271,8 @@ describe('SteamService.runImport', () => {
     timeToBeatFails = false,
     achievedApiNames = [],
     communityTexts = null,
-    schema = null
+    schema = null,
+    globalPercentages = null
   }: {
     playtimeMinutes: number
     normallySeconds?: number
@@ -283,6 +284,7 @@ describe('SteamService.runImport', () => {
     achievedApiNames?: string[]
     communityTexts?: Map<string, string> | null
     schema?: Map<string, string> | null
+    globalPercentages?: Map<string, number> | null
   }) {
     const userRepository = fakeUserRepository({
       findUserById: vi.fn().mockResolvedValue({ id: 'user-1' }),
@@ -314,7 +316,7 @@ describe('SteamService.runImport', () => {
     vi.spyOn(
       SteamApiService,
       'getGlobalAchievementPercentages'
-    ).mockResolvedValue(null)
+    ).mockResolvedValue(globalPercentages)
     vi.spyOn(SteamApiService, 'getAchievementSchema').mockResolvedValue(schema)
     communityTextsSpy = vi
       .spyOn(SteamApiService, 'getUnlockedAchievementTexts')
@@ -1010,6 +1012,62 @@ describe('SteamService.runImport', () => {
       statusIds: 3,
       endless: false
     })
+  })
+
+  it('regression: a currency achievement that says "Credits" does not read as the end credits (Warframe)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 6 * 60,
+      achieved: 13,
+      total: 193,
+      achievedApiNames: ['ACHIEVEMENT_31'],
+      schema: new Map([['ACHIEVEMENT_31', 'Earn 1,000 Credits.']])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('regression: one rare achievement among very few unlocked does not read as completion (CROWZ)', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 71 * 60,
+      achieved: 1,
+      total: 14,
+      achievedApiNames: ['NEW_ACHIEVEMENT_20_14'],
+      globalPercentages: new Map([['NEW_ACHIEVEMENT_20_14', 0.4]])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 4 })
+    )
+  })
+
+  it('still reads a rare achievement as completion once enough achievements are unlocked', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 20 * 60,
+      achieved: 5,
+      total: 14,
+      achievedApiNames: ['A1', 'A2', 'A3', 'A4', 'RARE'],
+      globalPercentages: new Map([['RARE', 0.4]])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
+  })
+
+  it('still reads the real end credits as completion', async () => {
+    const addGame = await importSingleGame({
+      playtimeMinutes: 6 * 60,
+      achieved: 13,
+      total: 193,
+      achievedApiNames: ['END'],
+      schema: new Map([['END', 'Watch the credits roll']])
+    })
+
+    expect(addGame).toHaveBeenCalledWith(
+      expect.objectContaining({ igdbId: 7, statusIds: 1 })
+    )
   })
 
   it('marks a game as PLAYED via a rare achievement even when the overall ratio is low', async () => {

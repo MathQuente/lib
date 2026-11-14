@@ -26,8 +26,15 @@ export function meetsCompletionRatio(earned: number, total: number): boolean {
   )
 }
 
+export function allowsRaritySignal(total: number, earned: number): boolean {
+  return (
+    total <= MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL &&
+    earned >= MIN_ACHIEVEMENTS_FOR_SIGNAL
+  )
+}
+
 export const COMPLETION_KEYWORD_PATTERN =
-  /\bending\b|\bfinal boss\b|\bcomplete(d)? the (main )?(game|story|storyline|campaign)\b|\bbeat the game\b|\bfinish(ed)? the (main )?(game|story|storyline|campaign)\b|\bcredits\b|\bepilogue\b|\bfinal (mission|chapter|level|stage|battle)\b|\bfinale\b/i
+  /\bending\b|\bfinal boss\b|\bcomplete(d)? the (main )?(game|story|storyline|campaign)\b|\bbeat the game\b|\bfinish(ed)? the (main )?(game|story|storyline|campaign)\b|\b(?:(?:end|closing|final) credits|credits roll(?:s|ed|ing)?|(?:roll(?:ed|ing)?|watch|see|sit through|get to|finish|complete|beat|unlock|end of)(?: the)? credits(?!\s+(?:cap|limit|balance|amount|total|per)))\b|\bepilogue\b|\bfinal (mission|chapter|level|stage|battle)\b|\bfinale\b/i
 
 export function hasSinglePlayerMode(game: IGDBGame): boolean {
   const modes = game.game_modes?.map(m => m.name.toLowerCase())

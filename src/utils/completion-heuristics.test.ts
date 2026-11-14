@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { IGDBGame } from '../types/igdb'
 import {
+  allowsRaritySignal,
   canInferCompletion,
   completedChapterSequenceEnd,
   COMPLETION_KEYWORD_PATTERN,
@@ -80,6 +81,18 @@ describe('COMPLETION_KEYWORD_PATTERN', () => {
     'Complete the final chapter on any difficulty',
     'Beat the final battle',
     'Watch the credits',
+    'Watch the credits roll',
+    'See the end credits',
+    'Sit through the final credits',
+    'Roll the credits',
+    'The credits roll after the last mission',
+    'The credits rolled',
+    'Finish the credits',
+    'Complete the credits',
+    'Beat the credits',
+    'Unlock the credits',
+    'End of the credits',
+    'Get to the credits',
     'Completed the final chapter.',
     'Season finale'
   ])('matches %s', text => {
@@ -89,7 +102,14 @@ describe('COMPLETION_KEYWORD_PATTERN', () => {
   it.each([
     'Complete the first mission',
     'Finalize your loadout',
-    'Win 10 final-round matches'
+    'Win 10 final-round matches',
+    'Earn 1,000 Credits.',
+    'Spend 500 credits at the market',
+    'Collect 10,000 credits',
+    'Reach the credits cap',
+    'View the credits balance',
+    'See the credits total',
+    'Credits'
   ])('does not match %s', text => {
     expect(COMPLETION_KEYWORD_PATTERN.test(text)).toBe(false)
   })
@@ -391,5 +411,17 @@ describe('completedChapterSequenceEnd', () => {
         unlockTimes: new Map(gap.map((n, i) => [n, 100 + i]))
       })
     ).toBeNull()
+  })
+})
+
+describe('allowsRaritySignal', () => {
+  it.each([
+    [14, 1, false],
+    [14, 4, false],
+    [14, 5, true],
+    [100, 5, true],
+    [101, 50, false]
+  ])('total %i, earned %i -> %s', (total, earned, expected) => {
+    expect(allowsRaritySignal(total, earned)).toBe(expected)
   })
 })
