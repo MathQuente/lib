@@ -4,7 +4,12 @@ import { isCommonPassword } from '../utils/common-passwords'
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_BYTES = 72
 
-export const EmailSchema = z.string().trim().toLowerCase().max(254).email()
+export const EmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .pipe(z.email())
 
 export const PasswordSchema = z
   .string()

@@ -53,9 +53,14 @@ export function startSteamImportWorker() {
       const { userId } = job.data as SteamImportJobData
       try {
         return await withTimeout(
-          steamService.runImport(userId, percent =>
-            job.updateProgress(percent)
-          ),
+          steamService.runImport(userId, percent => {
+            job.updateProgress(percent).catch(err => {
+              console.warn('[SteamImport] could not report progress', {
+                jobId: job.id,
+                error: err instanceof Error ? err.message : 'unknown error'
+              })
+            })
+          }),
           IMPORT_TIMEOUT_MS,
           'Steam import timed out after 10 minutes.'
         )

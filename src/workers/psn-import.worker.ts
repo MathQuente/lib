@@ -33,7 +33,14 @@ export function startPsnImportWorker() {
       const { userId } = job.data as PsnImportJobData
       try {
         return await withTimeout(
-          psnService.runImport(userId, percent => job.updateProgress(percent)),
+          psnService.runImport(userId, percent => {
+            job.updateProgress(percent).catch(err => {
+              console.warn('[PsnImport] could not report progress', {
+                jobId: job.id,
+                error: err instanceof Error ? err.message : 'unknown error'
+              })
+            })
+          }),
           IMPORT_TIMEOUT_MS,
           'PSN import timed out after 10 minutes.'
         )
