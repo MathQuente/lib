@@ -27,7 +27,7 @@ export function meetsCompletionRatio(earned: number, total: number): boolean {
 }
 
 export const COMPLETION_KEYWORD_PATTERN =
-  /\bending\b|\bfinal boss\b|\bcomplete(d)? the (main )?(game|story|storyline|campaign)\b|\bbeat the game\b|\bfinish(ed)? the (main )?(game|story|storyline|campaign)\b|\bcredits\b|\bepilogue\b|\bfinal (mission|chapter|level|stage|battle)\b|\bfinale\b/i
+  /\bending\b|\bfinal boss\b|\bcomplete(d)? the (main )?(game|story|storyline|campaign)\b|\bbeat the game\b|\bfinish(ed)? the (main )?(game|story|storyline|campaign)\b|\b(?:end|closing|final) credits\b|\bcredits roll(?:s|ing)?\b|\broll(?:ed|ing)? (?:the )?credits\b|\b(?:watch|see|view|reach|sit through|get to) (?:the )?credits\b|\bepilogue\b|\bfinal (mission|chapter|level|stage|battle)\b|\bfinale\b/i
 
 export function hasSinglePlayerMode(game: IGDBGame): boolean {
   const modes = game.game_modes?.map(m => m.name.toLowerCase())

@@ -77,6 +77,7 @@ function hasRareAchievementSignal(
 ): string[] {
   if (
     achievements.total > MAX_ACHIEVEMENTS_FOR_RARITY_SIGNAL ||
+    achievements.achieved < MIN_ACHIEVEMENTS_FOR_SIGNAL ||
     globalPercentages == null
   ) {
     return []

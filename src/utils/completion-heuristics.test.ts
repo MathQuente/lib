@@ -80,6 +80,11 @@ describe('COMPLETION_KEYWORD_PATTERN', () => {
     'Complete the final chapter on any difficulty',
     'Beat the final battle',
     'Watch the credits',
+    'Watch the credits roll',
+    'See the end credits',
+    'Sit through the final credits',
+    'Roll the credits',
+    'The credits roll after the last mission',
     'Completed the final chapter.',
     'Season finale'
   ])('matches %s', text => {
@@ -89,7 +94,11 @@ describe('COMPLETION_KEYWORD_PATTERN', () => {
   it.each([
     'Complete the first mission',
     'Finalize your loadout',
-    'Win 10 final-round matches'
+    'Win 10 final-round matches',
+    'Earn 1,000 Credits.',
+    'Spend 500 credits at the market',
+    'Collect 10,000 credits',
+    'Credits'
   ])('does not match %s', text => {
     expect(COMPLETION_KEYWORD_PATTERN.test(text)).toBe(false)
   })
